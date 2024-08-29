@@ -1,0 +1,18 @@
+# User interface
+gradio
+
+# Build, commit and system
+pre-commit
+python-dotenv
+icecream
+pytest
+
+# LlamaIndex
+llama-index
+llama-index-utils-workflow
+llama-index-vector-stores-qdrant
+qdrant_client
+llama-index-llms-groq
+llama-index-llms-ollama
+llama-index-llms-anthropic
+llama-index-llms-cohere
