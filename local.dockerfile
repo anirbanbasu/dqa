@@ -45,6 +45,8 @@ RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir -U -r requirements.txt
 COPY ./*.md ./LICENSE ./
 COPY ./.env.docker /.env
 COPY ./src/*.py ./src/
+# Copy the required assets
+COPY ./assets/logo.svg ./assets/
 
 # Expose the port to conect
 EXPOSE 7860
