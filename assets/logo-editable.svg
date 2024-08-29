@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 250 125" xmlns="http://www.w3.org/2000/svg" xmlns:bx="https://boxy-svg.com">
+  <defs>
+    <style bx:fonts="Megrim">@import url(https://fonts.googleapis.com/css2?family=Megrim%3Aital%2Cwght%400%2C400&amp;display=swap);</style>
+    <style bx:fonts="Roboto Mono">@import url(https://fonts.googleapis.com/css2?family=Roboto+Mono%3Aital%2Cwght%400%2C100..700%3B1%2C100..700&amp;display=swap);</style>
+  </defs>
+  <g transform="matrix(1, 0, 0, 1, -111.46675872802734, -62.500362396240234)">
+    <title>logo</title>
+    <text style="fill: rgb(102, 102, 102); font-family: Megrim; font-size: 70px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; white-space: pre;" x="121.334" y="148.296"><title>abbreviation</title>DQA</text>
+    <text style="fill: rgb(102, 102, 102); font-family: 'Roboto Mono'; font-weight: 100; white-space: pre;" transform="matrix(1, 0, 0, 1, -350.556, -112.211327)"><title>slogan</title><tspan x="621.139" y="231.104">difficult</tspan><tspan x="621.1389770507812" dy="0.8em">​</tspan><tspan>questions</tspan><tspan x="621.1389770507812" dy="0.8em">​</tspan><tspan>attempted</tspan></text>
+    <rect x="257.729" y="86.615" width="0.75" height="76.77" style="fill: rgb(102, 102, 102);">
+      <title>Separator</title>
+    </rect>
+  </g>
+</svg>
+
+<!-- Created with Boxy SVG app at https://boxy-svg.com/app -->
