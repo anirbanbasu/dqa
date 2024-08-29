@@ -1,3 +1,5 @@
+[![Python linter and format checker with ruff](https://github.com/anirbanbasu/dqa/actions/workflows/python-linter-format-checker.yml/badge.svg)](https://github.com/anirbanbasu/dqa/actions/workflows/python-linter-format-checker.yml)
+
 <p align="right">
   <img width="400" height="200" src="https://github.com/anirbanbasu/dqa/blob/9978348a1392a70e1335d1d05b91542a943a2bda/assets/logo.svg" alt="dqa logo" style="filter: invert(0.5)">
 </p>
