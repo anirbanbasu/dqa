@@ -62,7 +62,7 @@ class EnvironmentVariables:
     VALUE__LLM_SEED = "1"
 
     KEY__LLM_GROQ_MODEL = "LLM__GROQ_MODEL"
-    VALUE__LLM_GROQ_MODEL = "llama3-groq-70b-8192-tool-use-preview"
+    VALUE__LLM_GROQ_MODEL = "llama3-groq-8b-8192-tool-use-preview"
 
     KEY__LLM_ANTHROPIC_MODEL = "LLM__ANTHROPIC_MODEL"
     VALUE__LLM_ANTHROPIC_MODEL = "claude-3-opus-20240229"
@@ -430,12 +430,9 @@ class GradioApp:
                         max_lines=4,
                         show_copy_button=True,
                     )
-                    agent_response = gr.TextArea(
+                    agent_response = gr.Markdown(
                         label="Agent response",
-                        info="The final response from the agent will be displayed here.",
-                        interactive=False,
-                        placeholder="The agent's response will appear here.",
-                        show_copy_button=True,
+                        show_label=True,
                     )
 
                     @text_user_input.submit(

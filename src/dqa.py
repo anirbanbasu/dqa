@@ -21,6 +21,8 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 
 import json
 from llama_index.tools.tavily_research import TavilyToolSpec
+from llama_index.core.tools import FunctionTool
+
 from llama_index.core.workflow import (
     step,
     Context,
@@ -31,6 +33,7 @@ from llama_index.core.workflow import (
 )
 from llama_index.core.agent import ReActAgent
 
+from tools import CountSubstringsSchema, count_substrings
 from utils import parse_env
 
 
@@ -70,15 +73,15 @@ Decompositions:
 {{
     "sub_questions": [
         "How many listings of Hamlet are there on IMDB?"
-        "How many listing of Comedy of Errors is there on IMDB?"
+        "How many listings of Comedy of Errors is there on IMDB?"
     ]
 }}
 
 Example 2:
-Question: What is the Capital city of Japan?
+Question: What is the capital city of Japan?
 Decompositions:
 {{
-    "sub_questions": ["What is the Capital city of Japan?"]
+    "sub_questions": ["What is the capital city of Japan?"]
 }}
 The question needs no decomposition
 
@@ -133,9 +136,12 @@ And here is the list of tools: {ctx.data['tools']}
             ]
         )
 
+        for event in ready:
+            ic(event)
+
         prompt = f"""
 You are given an overall question that has been split into sub-questions, each of which has been answered.
-Combine the answers to all the sub-questions into a single answer to the original question.
+Combine the answers to all the sub-questions into a single and succinct answer to the original question.
 
 Original question: {ctx.data['original_query']}
 
@@ -156,6 +162,14 @@ class DQAEngine:
     def __init__(self, llm):
         self.llm = llm
         self.tools = TavilyToolSpec(api_key=parse_env("TAVILY_API_KEY")).to_tool_list()
+        self.tools.append(
+            FunctionTool.from_defaults(
+                fn=count_substrings,
+                name="count_substrings",
+                description="Count the number of sub-strings in a given string.",
+                fn_schema=CountSubstringsSchema,
+            )
+        )
         self.workflow = DQAWorkflow(timeout=120, verbose=True)
 
     async def run(self, query: str):
