@@ -16,3 +16,4 @@ llama-index-llms-groq
 llama-index-llms-ollama
 llama-index-llms-anthropic
 llama-index-llms-cohere
+llama-index-tools-tavily-research

@@ -22,7 +22,8 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 from dotenv import load_dotenv
 import gradio as gr
 
-from utils import parse_env, EMPTY_STRING
+from dqa import DQAEngine
+from utils import parse_env, EMPTY_STRING, EMPTY_DICT
 
 from llama_index.llms.ollama import Ollama
 from llama_index.llms.groq import Groq
@@ -422,12 +423,31 @@ class GradioApp:
                 with gr.Column(visible=self._sidebar_state, scale=1) as sidebar:
                     self.create_component_settings()
                 with gr.Column(scale=2):
-                    gr.HTML(
-                        """
-                            <h1>Main content</h1>
-                            <p>This is the main content area.</p>
-                        """
+                    text_user_input = gr.Textbox(
+                        label="Question to ask",
+                        info="Pose the question that you want to ask the large language model.",
+                        placeholder="Enter your question here...",
+                        max_lines=4,
+                        show_copy_button=True,
                     )
+                    agent_response = gr.TextArea(
+                        label="Agent response",
+                        info="The final response from the agent will be displayed here.",
+                        interactive=False,
+                        placeholder="The agent's response will appear here.",
+                        show_copy_button=True,
+                    )
+
+                    @text_user_input.submit(
+                        api_name=False,
+                        inputs=[text_user_input],
+                        outputs=[agent_response],
+                    )
+                    async def get_agent_response(user_input: str):
+                        if user_input is not None and user_input != EMPTY_STRING:
+                            dqa = DQAEngine(self._llm)
+                            return await dqa.run(user_input)
+                        return EMPTY_DICT
 
             # Component actions
             btn_theme_toggle.click(

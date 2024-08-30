@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """Various utility functions used in the project."""
 
 import os
@@ -18,6 +19,7 @@ from typing import Any
 
 EMPTY_STRING = ""
 SPACE_STRING = " "
+EMPTY_DICT = {}
 
 TRUE_VALUES_LIST = ["true", "yes", "t", "y", "on"]
 
