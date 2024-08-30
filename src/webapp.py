@@ -22,6 +22,53 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 from dotenv import load_dotenv
 import gradio as gr
 
+from utils import parse_env
+
+from llama_index.llms.ollama import Ollama
+from llama_index.llms.groq import Groq
+from llama_index.llms.anthropic import Anthropic
+from llama_index.llms.cohere import Cohere
+from llama_index.llms.openai import OpenAI
+
+
+class EnvironmentVariables:
+    KEY__LLM_PROVIDER = "LLM__PROVIDER"
+
+    VALUE__LLM_PROVIDER_OLLAMA = "Ollama"
+    VALUE__LLM_PROVIDER_GROQ = "Groq"
+    VALUE__LLM_PROVIDER_ANTHROPIC = "Anthropic"
+    VALUE__LLM_PROVIDER_COHERE = "Cohere"
+    VALUE__LLM_PROVIDER_OPENAI = "Open AI"
+
+    KEY__LLM_TEMPERATURE = "LLM__TEMPERATURE"
+
+    VALUE__LLM_TEMPERATURE = "0.4"
+    KEY__LLM_TOP_P = "LLM__TOP_P"
+    VALUE__LLM_TOP_P = "0.4"
+    KEY__LLM_TOP_K = "LLM__TOP_K"
+    VALUE__LLM_TOP_K = "40"
+    KEY__LLM_REPEAT_PENALTY = "LLM__REPEAT_PENALTY"
+    VALUE__LLM_REPEAT_PENALTY = "1.1"
+    KEY__LLM_SEED = "LLM__SEED"
+    VALUE__LLM_SEED = "1"
+
+    KEY__LLM_GROQ_MODEL = "LLM__GROQ_MODEL"
+    VALUE__LLM_GROQ_MODEL = "llama3-groq-70b-8192-tool-use-preview"
+
+    KEY__LLM_ANTHROPIC_MODEL = "LLM__ANTHROPIC_MODEL"
+    VALUE__LLM_ANTHROPIC_MODEL = "claude-3-opus-20240229"
+
+    KEY__LLM_COHERE_MODEL = "LLM__COHERE_MODEL"
+    VALUE__LLM_COHERE_MODEL = "command-r-plus"
+
+    KEY__LLM_OPENAI_MODEL = "LLM__OPENAI_MODEL"
+    VALUE__LLM_OPENAI_MODEL = "gpt-4o-mini"
+
+    KEY__LLM_OLLAMA_URL = "LLM__OLLAMA_URL"
+    VALUE__LLM_OLLAMA_URL = "http://localhost:11434"
+    KEY__LLM_OLLAMA_MODEL = "LLM__OLLAMA_MODEL"
+    VALUE__LLM_OLLAMA_MODEL = "mistral-nemo"
+
 
 class GradioApp:
     """This class represents the Gradio webapp for the application."""
@@ -72,7 +119,108 @@ class GradioApp:
 
     def __init__(self):
         ic(load_dotenv())
-        self.interface = self.create_interface()
+        self.set_llm_provider()
+
+    def set_llm_provider(self, provider: str | None = None):
+        """Set the LLM provider for the application."""
+        if provider is not None:
+            self._llm_provider = provider
+        else:
+            # Setup LLM provider and LLM configuration
+            self._llm_provider = parse_env(
+                EnvironmentVariables.KEY__LLM_PROVIDER,
+                default_value=EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA,
+            )
+
+        if self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA:
+            self._llm = Ollama(
+                base_url=parse_env(
+                    EnvironmentVariables.KEY__LLM_OLLAMA_URL,
+                    default_value=EnvironmentVariables.VALUE__LLM_OLLAMA_URL,
+                ),
+                model=parse_env(
+                    EnvironmentVariables.KEY__LLM_OLLAMA_MODEL,
+                    default_value=EnvironmentVariables.VALUE__LLM_OLLAMA_MODEL,
+                ),
+                temperature=parse_env(
+                    EnvironmentVariables.KEY__LLM_TEMPERATURE,
+                    default_value=EnvironmentVariables.VALUE__LLM_TEMPERATURE,
+                    type_cast=float,
+                ),
+                json_mode=True,
+                top_p=parse_env(
+                    EnvironmentVariables.KEY__LLM_TOP_P,
+                    default_value=EnvironmentVariables.VALUE__LLM_TOP_P,
+                    type_cast=float,
+                ),
+                top_k=parse_env(
+                    EnvironmentVariables.KEY__LLM_TOP_K,
+                    default_value=EnvironmentVariables.VALUE__LLM_TOP_K,
+                    type_cast=int,
+                ),
+                repeat_penalty=parse_env(
+                    EnvironmentVariables.KEY__LLM_REPEAT_PENALTY,
+                    default_value=EnvironmentVariables.VALUE__LLM_REPEAT_PENALTY,
+                    type_cast=float,
+                ),
+                seed=parse_env(
+                    EnvironmentVariables.KEY__LLM_SEED,
+                    default_value=EnvironmentVariables.VALUE__LLM_SEED,
+                    type_cast=int,
+                ),
+            )
+        elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_GROQ:
+            self._llm = Groq(
+                model=parse_env(
+                    EnvironmentVariables.KEY__LLM_GROQ_MODEL,
+                    default_value=EnvironmentVariables.VALUE__LLM_GROQ_MODEL,
+                ),
+                temperature=parse_env(
+                    EnvironmentVariables.KEY__LLM_TEMPERATURE,
+                    default_value=EnvironmentVariables.VALUE__LLM_TEMPERATURE,
+                    type_cast=float,
+                ),
+            )
+        elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_ANTHROPIC:
+            self._llm = Anthropic(
+                model=parse_env(
+                    EnvironmentVariables.KEY__LLM_ANTHROPIC_MODEL,
+                    default_value=EnvironmentVariables.VALUE__LLM_ANTHROPIC_MODEL,
+                ),
+                temperature=parse_env(
+                    EnvironmentVariables.KEY__LLM_TEMPERATURE,
+                    default_value=EnvironmentVariables.VALUE__LLM_TEMPERATURE,
+                    type_cast=float,
+                ),
+            )
+        elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_COHERE:
+            self._llm = Cohere(
+                model=parse_env(
+                    EnvironmentVariables.KEY__LLM_COHERE_MODEL,
+                    default_value=EnvironmentVariables.VALUE__LLM_COHERE_MODEL,
+                ),
+                temperature=parse_env(
+                    EnvironmentVariables.KEY__LLM_TEMPERATURE,
+                    default_value=EnvironmentVariables.VALUE__LLM_TEMPERATURE,
+                    type_cast=float,
+                ),
+            )
+        elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_OPENAI:
+            self._llm = OpenAI(
+                model=parse_env(
+                    EnvironmentVariables.KEY__LLM_OPENAI_MODEL,
+                    default_value=EnvironmentVariables.VALUE__LLM_OPENAI_MODEL,
+                ),
+                temperature=parse_env(
+                    EnvironmentVariables.KEY__LLM_TEMPERATURE,
+                    default_value=EnvironmentVariables.VALUE__LLM_TEMPERATURE,
+                    type_cast=float,
+                ),
+            )
+        else:
+            raise ValueError(f"Unsupported LLM provider: {self._llm_provider}")
+
+        ic(self._llm)
 
     def create_interface(self):
         """Construct the Gradio user interface and make it available through the `interface` property of this class."""
