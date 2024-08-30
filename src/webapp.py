@@ -22,7 +22,7 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 from dotenv import load_dotenv
 import gradio as gr
 
-from utils import parse_env
+from utils import parse_env, EMPTY_STRING
 
 from llama_index.llms.ollama import Ollama
 from llama_index.llms.groq import Groq
@@ -39,6 +39,14 @@ class EnvironmentVariables:
     VALUE__LLM_PROVIDER_ANTHROPIC = "Anthropic"
     VALUE__LLM_PROVIDER_COHERE = "Cohere"
     VALUE__LLM_PROVIDER_OPENAI = "Open AI"
+
+    SUPPORTED_LLM_PROVIDERS = [
+        VALUE__LLM_PROVIDER_OLLAMA,
+        VALUE__LLM_PROVIDER_GROQ,
+        VALUE__LLM_PROVIDER_ANTHROPIC,
+        VALUE__LLM_PROVIDER_COHERE,
+        VALUE__LLM_PROVIDER_OPENAI,
+    ]
 
     KEY__LLM_TEMPERATURE = "LLM__TEMPERATURE"
 
@@ -171,6 +179,7 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_GROQ:
             self._llm = Groq(
+                # Pick up the API key from the environment variable GROQ_API_KEY
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_GROQ_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_GROQ_MODEL,
@@ -183,6 +192,7 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_ANTHROPIC:
             self._llm = Anthropic(
+                # Pick up the API key from the environment variable ANTHROPIC_API_KEY
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_ANTHROPIC_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_ANTHROPIC_MODEL,
@@ -195,6 +205,7 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_COHERE:
             self._llm = Cohere(
+                # Pick up the API key from the environment variable COHERE_API_KEY
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_COHERE_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_COHERE_MODEL,
@@ -207,6 +218,7 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_OPENAI:
             self._llm = OpenAI(
+                # Pick up the API key from the environment variable OPENAI_API_KEY
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_OPENAI_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_OPENAI_MODEL,
@@ -220,9 +232,147 @@ class GradioApp:
         else:
             raise ValueError(f"Unsupported LLM provider: {self._llm_provider}")
 
-        ic(self._llm)
+        ic(self._llm_provider, self._llm.model, self._llm.temperature)
 
-    def create_interface(self):
+    def create_component_settings(self) -> gr.Group:
+        with gr.Group() as settings:
+            gr.Label("Settings", show_label=False)
+            with gr.Accordion(label="Large language model (LLM)", open=False):
+                dropdown_llm_provider = gr.Dropdown(
+                    choices=EnvironmentVariables.SUPPORTED_LLM_PROVIDERS,
+                    label="Provider",
+                    value=self._llm_provider,
+                    interactive=True,
+                    info="Changing the LLM provider will reset the model and temperature settings below to their default values.",
+                )
+                text_api_key = gr.Textbox(
+                    label=f"{self._llm_provider} API key",
+                    interactive=True,
+                    max_lines=1,
+                    info="A valid API key for the selected LLM provider is required. Once set, the API key will not be displayed. DEPRECATED: Use the environment variable instead.",
+                    type="password",
+                    value=EMPTY_STRING,
+                    visible=(
+                        False
+                        if self._llm_provider
+                        == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
+                        else True
+                    ),
+                )
+                text_llm_model = gr.Textbox(
+                    label="Model",
+                    value=self._llm.model,
+                    interactive=True,
+                    max_lines=1,
+                    info="Ensure that this model is supported by the selected LLM provider.",
+                )
+                number_llm_temperature = gr.Slider(
+                    minimum=0.0,
+                    maximum=1.0,
+                    step=0.1,
+                    value=self._llm.temperature,
+                    label="Temperature",
+                    interactive=True,
+                    info="The temperature range is [0.0, 2.0] for Open AI models and [0.0, 1.0] otherwise.",
+                )
+
+            @dropdown_llm_provider.change(
+                api_name=False,
+                inputs=[dropdown_llm_provider],
+                outputs=[text_llm_model, number_llm_temperature, text_api_key],
+            )
+            def change_llm_provider(provider: str):
+                self.set_llm_provider(provider)
+                return (
+                    gr.update(value=self._llm.model),
+                    gr.update(
+                        maximum=(
+                            2.0
+                            if self._llm_provider
+                            == EnvironmentVariables.VALUE__LLM_PROVIDER_OPENAI
+                            else 1.0
+                        ),
+                        value=self._llm.temperature,
+                    ),
+                    gr.update(
+                        label=f"{self._llm_provider} API key",
+                        visible=(
+                            False
+                            if self._llm_provider
+                            == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
+                            else True
+                        ),
+                        value=EMPTY_STRING,
+                    ),
+                )
+
+            @text_api_key.blur(
+                api_name=False,
+                inputs=[text_api_key],
+                outputs=[text_api_key],
+            )
+            def change_llm_api_key(api_key: str):
+                if api_key is not None and api_key != EMPTY_STRING:
+                    # Note that the API key for some providers cannot be set after initialization. See: https://github.com/run-llama/llama_index/discussions/15735.
+                    if self._llm_provider in [
+                        EnvironmentVariables.VALUE__LLM_PROVIDER_GROQ,
+                        EnvironmentVariables.VALUE__LLM_PROVIDER_OPENAI,
+                    ]:
+                        if api_key != self._llm.api_key:
+                            self._llm.api_key = api_key
+                    elif (
+                        self._llm_provider
+                        == EnvironmentVariables.VALUE__LLM_PROVIDER_ANTHROPIC
+                    ):
+                        anthropic_temperature = self._llm.temperature
+                        anthropic_model = self._llm.model
+                        self._llm = Anthropic(
+                            api_key=api_key,
+                            model=anthropic_model,
+                            temperature=anthropic_temperature,
+                        )
+                    elif (
+                        self._llm_provider
+                        == EnvironmentVariables.VALUE__LLM_PROVIDER_COHERE
+                    ):
+                        cohere_temperature = self._llm.temperature
+                        cohere_model = self._llm.model
+                        self._llm = Cohere(
+                            api_key=api_key,
+                            model=cohere_model,
+                            temperature=cohere_temperature,
+                        )
+
+                    return gr.update(value=EMPTY_STRING)
+
+            @text_llm_model.blur(
+                api_name=False,
+                inputs=[text_llm_model],
+                outputs=[text_llm_model],
+            )
+            def change_llm_model(model: str):
+                if (
+                    model != self._llm.model
+                    and model is not None
+                    and model != EMPTY_STRING
+                ):
+                    self._llm.model = model
+                    ic(self._llm_provider, self._llm.model, self._llm.temperature)
+
+                return gr.update(value=self._llm.model)
+
+            @number_llm_temperature.change(
+                api_name=False,
+                inputs=[number_llm_temperature],
+            )
+            def change_llm_temperature(temperature: float):
+                if temperature != self._llm.temperature:
+                    self._llm.temperature = temperature
+                    ic(self._llm_provider, self._llm.model, self._llm.temperature)
+
+        return settings
+
+    def create_app_ui(self):
         """Construct the Gradio user interface and make it available through the `interface` property of this class."""
         with gr.Blocks(
             # See theming guide at https://www.gradio.app/guides/theming-guide
@@ -270,12 +420,7 @@ class GradioApp:
 
             with gr.Row(equal_height=True):
                 with gr.Column(visible=self._sidebar_state, scale=1) as sidebar:
-                    gr.HTML(
-                        """
-                            <h1>Sidebar</h1>
-                            <p>This is a sidebar to contain configurable settings. It can be toggled on and off.</p>
-                        """
-                    )
+                    self.create_component_settings()
                 with gr.Column(scale=2):
                     gr.HTML(
                         """
@@ -309,7 +454,7 @@ class GradioApp:
 
     def run(self):
         """Run the Gradio app by launching a server."""
-        self.create_interface()
+        self.create_app_ui()
         allowed_static_file_paths = [
             GradioApp.PROJECT_LOGO_PATH,
         ]
