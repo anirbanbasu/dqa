@@ -53,9 +53,9 @@ The web UI will be available at [http://localhost:7860](http://localhost:7860).
 
 ## Usage (Docker)
 
-In the `.env.docker`, both Ollama and Qdrant are expected to be available at ports 11434 and 6333, respectively, on your preferred host, i.e., `host.docker.internal`. Set them to some other host, if that is where your Ollama and Qdrant servers are setup. Set the Ollama model to the tool calling model that you have downloaded on your Ollama installation. Set the value of the `LLM_PROVIDER` to the provider that you want to use. Supported names are `Anthropic`, `Cohere`, `Groq`, `Ollama` and `Open AI`.
+In the `.env.docker`, both Ollama and Qdrant are expected to be available at ports 11434 and 6333, respectively, on your Docker host, i.e., `host.docker.internal`. Set them to some other host(s), if that is where your Ollama and Qdrant servers are available. Set the Ollama model to the tool calling model that you have downloaded on your Ollama installation.
 
-Add the API keys for Anthropic, Cohere, Groq and Open AI LLM providers as well as Tavily and optionally Qdrant as metioned above in the **Usage (local)** section.
+Set the value of the `LLM_PROVIDER` to the provider that you want to use and add the API keys for Anthropic, Cohere, Groq and Open AI LLM providers as well as that of Tavily and optionally Qdrant as metioned above in the **Usage (local)** section.
 
 With all these setup done, and assuming that you have Docker installed, you can build an image of the DQA app, create a container and start it as follows.
 
