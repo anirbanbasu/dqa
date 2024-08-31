@@ -34,7 +34,7 @@ from llama_index.core.workflow import (
 from llama_index.core.agent import ReActAgent
 
 from tools import CountSubstringsSchema, count_substrings
-from utils import parse_env
+from utils import parse_env, EnvironmentVariables
 
 
 class QueryEvent(Event):
@@ -49,6 +49,18 @@ class AnswerEvent(Event):
 class DQAWorkflow(Workflow):
     @step
     async def query(self, ctx: Context, ev: StartEvent) -> QueryEvent:
+        """
+        As a start event of the workflow, this step receives the original query and stores it in the context.
+        It then asks the LLM to decompose the query into sub-questions. Upon decomposition, it emits every
+        sub-question as a `QueryEvent`.
+
+        Args:
+            ctx (Context): The context object.
+            ev (StartEvent): The start event.
+
+        Returns:
+            QueryEvent: The event containing the original query.
+        """
         if hasattr(ev, "query"):
             ctx.data["original_query"] = ev.query
             print(f"Query is {ctx.data['original_query']}")
@@ -63,8 +75,8 @@ class DQAWorkflow(Workflow):
             f"""
 You are an assistant for question-answering tasks who performs query decomposition.
 Given a user question, generate a list of distinct sub questions that you need to answer in order to answer the original question.
-Respond with a list only the original question when no decomposition is needed.
-Generate questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,' etc.
+Respond with a list containing only the unmodified original question when no decomposition is needed.
+Generate questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
 Each question should clearly state the subject to ensure no ambiguity.
 
 Example 1:
@@ -113,7 +125,17 @@ And here is the list of tools: {ctx.data['tools']}
         return None
 
     @step
-    async def sub_question(self, ctx: Context, ev: QueryEvent) -> AnswerEvent:
+    async def answer_sub_question(self, ctx: Context, ev: QueryEvent) -> AnswerEvent:
+        """
+        This step receives a sub-question and attempts to answer it using the tools provided in the context.
+
+        Args:
+            ctx (Context): The context object.
+            ev (QueryEvent): The event containing the sub-question.
+
+        Returns:
+            AnswerEvent: The event containing the sub-question and the answer.
+        """
         ic(f"Attempting sub-question: {ev.question}")
 
         agent = ReActAgent.from_tools(
@@ -125,6 +147,17 @@ And here is the list of tools: {ctx.data['tools']}
 
     @step
     async def combine_answers(self, ctx: Context, ev: AnswerEvent) -> StopEvent | None:
+        """
+        This step receives the answers to the sub-questions and combines them into a single answer to the original
+        question so long as all the sub-questions have been answered.
+
+        Args:
+            ctx (Context): The context object.
+            ev (AnswerEvent): The event containing the sub-question and the answer.
+
+        Returns:
+            StopEvent | None: The event containing the final answer to the original
+        """
         ready = ctx.collect_events(ev, [AnswerEvent] * ctx.data["sub_question_count"])
         if ready is None:
             return None
@@ -160,8 +193,16 @@ Sub-questions and answers:
 
 class DQAEngine:
     def __init__(self, llm):
+        """
+        Initialize the Difficult Questions Attempted engine.
+
+        Args:
+            llm (FunctionCallingLLM): The function calling LLM instance to use.
+        """
         self.llm = llm
-        self.tools = TavilyToolSpec(api_key=parse_env("TAVILY_API_KEY")).to_tool_list()
+        self.tools = TavilyToolSpec(
+            api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
+        ).to_tool_list()
         self.tools.append(
             FunctionTool.from_defaults(
                 fn=count_substrings,
@@ -172,7 +213,16 @@ class DQAEngine:
         )
         self.workflow = DQAWorkflow(timeout=120, verbose=True)
 
-    async def run(self, query: str):
+    async def run(self, query: str) -> str:
+        """
+        Run the Difficult Questions Attempted engine with the given query.
+
+        Args:
+            query (str): The query to process.
+
+        Returns:
+            str: The response from the engine.
+        """
         result = await self.workflow.run(
             llm=self.llm,
             tools=self.tools,
