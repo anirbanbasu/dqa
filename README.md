@@ -33,7 +33,7 @@ Make a copy of the file `.env.docker` in the _working directory_ as a `.env` fil
 cp .env.docker .env
 ```
 
-Change all occurrences of `host.docker.internal` to `localhost` or some other host or IP assuming that you have both Ollama and Qdrant available at ports 11434 and 6333 on your preferred host. Set the Ollama model to the tool calling model that you have downloaded on your Ollama installation. Set the value of the `LLM_PROVIDER` to the provider that you want to use. Supported names are `Anthropic`, `Cohere`, `Groq`, `Ollama` and `Open AI`.
+Change all occurrences of `host.docker.internal` to `localhost` or some other host or IP assuming that you have both Ollama and Qdrant available at ports 11434 and 6333, respectively, on your preferred host. Set the Ollama model to the tool calling model that you have downloaded on your Ollama installation. Set the value of the `LLM_PROVIDER` to the provider that you want to use. Supported names are `Anthropic`, `Cohere`, `Groq`, `Ollama` and `Open AI`.
 
 Add the API keys for [Anthropic](https://console.anthropic.com/), [Cohere](https://dashboard.cohere.com/welcome/login), [Groq](https://console.groq.com/keys) or [Open AI](https://platform.openai.com/docs/overview) if you want to use any of these. In addition, add [an API key of Tavily](https://app.tavily.com/sign-in). Qdrant API key is not necessary if you are not using [Qdrant cloud](https://qdrant.tech/documentation/qdrant-cloud-api/).
 
@@ -50,6 +50,21 @@ python src/webapp.py 2>&1 | tee /tmp/dqa.log
 ```
 
 The web UI will be available at [http://localhost:7860](http://localhost:7860).
+
+## Usage (Docker)
+
+In the `.env.docker`, both Ollama and Qdrant are expected to be available at ports 11434 and 6333, respectively, on your preferred host, i.e., `host.docker.internal`. Set them to some other host, if that is where your Ollama and Qdrant servers are setup. Set the Ollama model to the tool calling model that you have downloaded on your Ollama installation. Set the value of the `LLM_PROVIDER` to the provider that you want to use. Supported names are `Anthropic`, `Cohere`, `Groq`, `Ollama` and `Open AI`.
+
+Add the API keys for Anthropic, Cohere, Groq and Open AI LLM providers as well as Tavily and optionally Qdrant as metioned above in the **Usage (local)** section.
+
+With all these setup done, and assuming that you have Docker installed, you can build an image of the DQA app, create a container and start it as follows.
+
+```bash
+docker build -f local.dockerfile -t dqa .
+docker create -p 7860:7860/tcp --name dqa-container dqa
+docker container start dqa-container
+```
+The web server will serve a web user interface as well as a REST API at [http://localhost:7860](http://localhost:7860). It is not configured to use HTTPS.
 
 ## Contributing
 

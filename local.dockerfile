@@ -13,10 +13,10 @@
 # limitations under the License.
 
 # Pull Python on Debian image
-FROM python:3.13.0rc1-slim-bookworm
+FROM python:3.12.5-slim-bookworm
 
 # Upgrade and install basic packages
-RUN apt-get update && apt-get -y upgrade && apt-get -y install build-essential && apt-get -y autoremove
+RUN apt-get update && apt-get -y upgrade && apt-get -y install build-essential curl && apt-get -y autoremove
 
 # Create a non-root user
 RUN useradd -m -u 1000 app_user
@@ -26,6 +26,10 @@ ENV HOME="/home/app_user"
 USER app_user
 # Set the working directory in the container
 WORKDIR $HOME/app
+
+# Install the Rust toolchain, which is required by some Python packages during their building processes
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/app_user/.cargo/bin:${PATH}"
 
 # Copy only the requirements file to take advantage of layering (see: https://docs.cloud.ploomber.io/en/latest/user-guide/dockerfile.html)
 COPY ./requirements.txt ./requirements.txt
