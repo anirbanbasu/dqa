@@ -19,6 +19,7 @@ from typing import Any
 
 EMPTY_STRING = ""
 SPACE_STRING = " "
+COLON_STRING = ":"
 EMPTY_DICT = {}
 
 TRUE_VALUES_LIST = ["true", "yes", "t", "y", "on"]
@@ -42,7 +43,7 @@ class EnvironmentVariables:
     ]
 
     KEY__SUPPORTED_LLM_PROVIDERS = "SUPPORTED_LLM_PROVIDERS"
-    VALUE__SUPPORTED_LLM_PROVIDERS = ",".join(ALL_SUPPORTED_LLM_PROVIDERS)
+    VALUE__SUPPORTED_LLM_PROVIDERS = COLON_STRING.join(ALL_SUPPORTED_LLM_PROVIDERS)
 
     KEY__LLM_TEMPERATURE = "LLM__TEMPERATURE"
 
@@ -113,3 +114,21 @@ def parse_env(
         else [type_cast(v) for v in parsed_value.split(list_split_char)]
     )
     return value
+
+
+def check_list_subset(list_a: list[Any], list_b: list[Any]) -> list[Any]:
+    """
+    Check if the elements of list_a forms a set that is a subset of the set formed by the elements of list_a.
+    This includes the cases where list_a is an empty list, and list_a contains all the elements of list_b.
+
+    Args:
+        list_a (list[Any]): The first list.
+        list_b (list[Any]): The second list.
+
+    Returns:
+        list[Any]: The distinct elements of list_a that are not in list_b. This should be an empty list if list_a
+        is a subset of list_b.
+    """
+    s1 = set(list_a)
+    s2 = set(list_b)
+    return list(s1 - s2)

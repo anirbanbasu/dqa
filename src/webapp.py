@@ -26,7 +26,14 @@ import gradio as gr
 from gradio_log import Log as GradioLog
 
 from dqa import DQAEngine
-from utils import parse_env, EMPTY_STRING, EMPTY_DICT, EnvironmentVariables
+from utils import (
+    COLON_STRING,
+    check_list_subset,
+    parse_env,
+    EMPTY_STRING,
+    EMPTY_DICT,
+    EnvironmentVariables,
+)
 
 from llama_index.llms.ollama import Ollama
 from llama_index.llms.groq import Groq
@@ -203,13 +210,22 @@ class GradioApp:
         with gr.Group() as settings:
             gr.Label("Settings", show_label=False)
             with gr.Accordion(label="Large language model (LLM)", open=False):
+                supported_llm_providers = parse_env(
+                    var_name=EnvironmentVariables.KEY__SUPPORTED_LLM_PROVIDERS,
+                    default_value=EnvironmentVariables.VALUE__SUPPORTED_LLM_PROVIDERS,
+                    convert_to_list=True,
+                    list_split_char=COLON_STRING,
+                )
+                unsupported_llm_providers = check_list_subset(
+                    supported_llm_providers,
+                    EnvironmentVariables.ALL_SUPPORTED_LLM_PROVIDERS,
+                )
+                if len(unsupported_llm_providers) != 0:
+                    raise ValueError(
+                        f"Unsupported LLM providers found: {','.join(unsupported_llm_providers)}"
+                    )
                 dropdown_llm_provider = gr.Dropdown(
-                    choices=parse_env(
-                        var_name=EnvironmentVariables.KEY__SUPPORTED_LLM_PROVIDERS,
-                        default_value=EnvironmentVariables.VALUE__SUPPORTED_LLM_PROVIDERS,
-                        convert_to_list=True,
-                        list_split_char=",",
-                    ),
+                    choices=supported_llm_providers,
                     label="Provider",
                     value=self._llm_provider,
                     interactive=True,
@@ -227,6 +243,23 @@ class GradioApp:
                         if self._llm_provider
                         == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
                         else True
+                    ),
+                )
+                text_ollama_url = gr.Textbox(
+                    label="Ollama URL",
+                    value=(
+                        self._llm.base_url
+                        if self._llm_provider
+                        == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
+                        else EMPTY_STRING
+                    ),
+                    interactive=True,
+                    max_lines=1,
+                    visible=(
+                        True
+                        if self._llm_provider
+                        == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
+                        else False
                     ),
                 )
                 text_llm_model = gr.Textbox(
@@ -249,7 +282,12 @@ class GradioApp:
             @dropdown_llm_provider.change(
                 api_name=False,
                 inputs=[dropdown_llm_provider],
-                outputs=[text_llm_model, number_llm_temperature, text_api_key],
+                outputs=[
+                    text_llm_model,
+                    number_llm_temperature,
+                    text_api_key,
+                    text_ollama_url,
+                ],
             )
             def change_llm_provider(provider: str):
                 self.set_llm_provider(provider)
@@ -273,6 +311,20 @@ class GradioApp:
                             else True
                         ),
                         value=EMPTY_STRING,
+                    ),
+                    gr.update(
+                        visible=(
+                            True
+                            if self._llm_provider
+                            == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
+                            else False
+                        ),
+                        value=(
+                            self._llm.base_url
+                            if self._llm_provider
+                            == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
+                            else EMPTY_STRING
+                        ),
                     ),
                 )
 
@@ -314,6 +366,22 @@ class GradioApp:
                         )
 
                     return gr.update(value=EMPTY_STRING)
+
+            @text_ollama_url.blur(
+                api_name=False,
+                inputs=[text_ollama_url],
+                outputs=[text_ollama_url],
+            )
+            def change_ollama_url(url: str):
+                if (
+                    url != self._llm.base_url
+                    and url is not None
+                    and url != EMPTY_STRING
+                ):
+                    self._llm.base_url = url
+                    ic(self._llm_provider, self._llm.base_url)
+
+                return gr.update(value=self._llm.base_url)
 
             @text_llm_model.blur(
                 api_name=False,
@@ -457,13 +525,14 @@ class GradioApp:
             GradioApp.PROJECT_LOGO_PATH,
         ]
         ic(allowed_static_file_paths)
-        self.interface.queue().launch(
-            show_api=True,
-            show_error=True,
-            allowed_paths=allowed_static_file_paths,
-            # Enable monitoring only for debugging purposes?
-            # enable_monitoring=True,
-        )
+        if self.interface is not None:
+            self.interface.queue().launch(
+                show_api=True,
+                show_error=True,
+                allowed_paths=allowed_static_file_paths,
+                # Enable monitoring only for debugging purposes?
+                # enable_monitoring=True,
+            )
 
 
 if __name__ == "__main__":
