@@ -13,28 +13,28 @@
 # limitations under the License.
 
 # Pull Python on Debian image
-FROM python:3.12.5-slim-bookworm
+FROM python:3.12.5-slim-bookworm AS build
 
 # Upgrade and install basic packages
-RUN apt-get update && apt-get -y install build-essential curl
+RUN apt-get update && apt-get -y upgrade && apt-get -y install build-essential curl
 
 # Create a non-root user
-RUN useradd -m -u 1000 app_user
+RUN useradd -m -u 1000 app_builder
 
-ENV HOME="/home/app_user"
+ENV HOME="/home/app_builder"
 
-USER app_user
+USER app_builder
 # Set the working directory in the container
 WORKDIR $HOME/app
 
 # Install the Rust toolchain, which is required by some Python packages during their building processes
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/home/app_user/.cargo/bin:${PATH}"
+ENV PATH="/home/app_builder/.cargo/bin:${PATH}"
 
-# Copy only the requirements file to take advantage of layering (see: https://docs.cloud.ploomber.io/en/latest/user-guide/dockerfile.html)
+# Copy the requirements file, which will not be retained in the final image
 COPY ./requirements.txt ./requirements.txt
 
-# Setup Virtual environment
+# Setup a virtual environment
 ENV VIRTUAL_ENV="$HOME/app/venv"
 RUN python -m venv $VIRTUAL_ENV
 RUN $VIRTUAL_ENV/bin/python -m ensurepip
@@ -42,19 +42,28 @@ RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir -U pip
 
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install dependencies
+# Install and build dependencies
 RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir -U -r requirements.txt
 
-# Uninstall things needed only at build time to reduce the image size by about 300MB
-# TODO: Explore better size optimisation methods. Note that alpine base image does not actually help in reducing the size of the image.
-USER root
-RUN apt-get -y remove build-essential curl && apt-get -y autoremove && rm -rf /var/lib/apt/lists/* && apt-get -y clean
-RUN rustup self uninstall -y
+# [Multi-stage build](https://docs.docker.com/build/building/multi-stage/) to reduce the size of the final image to about 30% of the original size!
+FROM python:3.12.5-slim-bookworm
+
+# Create a non-root user. The home directory is used for caching stuff, e.g., from Hugging Face Transformers
+RUN useradd -m -u 1000 app_user
+
+# Switch to the non-root user
+ENV HOME="/home/app_user"
 USER app_user
+# Set the working directory in the container
+WORKDIR $HOME/app
+
+# Copy only the Python virtual environment from the build image
+COPY --from=build /home/app_builder/app/venv ./venv
 
 # Copy the project files
-COPY ./*.md ./LICENSE ./
-COPY ./.env.docker /.env
+COPY ./LICENSE ./.env.docker ./
+# Although the example .env file is copied here, use -v to load a different .env file from the Docker host, if necessary.
+RUN mv .env.docker .env
 COPY ./src/*.py ./src/
 # Copy the required assets
 COPY ./assets/logo.svg ./assets/
