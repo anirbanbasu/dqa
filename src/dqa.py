@@ -74,10 +74,11 @@ class DQAWorkflow(Workflow):
         response = ctx.data["llm"].complete(
             f"""
 You are an assistant for question-answering tasks who performs query decomposition.
-Given a user question, generate a list of distinct sub questions that you need to answer in order to answer the original question.
+Given a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question.
 Respond with a list containing only the unmodified original question when no decomposition is needed.
-Generate questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
-Each question should clearly state the subject to ensure no ambiguity.
+Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
+Each sub-question should clearly state the subject to ensure no ambiguity.
+Do not generate unnecessary sub-questions that do not contribute to answering the original question.
 
 Example 1:
 Question: Is Hamlet more common on IMDB than Comedy of Errors?
@@ -102,7 +103,7 @@ Always, respond in pure JSON without any Markdown, like this:
     "sub_questions": [
         "sub question 1",
         "sub question 2",
-        "sub question 3"
+        "sub question 3",
     ]
 }}
 
