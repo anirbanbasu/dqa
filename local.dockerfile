@@ -16,7 +16,7 @@
 FROM python:3.12.5-slim-bookworm
 
 # Upgrade and install basic packages
-RUN apt-get update && apt-get -y upgrade && apt-get -y install build-essential curl && apt-get -y autoremove
+RUN apt-get update && apt-get -y install build-essential curl
 
 # Create a non-root user
 RUN useradd -m -u 1000 app_user
@@ -44,6 +44,13 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Install dependencies
 RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir -U -r requirements.txt
+
+# Uninstall things needed only at build time to reduce the image size by about 300MB
+# TODO: Explore better size optimisation methods. Note that alpine base image does not actually help in reducing the size of the image.
+USER root
+RUN apt-get -y remove build-essential curl && apt-get -y autoremove && rm -rf /var/lib/apt/lists/* && apt-get -y clean
+RUN rustup self uninstall -y
+USER app_user
 
 # Copy the project files
 COPY ./*.md ./LICENSE ./
