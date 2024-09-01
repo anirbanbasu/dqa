@@ -46,6 +46,12 @@ class GradioApp:
     LABEL_SHOW_SIDEBAR = "Show sidebar"
     LABEL_HIDE_SIDEBAR = "Hide sidebar"
 
+    MD_EU_AI_ACT_TRANSPARENCY = """
+    **European Union AI Act Transparency notice**: By using this app, you are interacting with an artificial intelligence (AI) system.
+    _You are advised not to take any of its responses as facts_. The AI system is not a substitute for professional advice.
+    If you are unsure about any information, please consult a professional in the field.
+    """
+
     CSS_CLASS_DIV_VERTICAL_ALIGNED = "div-vertical-aligned"
     CSS_CLASS_DIV_RIGHT_ALIGNED = "div-right-aligned"
     CSS_CLASS_BUTTON_FIT_TRANSPARENT = "button-fit-transparent"
@@ -198,7 +204,12 @@ class GradioApp:
             gr.Label("Settings", show_label=False)
             with gr.Accordion(label="Large language model (LLM)", open=False):
                 dropdown_llm_provider = gr.Dropdown(
-                    choices=EnvironmentVariables.SUPPORTED_LLM_PROVIDERS,
+                    choices=parse_env(
+                        var_name=EnvironmentVariables.KEY__SUPPORTED_LLM_PROVIDERS,
+                        default_value=EnvironmentVariables.VALUE__SUPPORTED_LLM_PROVIDERS,
+                        convert_to_list=True,
+                        list_split_char=",",
+                    ),
                     label="Provider",
                     value=self._llm_provider,
                     interactive=True,
@@ -381,9 +392,10 @@ class GradioApp:
                 with gr.Column(visible=self._sidebar_state, scale=1) as sidebar:
                     self.create_component_settings()
                 with gr.Column(scale=2):
+                    gr.Markdown(GradioApp.MD_EU_AI_ACT_TRANSPARENCY)
                     text_user_input = gr.Textbox(
                         label="Question to ask",
-                        info="Pose the question that you want to ask the large language model.",
+                        info="Pose the question that you want to ask the large language model agent. Press ENTER to ask.",
                         placeholder="Enter your question here...",
                         max_lines=4,
                         show_copy_button=True,
