@@ -10,13 +10,23 @@ pytest
 # LlamaIndex
 llama-index
 llama-index-utils-workflow
+
+# LlamaIndex storage
 llama-index-vector-stores-qdrant
 qdrant_client
+
+# LlamaIndex LLMs
 llama-index-llms-groq
 llama-index-llms-ollama
 llama-index-llms-anthropic
 llama-index-llms-cohere
+
+# LlamaIndex tools
+llama-index-tools-arxiv
+llama-index-tools-duckduckgo
 llama-index-tools-tavily-research
+llama-index-tools-wikipedia
+llama-index-tools-yahoo-finance
 
 # Experimental
 gradio_log # see https://github.com/louis-she/gradio-log

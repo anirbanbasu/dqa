@@ -20,7 +20,11 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
 import json
+from typing import List
+from llama_index.tools.arxiv import ArxivToolSpec
+from llama_index.tools.wikipedia import WikipediaToolSpec
 from llama_index.tools.tavily_research import TavilyToolSpec
+from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
 from llama_index.core.tools import FunctionTool
 
 from llama_index.core.workflow import (
@@ -33,7 +37,7 @@ from llama_index.core.workflow import (
 )
 from llama_index.core.agent import ReActAgent
 
-from tools import CountSubstringsSchema, count_substrings
+from tools import StringFunctionsToolSpec
 from utils import parse_env, EnvironmentVariables
 
 
@@ -140,7 +144,10 @@ And here is the list of tools: {ctx.data['tools']}
         ic(f"Attempting sub-question: {ev.question}")
 
         agent = ReActAgent.from_tools(
-            ctx.data["tools"], llm=ctx.data["llm"], verbose=True
+            ctx.data["tools"],
+            llm=ctx.data["llm"],
+            verbose=True,
+            max_iterations=25,
         )
         response = agent.chat(ev.question)
 
@@ -201,17 +208,20 @@ class DQAEngine:
             llm (FunctionCallingLLM): The function calling LLM instance to use.
         """
         self.llm = llm
-        self.tools = TavilyToolSpec(
-            api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
-        ).to_tool_list()
-        self.tools.append(
-            FunctionTool.from_defaults(
-                fn=count_substrings,
-                name="count_substrings",
-                description="Count the number of sub-strings in a given string.",
-                fn_schema=CountSubstringsSchema,
-            )
+        # Add tool specs
+        self.tools: List[FunctionTool] = []
+        self.tools.extend(ArxivToolSpec().to_tool_list())
+        # DuckDuckGo search tool can end up being used even when other better tools are available, so it is commented out.
+        # self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
+        self.tools.extend(StringFunctionsToolSpec().to_tool_list())
+        self.tools.extend(
+            TavilyToolSpec(
+                api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
+            ).to_tool_list()
         )
+        self.tools.extend(WikipediaToolSpec().to_tool_list())
+        self.tools.extend(YahooFinanceToolSpec().to_tool_list())
+
         self.workflow = DQAWorkflow(timeout=120, verbose=True)
 
     async def run(self, query: str) -> str:
