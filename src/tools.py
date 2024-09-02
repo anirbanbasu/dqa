@@ -14,18 +14,9 @@
 
 """Functions wrapped as tools used by LLMs and agents for various tasks."""
 
-from pydantic import BaseModel, Field
 from llama_index.core.tools.tool_spec.base import BaseToolSpec
 
 from utils import EMPTY_STRING
-
-
-class CountSubstringsSchema(BaseModel):
-    string: str = Field(..., description="The string to search.")
-    substring: str = Field(
-        ...,
-        description="The substring to search for. This could be a single character or a sequence of characters.",
-    )
 
 
 class StringFunctionsToolSpec(BaseToolSpec):
@@ -63,3 +54,84 @@ class StringFunctionsToolSpec(BaseToolSpec):
         if not string:
             raise ValueError("The string must be provided.")
         return string == string[::-1]
+
+
+class BasicArithmeticCalculatorSpec(BaseToolSpec):
+    """Tool spec for basic arithmetic operations."""
+
+    spec_functions = ["add", "subtract", "multiply", "divide", "modulo"]
+
+    def add(self, a: int | float, b: int | float) -> int | float:
+        """
+        Adds two numbers.
+
+        Args:
+            a (int | float): The first number.
+            b (int | float): The second number.
+
+        Returns:
+            int | float: The sum of the two numbers.
+        """
+        return a + b
+
+    def subtract(self, a: int | float, b: int | float) -> int | float:
+        """
+        Subtracts one number from another.
+
+        Args:
+            a (int | float): The number to subtract from.
+            b (int | float): The number to subtract.
+
+        Returns:
+            int | float: The result of the subtraction.
+        """
+        return a - b
+
+    def multiply(self, a: int | float, b: int | float) -> int | float:
+        """
+        Multiplies two numbers.
+
+        Args:
+            a (int | float): The first number.
+            b (int | float): The second number.
+
+        Returns:
+            int | float: The product of the two numbers.
+        """
+        return a * b
+
+    def divide(self, a: int | float, b: int | float) -> int | float:
+        """
+        Divides one number by another.
+
+        Args:
+            a (int | float): The dividend.
+            b (int | float): The divisor.
+
+        Returns:
+            int | float: The result of the division.
+
+        Raises:
+            ValueError: If the divisor is zero.
+        """
+        if b == 0:
+            raise ValueError("Division by zero is not allowed.")
+        return a / b
+
+    def modulo(self, a: int | float, b: int | float) -> int | float:
+        """
+        Computes the modulo of one number by another.
+
+        Args:
+            a (int | float): The number to find the modulo of.
+            b (int | float): The modulo.
+
+        Returns:
+            int | float: The result of the modulo operation.
+
+        Raises:
+            ValueError: If the modulo is zero.
+        """
+        if b == 0:
+            raise ValueError("Modulo by zero is not allowed.")
+        return a % b

@@ -37,7 +37,7 @@ from llama_index.core.workflow import (
 )
 from llama_index.core.agent import ReActAgent
 
-from tools import StringFunctionsToolSpec
+from tools import StringFunctionsToolSpec, BasicArithmeticCalculatorSpec
 from utils import parse_env, EnvironmentVariables
 
 
@@ -213,7 +213,6 @@ class DQAEngine:
         self.tools.extend(ArxivToolSpec().to_tool_list())
         # DuckDuckGo search tool can end up being used even when other better tools are available, so it is commented out.
         # self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
-        self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         self.tools.extend(
             TavilyToolSpec(
                 api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
@@ -221,6 +220,10 @@ class DQAEngine:
         )
         self.tools.extend(WikipediaToolSpec().to_tool_list())
         self.tools.extend(YahooFinanceToolSpec().to_tool_list())
+
+        # Custom tools
+        self.tools.extend(StringFunctionsToolSpec().to_tool_list())
+        self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
 
         self.workflow = DQAWorkflow(timeout=120, verbose=True)
 
