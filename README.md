@@ -70,7 +70,7 @@ docker container start dqa-container
 You can replace the second line above to the following, in order to use a `.env` file on your Docker host that resides at the absolute path `PATH_TO_YOUR_.env_FILE`.
 
 ```bash
-docker create -v /PATH_TO_YOUR_.env_FILE:/app/.env -p 7860:7860/tcp --name dqa-container dqa
+docker create -v /PATH_TO_YOUR_.env_FILE:/home/app_user/app/.env -p 7860:7860/tcp --name dqa-container dqa
 ```
 
 The web server will serve a web user interface as well as a REST API at [http://localhost:7860](http://localhost:7860). It is not configured to use HTTPS.
