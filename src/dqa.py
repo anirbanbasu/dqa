@@ -19,12 +19,15 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
+import uuid
 import json
-from typing import List
+from typing import Any, List
 from llama_index.tools.arxiv import ArxivToolSpec
-from llama_index.tools.wikipedia import WikipediaToolSpec
+
+# from llama_index.tools.wikipedia import WikipediaToolSpec
 from llama_index.tools.tavily_research import TavilyToolSpec
-from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
+
+# from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
 from llama_index.core.tools import FunctionTool
 
 from llama_index.core.workflow import (
@@ -35,40 +38,214 @@ from llama_index.core.workflow import (
     StartEvent,
     StopEvent,
 )
-from llama_index.core.agent import ReActAgent
+
+# from llama_index.core.agent import ReActAgent
 
 from tools import StringFunctionsToolSpec, BasicArithmeticCalculatorSpec
-from utils import parse_env, EnvironmentVariables
+from utils import EMPTY_STRING, parse_env, EnvironmentVariables
 
 
-class QueryEvent(Event):
+from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.tools import ToolSelection, ToolOutput
+from llama_index.core.agent.react import ReActChatFormatter, ReActOutputParser
+from llama_index.core.agent.react.types import (
+    ActionReasoningStep,
+    ObservationReasoningStep,
+)
+from llama_index.core.llms.llm import LLM
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.core.tools.types import BaseTool
+
+
+class ReActPrepEvent(Event):
+    pass
+
+
+class ReActInputEvent(Event):
+    input: list[ChatMessage]
+
+
+class ReActToolCallEvent(Event):
+    tool_calls: list[ToolSelection]
+
+
+class ReActFunctionOutputEvent(Event):
+    output: ToolOutput
+
+
+class ReActWorkflow(Workflow):
+    STR_CURRENT_REASONING = "current_reasoning"
+
+    def __init__(
+        self,
+        *args: Any,
+        llm: LLM | None = None,
+        tools: list[BaseTool] | None = None,
+        extra_context: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.tools = tools or []
+
+        self.llm = llm
+
+        self.memory = ChatMemoryBuffer.from_defaults(llm=llm)
+        self.formatter = ReActChatFormatter(context=extra_context or EMPTY_STRING)
+        self.output_parser = ReActOutputParser()
+        self.sources = []
+
+    @step
+    async def new_user_msg(self, ctx: Context, ev: StartEvent) -> ReActPrepEvent:
+        # clear sources
+        self.sources = []
+
+        # get user input
+        user_input = ev.input
+        user_msg = ChatMessage(role=MessageRole.USER, content=user_input)
+        self.memory.put(user_msg)
+
+        if self._verbose:
+            ic(f"User asked: {ev.input}")
+
+        # clear current reasoning
+        await ctx.set(ReActWorkflow.STR_CURRENT_REASONING, [])
+
+        return ReActPrepEvent()
+
+    @step
+    async def prepare_chat_history(
+        self, ctx: Context, ev: ReActPrepEvent
+    ) -> ReActInputEvent:
+        # get chat history
+        chat_history = self.memory.get()
+        current_reasoning = await ctx.get(
+            ReActWorkflow.STR_CURRENT_REASONING, default=[]
+        )
+        llm_input = self.formatter.format(
+            self.tools, chat_history, current_reasoning=current_reasoning
+        )
+        return ReActInputEvent(input=llm_input)
+
+    @step
+    async def handle_llm_input(
+        self, ctx: Context, ev: ReActInputEvent
+    ) -> ReActToolCallEvent | StopEvent:
+        chat_history = ev.input
+
+        response = await self.llm.achat(chat_history)
+
+        try:
+            reasoning_step = self.output_parser.parse(response.message.content)
+            if self._verbose:
+                ic(reasoning_step)
+            (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                reasoning_step
+            )
+            if reasoning_step.is_done:
+                self.memory.put(
+                    ChatMessage(
+                        role=MessageRole.ASSISTANT, content=reasoning_step.response
+                    )
+                )
+                return StopEvent(
+                    # result={
+                    #     "response": reasoning_step.response,
+                    #     "sources": [*self.sources],
+                    #     "reasoning": await ctx.get(
+                    #         ReActWorkflow.STR_CURRENT_REASONING, default=[]
+                    #     ),
+                    # }
+                    result=reasoning_step.response
+                )
+            elif isinstance(reasoning_step, ActionReasoningStep):
+                tool_name = reasoning_step.action
+                tool_args = reasoning_step.action_input
+                return ReActToolCallEvent(
+                    tool_calls=[
+                        ToolSelection(
+                            tool_id=f"{tool_name}-{uuid.uuid4()}",
+                            tool_name=tool_name,
+                            tool_kwargs=tool_args,
+                        )
+                    ]
+                )
+        except Exception as e:
+            (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                ObservationReasoningStep(
+                    observation=f"There was an error in parsing my reasoning: {e}"
+                )
+            )
+
+        # if no tool calls or final response, iterate again
+        return ReActPrepEvent()
+
+    @step
+    async def handle_tool_calls(
+        self, ctx: Context, ev: ReActToolCallEvent
+    ) -> ReActPrepEvent:
+        tool_calls = ev.tool_calls
+        tools_by_name = {tool.metadata.get_name(): tool for tool in self.tools}
+
+        # call tools -- safely!
+        for tool_call in tool_calls:
+            tool = tools_by_name.get(tool_call.tool_name)
+            if not tool:
+                (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                    ObservationReasoningStep(
+                        observation=f"Tool {tool_call.tool_name} does not exist"
+                    )
+                )
+                continue
+
+            try:
+                tool_output = tool(**tool_call.tool_kwargs)
+                self.sources.append(tool_output)
+                (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                    ObservationReasoningStep(observation=tool_output.content)
+                )
+                if self._verbose:
+                    ic(
+                        f"Tool output: {tool_output.content} from {tool.metadata.get_name()}"
+                    )
+            except Exception as e:
+                (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                    ObservationReasoningStep(
+                        observation=f"Error calling tool {tool.metadata.get_name()}: {e}"
+                    )
+                )
+
+        # prep the next iteraiton
+        return ReActPrepEvent()
+
+
+class DQAQueryEvent(Event):
     question: str
 
 
-class AnswerEvent(Event):
+class DQAAnswerEvent(Event):
     question: str
     answer: str
 
 
-class ReviewSubQuestionEvent(Event):
+class DQAReviewSubQuestionEvent(Event):
     questions: List[str]
     satisfied: bool = False
 
 
 class DQAWorkflow(Workflow):
     @step
-    async def query(self, ctx: Context, ev: StartEvent) -> QueryEvent:
+    async def query(self, ctx: Context, ev: StartEvent) -> DQAQueryEvent:
         """
         As a start event of the workflow, this step receives the original query and stores it in the context.
         It then asks the LLM to decompose the query into sub-questions. Upon decomposition, it emits every
-        sub-question as a `QueryEvent`.
+        sub-question as a `DQAQueryEvent`.
 
         Args:
             ctx (Context): The context object.
             ev (StartEvent): The start event.
 
         Returns:
-            QueryEvent: The event containing the original query.
+            DQAQueryEvent: The event containing the original query.
         """
         if hasattr(ev, "query"):
             ctx.data["original_query"] = ev.query
@@ -122,22 +299,23 @@ And here is the list of tools: {ctx.data['tools']}
         """
         )
 
-        ic(self.query.__name__)
-
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
+
+        if self._verbose:
+            ic(sub_questions)
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
         if len(sub_questions) == 1:
-            return QueryEvent(question=sub_questions[0])
+            return DQAQueryEvent(question=sub_questions[0])
         else:
-            return ReviewSubQuestionEvent(questions=sub_questions)
+            return DQAReviewSubQuestionEvent(questions=sub_questions)
 
     @step
     async def review_sub_questions(
-        self, ctx: Context, ev: ReviewSubQuestionEvent
-    ) -> QueryEvent | ReviewSubQuestionEvent:
+        self, ctx: Context, ev: DQAReviewSubQuestionEvent
+    ) -> DQAQueryEvent | DQAReviewSubQuestionEvent:
         """
         This step receives the sub-questions and asks the LLM to review them. If the LLM is satisfied with the
         sub-questions, they can be used to answer the original question. Otherwise, the LLM can provide updated
@@ -145,17 +323,17 @@ And here is the list of tools: {ctx.data['tools']}
 
         Args:
             ctx (Context): The context object.
-            ev (QueryEvent): The event containing the sub-question.
+            ev (DQAQueryEvent): The event containing the sub-question.
 
         Returns:
-            QueryEvent | ReviewSubQuestionEvent: The event containing the sub-question or the event to review the
+            DQAQueryEvent | DQAReviewSubQuestionEvent: The event containing the sub-question or the event to review the
             sub-questions.
         """
 
         if ev.satisfied:
             # Already satisfied, no need to review.
             for question in ev.questions:
-                ctx.send_event(QueryEvent(question=question))
+                ctx.send_event(DQAQueryEvent(question=question))
 
         response = ctx.data["llm"].complete(
             f"""
@@ -186,63 +364,74 @@ Sub-questions and answers:
 {ev.questions}
             """
         )
-        ic(self.review_sub_questions.__name__)
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
+        satisfied = response_obj["satisfied"]
+
+        if self._verbose:
+            ic(sub_questions, satisfied)
         ctx.data["sub_question_count"] = len(sub_questions)
 
         if len(sub_questions) == 1:
-            return QueryEvent(question=sub_questions[0])
+            return DQAQueryEvent(question=sub_questions[0])
 
-        if response_obj["satisfied"]:
+        if satisfied:
             for question in sub_questions:
-                ctx.send_event(QueryEvent(question=question))
+                ctx.send_event(DQAQueryEvent(question=question))
         else:
             # Not satisfied, so ask for review again.
-            return ReviewSubQuestionEvent(
+            return DQAReviewSubQuestionEvent(
                 questions=sub_questions, satisfied=response_obj["satisfied"]
             )
 
         return None
 
     @step(num_workers=4)
-    async def answer_sub_question(self, ctx: Context, ev: QueryEvent) -> AnswerEvent:
+    async def answer_sub_question(
+        self, ctx: Context, ev: DQAQueryEvent, react_workflow: ReActWorkflow
+    ) -> DQAAnswerEvent:
         """
         This step receives a sub-question and attempts to answer it using the tools provided in the context.
 
         Args:
             ctx (Context): The context object.
-            ev (QueryEvent): The event containing the sub-question.
+            ev (DQAQueryEvent): The event containing the sub-question.
 
         Returns:
-            AnswerEvent: The event containing the sub-question and the answer.
+            DQAAnswerEvent: The event containing the sub-question and the answer.
         """
 
-        agent = ReActAgent.from_tools(
-            ctx.data["tools"],
-            llm=ctx.data["llm"],
-            verbose=True,
-            max_iterations=25,
-        )
-        response = agent.chat(ev.question)
-        ic(self.answer_sub_question.__name__)
+        # agent = ReActAgent.from_tools(
+        #     ctx.data["tools"],
+        #     llm=ctx.data["llm"],
+        #     verbose=True,
+        #     max_iterations=25,
+        # )
+        # response = agent.chat(ev.question)
+        response = await react_workflow.run(input=ev.question)
+        if self._verbose:
+            ic(response)
 
-        return AnswerEvent(question=ev.question, answer=str(response))
+        return DQAAnswerEvent(question=ev.question, answer=str(response))
 
     @step
-    async def combine_answers(self, ctx: Context, ev: AnswerEvent) -> StopEvent | None:
+    async def combine_answers(
+        self, ctx: Context, ev: DQAAnswerEvent
+    ) -> StopEvent | None:
         """
         This step receives the answers to the sub-questions and combines them into a single answer to the original
         question so long as all the sub-questions have been answered.
 
         Args:
             ctx (Context): The context object.
-            ev (AnswerEvent): The event containing the sub-question and the answer.
+            ev (DQAAnswerEvent): The event containing the sub-question and the answer.
 
         Returns:
             StopEvent | None: The event containing the final answer to the original
         """
-        ready = ctx.collect_events(ev, [AnswerEvent] * ctx.data["sub_question_count"])
+        ready = ctx.collect_events(
+            ev, [DQAAnswerEvent] * ctx.data["sub_question_count"]
+        )
         if ready is None:
             return None
 
@@ -268,8 +457,11 @@ Sub-questions and answers:
 {answers}
         """
 
+        if self._verbose:
+            ic(prompt)
         response = ctx.data["llm"].complete(prompt)
-        ic(self.combine_answers.__name__)
+        if self._verbose:
+            ic(response)
         return StopEvent(result=str(response))
 
 
@@ -292,14 +484,19 @@ class DQAEngine:
                 api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
             ).to_tool_list()
         )
-        self.tools.extend(WikipediaToolSpec().to_tool_list())
-        self.tools.extend(YahooFinanceToolSpec().to_tool_list())
+        # self.tools.extend(WikipediaToolSpec().to_tool_list())
+        # self.tools.extend(YahooFinanceToolSpec().to_tool_list())
 
         # Custom tools
         self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
 
         self.workflow = DQAWorkflow(timeout=120, verbose=True)
+        self.workflow.add_workflows(
+            react_workflow=ReActWorkflow(
+                llm=self.llm, tools=self.tools, timeout=120, verbose=True
+            )
+        )
 
     async def run(self, query: str) -> str:
         """
