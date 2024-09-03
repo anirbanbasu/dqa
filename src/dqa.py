@@ -50,6 +50,11 @@ class AnswerEvent(Event):
     answer: str
 
 
+class ReviewSubQuestionEvent(Event):
+    questions: List[str]
+    satisfied: bool = False
+
+
 class DQAWorkflow(Workflow):
     @step
     async def query(self, ctx: Context, ev: StartEvent) -> QueryEvent:
@@ -82,7 +87,7 @@ Given a user question, generate a list of distinct sub-questions that you need t
 Respond with a list containing only the unmodified original question when no decomposition is needed.
 Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
 Each sub-question should clearly state the subject to ensure no ambiguity.
-Do not generate unnecessary sub-questions that do not contribute to answering the original question.
+Do not generate unnecessary sub-questions that are not required to answer the original question.
 
 Example 1:
 Question: Is Hamlet more common on IMDB than Comedy of Errors?
@@ -100,7 +105,7 @@ Decompositions:
 {{
     "sub_questions": ["What is the capital city of Japan?"]
 }}
-The question needs no decomposition
+Note that this question above needs no decomposition. Hence, the original question is repeated as the only sub-question.
 
 Always, respond in pure JSON without any Markdown, like this:
 {{
@@ -117,19 +122,90 @@ And here is the list of tools: {ctx.data['tools']}
         """
         )
 
-        ic(response)
+        ic(self.query.__name__)
 
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
-        for question in sub_questions:
-            self.send_event(QueryEvent(question=question))
+        if len(sub_questions) == 1:
+            return QueryEvent(question=sub_questions[0])
+        else:
+            return ReviewSubQuestionEvent(questions=sub_questions)
+
+    @step
+    async def review_sub_questions(
+        self, ctx: Context, ev: ReviewSubQuestionEvent
+    ) -> QueryEvent | ReviewSubQuestionEvent:
+        """
+        This step receives the sub-questions and asks the LLM to review them. If the LLM is satisfied with the
+        sub-questions, they can be used to answer the original question. Otherwise, the LLM can provide updated
+        sub-questions.
+
+        Args:
+            ctx (Context): The context object.
+            ev (QueryEvent): The event containing the sub-question.
+
+        Returns:
+            QueryEvent | ReviewSubQuestionEvent: The event containing the sub-question or the event to review the
+            sub-questions.
+        """
+
+        if ev.satisfied:
+            # Already satisfied, no need to review.
+            for question in ev.questions:
+                ctx.send_event(QueryEvent(question=question))
+
+        response = ctx.data["llm"].complete(
+            f"""
+You are given an overall question that has been decomposed into sub-questions.
+Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query..
+Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question.
+Ensure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
+Each sub-question should clearly state the subject to ensure no ambiguity.
+Do not output sub-questions that are not required to answer the original question.
+
+Lastly, generate a binary response indicating whether you are satisfied with the amended sub-questions or not.
+
+Always, respond in pure JSON without any Markdown, like this:
+{{
+    "sub_questions": [
+        "sub question 1",
+        "sub question 2",
+        "sub question 3",
+    ],
+    "satisfied": true or false
+}}
+
+Here is the user question: {ctx.data['original_query']}
+
+And here is the list of tools: {ctx.data['tools']}
+
+Sub-questions and answers:
+{ev.questions}
+            """
+        )
+        ic(self.review_sub_questions.__name__)
+        response_obj = json.loads(str(response))
+        sub_questions = response_obj["sub_questions"]
+        ctx.data["sub_question_count"] = len(sub_questions)
+
+        if len(sub_questions) == 1:
+            return QueryEvent(question=sub_questions[0])
+
+        if response_obj["satisfied"]:
+            for question in sub_questions:
+                ctx.send_event(QueryEvent(question=question))
+        else:
+            # Not satisfied, so ask for review again.
+            return ReviewSubQuestionEvent(
+                questions=sub_questions, satisfied=response_obj["satisfied"]
+            )
 
         return None
 
-    @step
+    @step(num_workers=4)
     async def answer_sub_question(self, ctx: Context, ev: QueryEvent) -> AnswerEvent:
         """
         This step receives a sub-question and attempts to answer it using the tools provided in the context.
@@ -141,7 +217,6 @@ And here is the list of tools: {ctx.data['tools']}
         Returns:
             AnswerEvent: The event containing the sub-question and the answer.
         """
-        ic(f"Attempting sub-question: {ev.question}")
 
         agent = ReActAgent.from_tools(
             ctx.data["tools"],
@@ -150,6 +225,7 @@ And here is the list of tools: {ctx.data['tools']}
             max_iterations=25,
         )
         response = agent.chat(ev.question)
+        ic(self.answer_sub_question.__name__)
 
         return AnswerEvent(question=ev.question, answer=str(response))
 
@@ -170,6 +246,10 @@ And here is the list of tools: {ctx.data['tools']}
         if ready is None:
             return None
 
+        if len(ready) == 1:
+            # Nothing to combine if there was only ever one sub-question.
+            return StopEvent(result=ready[0].answer)
+
         answers = "\n\n".join(
             [
                 f"Question: {event.question}: \n Answer: {event.answer}"
@@ -177,12 +257,10 @@ And here is the list of tools: {ctx.data['tools']}
             ]
         )
 
-        for event in ready:
-            ic(event)
-
         prompt = f"""
 You are given an overall question that has been split into sub-questions, each of which has been answered.
-Combine the answers to all the sub-questions into a single and succinct answer to the original question.
+Combine the answers to all the sub-questions into a single answer to the original question. Your answer should be a coherent response to the original question.
+Ensure that your final answer includes all the relevant information from the answers to the sub-questions. Do not miss out on any important details and nuances.
 
 Original question: {ctx.data['original_query']}
 
@@ -190,12 +268,8 @@ Sub-questions and answers:
 {answers}
         """
 
-        ic(f"Final prompt is {prompt}")
-
         response = ctx.data["llm"].complete(prompt)
-
-        ic("Final response is", response)
-
+        ic(self.combine_answers.__name__)
         return StopEvent(result=str(response))
 
 
