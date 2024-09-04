@@ -289,6 +289,25 @@ class DQAReviewSubQuestionEvent(Event):
 
 
 class DQAWorkflow(Workflow):
+    def __init__(
+        self,
+        *args: Any,
+        llm: LLM | None = None,
+        tools: list[BaseTool] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Initialize the DQA workflow.
+
+        Args:
+            llm (LLM): The LLM instance to use.
+            tools (list[BaseTool]): The list of tools to use.
+        """
+        super().__init__(*args, **kwargs)
+        self.tools = tools or []
+
+        self.llm = llm
+
     @step
     async def query(self, ctx: Context, ev: StartEvent) -> DQAQueryEvent:
         """
@@ -303,17 +322,11 @@ class DQAWorkflow(Workflow):
         Returns:
             DQAQueryEvent: The event containing the original query.
         """
-        if hasattr(ev, "query"):
-            ctx.data["original_query"] = ev.query
-            print(f"Query is {ctx.data['original_query']}")
+        # if hasattr(ev, "query"):
+        ctx.data["original_query"] = ev.query
+        print(f"Query is {ctx.data['original_query']}")
 
-        if hasattr(ev, "llm"):
-            ctx.data["llm"] = ev.llm
-
-        if hasattr(ev, "tools"):
-            ctx.data["tools"] = ev.tools
-
-        response = ctx.data["llm"].complete(
+        response = self.llm.complete(
             f"""
 You are an assistant for question-answering tasks who performs query decomposition.
 Given a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question.
@@ -351,7 +364,7 @@ Always, respond in pure JSON without any Markdown, like this:
 
 Here is the user question: {ctx.data['original_query']}
 
-And here is the list of tools: {ctx.data['tools']}
+And here is the list of tools: {self.tools}
         """
         )
 
@@ -391,7 +404,7 @@ And here is the list of tools: {ctx.data['tools']}
             for question in ev.questions:
                 ctx.send_event(DQAQueryEvent(question=question))
 
-        response = ctx.data["llm"].complete(
+        response = self.llm.complete(
             f"""
 You are given an overall question that has been decomposed into sub-questions.
 Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query..
@@ -414,7 +427,7 @@ Always, respond in pure JSON without any Markdown, like this:
 
 Here is the user question: {ctx.data['original_query']}
 
-And here is the list of tools: {ctx.data['tools']}
+And here is the list of tools: {self.tools}
 
 Sub-questions and answers:
 {ev.questions}
@@ -459,7 +472,7 @@ Sub-questions and answers:
 
         # agent = ReActAgent.from_tools(
         #     ctx.data["tools"],
-        #     llm=ctx.data["llm"],
+        #     llm=self.llm,
         #     verbose=True,
         #     max_iterations=25,
         # )
@@ -525,7 +538,7 @@ Sub-questions and answers:
 
         if self._verbose:
             ic(prompt)
-        response = ctx.data["llm"].complete(prompt)
+        response = self.llm.complete(prompt)
         if self._verbose:
             ic(response)
         return StopEvent(result=str(response))
@@ -556,13 +569,6 @@ class DQAEngine:
         # Custom tools
         self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
-
-        self.workflow = DQAWorkflow(timeout=120, verbose=True)
-        self.workflow.add_workflows(
-            react_workflow=ReActWorkflow(
-                llm=self.llm, tools=self.tools, timeout=60, verbose=True
-            )
-        )
 
     def _are_tools_present(self, tool_names: list[str]) -> bool:
         """
@@ -759,9 +765,15 @@ class DQAEngine:
         Returns:
             str: The response from the engine.
         """
+        self.workflow = DQAWorkflow(
+            llm=self.llm, tools=self.tools, timeout=120, verbose=True
+        )
+        self.workflow.add_workflows(
+            react_workflow=ReActWorkflow(
+                llm=self.llm, tools=self.tools, timeout=60, verbose=True
+            )
+        )
         result = await self.workflow.run(
-            llm=self.llm,
-            tools=self.tools,
             query=query,
         )
         ic(result)

@@ -100,6 +100,7 @@ class GradioApp:
 
     def __init__(self):
         ic(load_dotenv())
+        self.dqa_engine = DQAEngine()
         self.set_llm_provider()
 
     def set_llm_provider(self, provider: str | None = None):
@@ -207,7 +208,7 @@ class GradioApp:
         else:
             raise ValueError(f"Unsupported LLM provider: {self._llm_provider}")
 
-        self.dqa_engine = DQAEngine(llm=self._llm)
+        self.dqa_engine.llm = self._llm
 
         ic(
             self._llm_provider,
