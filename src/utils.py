@@ -17,12 +17,23 @@
 import os
 from typing import Any
 
+FAKE_STRING = "fake"
 EMPTY_STRING = ""
 SPACE_STRING = " "
 COLON_STRING = ":"
 EMPTY_DICT = {}
 
 TRUE_VALUES_LIST = ["true", "yes", "t", "y", "on"]
+
+
+class ToolNames:
+    TOOL_NAME_ARXIV = "ArXiV"
+    TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR = "Basic arithmetic calculator"
+    TOOL_NAME_DUCKDUCKGO = "DuckDuckGo"
+    TOOL_NAME_STRING_FUNCTIONS = "String functions"
+    TOOL_NAME_TAVILY = "Tavily"
+    TOOL_NAME_WIKIPEDIA = "Wikipedia"
+    TOOL_NAME_YAHOO_FINANCE = "Yahoo! Finance"
 
 
 class EnvironmentVariables:

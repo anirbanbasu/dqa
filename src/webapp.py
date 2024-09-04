@@ -28,6 +28,7 @@ from gradio_log import Log as GradioLog
 from dqa import DQAEngine
 from utils import (
     COLON_STRING,
+    ToolNames,
     check_list_subset,
     parse_env,
     EMPTY_STRING,
@@ -128,26 +129,28 @@ class GradioApp:
                     type_cast=float,
                 ),
                 json_mode=True,
-                top_p=parse_env(
-                    EnvironmentVariables.KEY__LLM_TOP_P,
-                    default_value=EnvironmentVariables.VALUE__LLM_TOP_P,
-                    type_cast=float,
-                ),
-                top_k=parse_env(
-                    EnvironmentVariables.KEY__LLM_TOP_K,
-                    default_value=EnvironmentVariables.VALUE__LLM_TOP_K,
-                    type_cast=int,
-                ),
-                repeat_penalty=parse_env(
-                    EnvironmentVariables.KEY__LLM_REPEAT_PENALTY,
-                    default_value=EnvironmentVariables.VALUE__LLM_REPEAT_PENALTY,
-                    type_cast=float,
-                ),
-                seed=parse_env(
-                    EnvironmentVariables.KEY__LLM_SEED,
-                    default_value=EnvironmentVariables.VALUE__LLM_SEED,
-                    type_cast=int,
-                ),
+                additional_kwargs={
+                    "top_p": parse_env(
+                        EnvironmentVariables.KEY__LLM_TOP_P,
+                        default_value=EnvironmentVariables.VALUE__LLM_TOP_P,
+                        type_cast=float,
+                    ),
+                    "top_k": parse_env(
+                        EnvironmentVariables.KEY__LLM_TOP_K,
+                        default_value=EnvironmentVariables.VALUE__LLM_TOP_K,
+                        type_cast=int,
+                    ),
+                    "repeat_penalty": parse_env(
+                        EnvironmentVariables.KEY__LLM_REPEAT_PENALTY,
+                        default_value=EnvironmentVariables.VALUE__LLM_REPEAT_PENALTY,
+                        type_cast=float,
+                    ),
+                    "seed": parse_env(
+                        EnvironmentVariables.KEY__LLM_SEED,
+                        default_value=EnvironmentVariables.VALUE__LLM_SEED,
+                        type_cast=int,
+                    ),
+                },
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_GROQ:
             self._llm = Groq(
@@ -204,7 +207,14 @@ class GradioApp:
         else:
             raise ValueError(f"Unsupported LLM provider: {self._llm_provider}")
 
-        ic(self._llm_provider, self._llm.model, self._llm.temperature)
+        self.dqa_engine = DQAEngine(llm=self._llm)
+
+        ic(
+            self._llm_provider,
+            self._llm.model,
+            self._llm.temperature,
+            self.dqa_engine.llm,
+        )
 
     def create_component_settings(self) -> gr.Group:
         with gr.Group() as settings:
@@ -231,11 +241,11 @@ class GradioApp:
                     interactive=True,
                     info="Changing the LLM provider will reset the model and temperature settings below to their default values.",
                 )
-                text_api_key = gr.Textbox(
+                text_llm_api_key = gr.Textbox(
                     label=f"{self._llm_provider} API key",
                     interactive=True,
                     max_lines=1,
-                    info="A valid API key for the selected LLM provider is required. Once set, the API key will not be displayed. DEPRECATED: Use the environment variable instead.",
+                    info=f"A valid API key for {self._llm_provider} is required. Once set, the API key will not be displayed.",
                     type="password",
                     value=EMPTY_STRING,
                     visible=(
@@ -279,13 +289,155 @@ class GradioApp:
                     info="The temperature range is [0.0, 2.0] for Open AI models and [0.0, 1.0] otherwise.",
                 )
 
+            with gr.Accordion(label="Tools for agents", open=False):
+                gr.Markdown(
+                    "**Note** that making too many tools available to the agents _may_ cause query performance degradation!"
+                )
+                check_arxiv = gr.Checkbox(
+                    label=ToolNames.TOOL_NAME_ARXIV,
+                    interactive=True,
+                    info="Tool to allow the agents to search for research papers.",
+                    value=self.dqa_engine.is_toolset_present(ToolNames.TOOL_NAME_ARXIV),
+                )
+
+                dropdown_web_search = gr.Dropdown(
+                    label="Web search",
+                    info="Tool to allow the agents to search the web for information.",
+                    show_label=True,
+                    choices=[
+                        ToolNames.TOOL_NAME_DUCKDUCKGO,
+                        ToolNames.TOOL_NAME_TAVILY,
+                    ],
+                    value=ToolNames.TOOL_NAME_DUCKDUCKGO,
+                    interactive=True,
+                )
+
+                text_web_search_api_key = gr.Textbox(
+                    label=f"{dropdown_web_search.value} API key",
+                    type="password",
+                    interactive=True,
+                    visible=(
+                        True
+                        if dropdown_web_search.value != ToolNames.TOOL_NAME_DUCKDUCKGO
+                        else False
+                    ),
+                )
+
+                check_wikipedia = gr.Checkbox(
+                    label=ToolNames.TOOL_NAME_WIKIPEDIA,
+                    interactive=True,
+                    info="Tool to allow the agents to search for articles.",
+                    value=self.dqa_engine.is_toolset_present(
+                        ToolNames.TOOL_NAME_WIKIPEDIA
+                    ),
+                )
+
+                check_yahoo_finance = gr.Checkbox(
+                    label=ToolNames.TOOL_NAME_YAHOO_FINANCE,
+                    interactive=True,
+                    info="Tool to allow the agents to search for financial information.",
+                    value=self.dqa_engine.is_toolset_present(
+                        ToolNames.TOOL_NAME_YAHOO_FINANCE
+                    ),
+                )
+
+                gr.Checkbox(
+                    label=ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR,
+                    interactive=False,
+                    info="Tool to allow the agents to perform some basic arithmetic operations.",
+                    value=self.dqa_engine.is_toolset_present(
+                        ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR
+                    ),
+                )
+
+                gr.Checkbox(
+                    label=ToolNames.TOOL_NAME_STRING_FUNCTIONS,
+                    interactive=False,
+                    info="Tool to allow the agents to perform some basic string operations.",
+                    value=self.dqa_engine.is_toolset_present(
+                        ToolNames.TOOL_NAME_STRING_FUNCTIONS
+                    ),
+                )
+
+                list_of_tools = gr.List(
+                    label="The list of tools that are available to the agents, including those that are not user-selectable.",
+                    show_label=True,
+                    value=self.dqa_engine.get_descriptive_tools_dataframe(),
+                    col_count=2,
+                    headers=["Name", "Description"],
+                    wrap=True,
+                    line_breaks=True,
+                    datatype="markdown",
+                    column_widths=[1, 2],
+                    height=300,
+                )
+
+            @check_arxiv.change(
+                api_name=False,
+                inputs=[check_arxiv],
+                outputs=[list_of_tools],
+            )
+            def toggle_arxiv_tool(checked: bool):
+                if checked:
+                    self.dqa_engine.add_or_set_toolset(ToolNames.TOOL_NAME_ARXIV)
+                else:
+                    self.dqa_engine.remove_toolset(ToolNames.TOOL_NAME_ARXIV)
+                return self.dqa_engine.get_descriptive_tools_dataframe()
+
+            @check_wikipedia.change(
+                api_name=False,
+                inputs=[check_wikipedia],
+                outputs=[list_of_tools],
+            )
+            def toggle_wikipedia_tool(checked: bool):
+                if checked:
+                    self.dqa_engine.add_or_set_toolset(ToolNames.TOOL_NAME_WIKIPEDIA)
+                else:
+                    self.dqa_engine.remove_toolset(ToolNames.TOOL_NAME_WIKIPEDIA)
+                return self.dqa_engine.get_descriptive_tools_dataframe()
+
+            @check_yahoo_finance.change(
+                api_name=False,
+                inputs=[check_yahoo_finance],
+                outputs=[list_of_tools],
+            )
+            def toggle_yahoo_finance_tool(checked: bool):
+                if checked:
+                    self.dqa_engine.add_or_set_toolset(
+                        ToolNames.TOOL_NAME_YAHOO_FINANCE
+                    )
+                else:
+                    self.dqa_engine.remove_toolset(ToolNames.TOOL_NAME_YAHOO_FINANCE)
+                return self.dqa_engine.get_descriptive_tools_dataframe()
+
+            @dropdown_web_search.change(
+                api_name=False,
+                inputs=[dropdown_web_search],
+                outputs=[text_web_search_api_key, list_of_tools],
+            )
+            def change_web_search_tool(selected_tool: str):
+                self.dqa_engine.set_web_search_tool(selected_tool)
+                return (
+                    gr.update(
+                        visible=(
+                            True
+                            if selected_tool != ToolNames.TOOL_NAME_DUCKDUCKGO
+                            else False
+                        ),
+                        label=f"{selected_tool} API key",
+                        info=f"A valid API key for the {selected_tool} tool is required. Once set, the API key will not be displayed.",
+                        value=EMPTY_STRING,
+                    ),
+                    self.dqa_engine.get_descriptive_tools_dataframe(),
+                )
+
             @dropdown_llm_provider.change(
                 api_name=False,
                 inputs=[dropdown_llm_provider],
                 outputs=[
                     text_llm_model,
                     number_llm_temperature,
-                    text_api_key,
+                    text_llm_api_key,
                     text_ollama_url,
                 ],
             )
@@ -310,6 +462,7 @@ class GradioApp:
                             == EnvironmentVariables.VALUE__LLM_PROVIDER_OLLAMA
                             else True
                         ),
+                        info=f"A valid API key for {self._llm_provider} is required. Once set, the API key will not be displayed.",
                         value=EMPTY_STRING,
                     ),
                     gr.update(
@@ -328,10 +481,10 @@ class GradioApp:
                     ),
                 )
 
-            @text_api_key.blur(
+            @text_llm_api_key.blur(
                 api_name=False,
-                inputs=[text_api_key],
-                outputs=[text_api_key],
+                inputs=[text_llm_api_key],
+                outputs=[text_llm_api_key],
             )
             def change_llm_api_key(api_key: str):
                 if api_key is not None and api_key != EMPTY_STRING:
@@ -491,8 +644,7 @@ class GradioApp:
                     )
                     async def get_agent_response(user_input: str):
                         if user_input is not None and user_input != EMPTY_STRING:
-                            dqa = DQAEngine(self._llm)
-                            return await dqa.run(user_input)
+                            return await self.dqa_engine.run(user_input)
                         return EMPTY_DICT
 
             # Component actions

@@ -22,11 +22,16 @@ from utils import EMPTY_STRING
 class StringFunctionsToolSpec(BaseToolSpec):
     """Tool spec for some string manipulation functions."""
 
-    spec_functions = ["count_substrings", "is_palindrome"]
+    def __init__(self):
+        self.spec_functions = [
+            method
+            for method in self.__class__.__dict__
+            if callable(getattr(self.__class__, method)) and not method.startswith("__")
+        ]
 
-    def count_substrings(self, string: str, substring: str) -> int:
+    def sf_count_substrings(self, string: str, substring: str) -> int:
         """
-        Counts the number of times a substring appears in a string.
+        StringFunctions: Counts the number of times a substring appears in a string.
 
         Args:
             string (str): The string to search.
@@ -41,9 +46,9 @@ class StringFunctionsToolSpec(BaseToolSpec):
             return 0
         return string.count(substring)
 
-    def is_palindrome(self, string: str) -> bool:
+    def sf_is_palindrome(self, string: str) -> bool:
         """
-        Checks if a string is a palindrome.
+        StringFunctions: Checks if a string is a palindrome.
 
         Args:
             string (str): The string to check.
@@ -59,11 +64,16 @@ class StringFunctionsToolSpec(BaseToolSpec):
 class BasicArithmeticCalculatorSpec(BaseToolSpec):
     """Tool spec for basic arithmetic operations."""
 
-    spec_functions = ["add", "subtract", "multiply", "divide", "modulo"]
+    def __init__(self):
+        self.spec_functions = [
+            method
+            for method in self.__class__.__dict__
+            if callable(getattr(self.__class__, method)) and not method.startswith("__")
+        ]
 
-    def add(self, a: int | float, b: int | float) -> int | float:
+    def bac_add(self, a: int | float, b: int | float) -> int | float:
         """
-        Adds two numbers.
+        BasicArithmeticCalculator: Adds two numbers.
 
         Args:
             a (int | float): The first number.
@@ -74,9 +84,9 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
         """
         return a + b
 
-    def subtract(self, a: int | float, b: int | float) -> int | float:
+    def bac_subtract(self, a: int | float, b: int | float) -> int | float:
         """
-        Subtracts one number from another.
+        BasicArithmeticCalculator: Subtracts one number from another.
 
         Args:
             a (int | float): The number to subtract from.
@@ -87,9 +97,9 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
         """
         return a - b
 
-    def multiply(self, a: int | float, b: int | float) -> int | float:
+    def bac_multiply(self, a: int | float, b: int | float) -> int | float:
         """
-        Multiplies two numbers.
+        BasicArithmeticCalculator: Multiplies two numbers.
 
         Args:
             a (int | float): The first number.
@@ -100,9 +110,9 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
         """
         return a * b
 
-    def divide(self, a: int | float, b: int | float) -> int | float:
+    def bac_divide(self, a: int | float, b: int | float) -> int | float:
         """
-        Divides one number by another.
+        BasicArithmeticCalculator: Divides one number by another.
 
         Args:
             a (int | float): The dividend.
@@ -118,16 +128,16 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
             raise ValueError("Division by zero is not allowed.")
         return a / b
 
-    def modulo(self, a: int | float, b: int | float) -> int | float:
+    def bac_modulo(self, a: int, b: int) -> int:
         """
-        Computes the modulo of one number by another.
+        BasicArithmeticCalculator: Computes the modulo of one number by another.
 
         Args:
-            a (int | float): The number to find the modulo of.
-            b (int | float): The modulo.
+            a (int): The number to find the modulo of.
+            b (int): The modulo.
 
         Returns:
-            int | float: The result of the modulo operation.
+            int: The result of the modulo operation.
 
         Raises:
             ValueError: If the modulo is zero.

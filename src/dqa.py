@@ -24,11 +24,11 @@ import json
 from typing import Any, List
 from llama_index.tools.arxiv import ArxivToolSpec
 
-# from llama_index.tools.wikipedia import WikipediaToolSpec
-# from llama_index.tools.tavily_research import TavilyToolSpec
+from llama_index.tools.wikipedia import WikipediaToolSpec
+from llama_index.tools.tavily_research import TavilyToolSpec
 from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
 
-# from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
+from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
 from llama_index.core.tools import FunctionTool
 
 from llama_index.core.workflow import (
@@ -43,7 +43,11 @@ from llama_index.core.workflow import (
 # from llama_index.core.agent import ReActAgent
 
 from tools import StringFunctionsToolSpec, BasicArithmeticCalculatorSpec
-from utils import EMPTY_STRING  # , parse_env, EnvironmentVariables
+from utils import (
+    EMPTY_STRING,
+    FAKE_STRING,
+    ToolNames,
+)  # , parse_env, EnvironmentVariables
 
 
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -499,7 +503,9 @@ Sub-questions and answers:
 
         answers = "\n\n".join(
             [
-                f"Question: {event.question}: \n Answer: {event.answer} \n Sources: {", ".join(event.sources)}"
+                f"""Question: {event.question}
+                \n Answer: {event.answer}
+                \n Sources: {", ".join(event.sources)}"""
                 for event in ready
             ]
         )
@@ -508,7 +514,7 @@ Sub-questions and answers:
 You are given an overall question that has been split into sub-questions, each of which has been answered.
 Combine the answers to all the sub-questions into a single answer to the original question. Your answer should be a coherent response to the original question.
 Ensure that your final answer includes all the relevant information from the answers to the sub-questions.
-Include information from the sources and their corresponding URLs, if present, in your final answer.
+In your final answer, include information from the sources if they have corresponding URLs.
 Do not miss out on any important details and nuances. Format your final answer as Markdown.
 
 Original question: {ctx.data['original_query']}
@@ -526,12 +532,12 @@ Sub-questions and answers:
 
 
 class DQAEngine:
-    def __init__(self, llm):
+    def __init__(self, llm: LLM | None = None):
         """
         Initialize the Difficult Questions Attempted engine.
 
         Args:
-            llm (FunctionCallingLLM): The function calling LLM instance to use.
+            llm (LLM): The function calling LLM instance to use.
         """
         self.llm = llm
         # Add tool specs
@@ -557,6 +563,191 @@ class DQAEngine:
                 llm=self.llm, tools=self.tools, timeout=60, verbose=True
             )
         )
+
+    def _are_tools_present(self, tool_names: list[str]) -> bool:
+        """
+        Check if the tools with the given names are present in the current set of tools.
+
+        Args:
+            tool_names (list[str]): The names of the tools to check.
+
+        Returns:
+            bool: True if all the tools are present, False otherwise.
+        """
+        return all(
+            tool_name in [tool.metadata.name for tool in self.tools]
+            for tool_name in tool_names
+        )
+
+    def _remove_tools_by_names(self, tool_names: list[str]):
+        """
+        Remove the tools with the given names from the current set of tools.
+
+        Args:
+            tool_names (list[str]): The names of the tools to remove.
+        """
+        self.tools = [
+            tool for tool in self.tools if tool.metadata.name not in tool_names
+        ]
+
+    def is_toolset_present(self, toolset_name: str) -> bool:
+        """
+        Check if the tools for the givev toolset are present in the current set of tools.
+
+        Args:
+            toolset_name (str): The name of the toolset to check.
+
+        Returns:
+            bool: True if the tools are present, False otherwise.
+        """
+        if toolset_name == ToolNames.TOOL_NAME_ARXIV:
+            return self._are_tools_present(
+                [tool.metadata.name for tool in ArxivToolSpec().to_tool_list()]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR:
+            return self._are_tools_present(
+                [
+                    tool.metadata.name
+                    for tool in BasicArithmeticCalculatorSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
+            return self._are_tools_present(
+                [
+                    tool.metadata.name
+                    for tool in DuckDuckGoSearchToolSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:
+            return self._are_tools_present(
+                [
+                    tool.metadata.name
+                    for tool in StringFunctionsToolSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_TAVILY:
+            return self._are_tools_present(
+                [
+                    tool.metadata.name
+                    for tool in TavilyToolSpec(api_key=FAKE_STRING).to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_WIKIPEDIA:
+            return self._are_tools_present(
+                [tool.metadata.name for tool in WikipediaToolSpec().to_tool_list()]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_YAHOO_FINANCE:
+            return self._are_tools_present(
+                [tool.metadata.name for tool in YahooFinanceToolSpec().to_tool_list()]
+            )
+
+    def remove_toolset(self, toolset_name: str):
+        """
+        Remove the tools for the given toolset from the current set of tools.
+
+        Args:
+            toolset_name (str): The name of the toolset to remove.
+        """
+        if toolset_name == ToolNames.TOOL_NAME_ARXIV:
+            self._remove_tools_by_names(
+                [tool.metadata.name for tool in ArxivToolSpec().to_tool_list()]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR:
+            self._remove_tools_by_names(
+                [
+                    tool.metadata.name
+                    for tool in BasicArithmeticCalculatorSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
+            self._remove_tools_by_names(
+                [
+                    tool.metadata.name
+                    for tool in DuckDuckGoSearchToolSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:
+            self._remove_tools_by_names(
+                [
+                    tool.metadata.name
+                    for tool in StringFunctionsToolSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_TAVILY:
+            self._remove_tools_by_names(
+                [
+                    tool.metadata.name
+                    for tool in TavilyToolSpec(api_key=FAKE_STRING).to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_WIKIPEDIA:
+            self._remove_tools_by_names(
+                [tool.metadata.name for tool in WikipediaToolSpec().to_tool_list()]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_YAHOO_FINANCE:
+            self._remove_tools_by_names(
+                [tool.metadata.name for tool in YahooFinanceToolSpec().to_tool_list()]
+            )
+
+    def add_or_set_toolset(
+        self,
+        toolset_name: str,
+        api_key: str | None = None,
+        remove_existing: bool = True,
+    ):
+        """
+        Add or set the tools for the given toolset.
+
+        Args:
+            toolset_name (str): The name of the toolset to add or set.
+            api_key (str): The API key to use with the toolset.
+            remove_existing (bool): Whether to remove the existing tools for the toolset before adding the new ones.
+        """
+
+        # Remove the existing tools for the toolset to avoid duplicates
+        if remove_existing:
+            self.remove_toolset(toolset_name)
+
+        if toolset_name == ToolNames.TOOL_NAME_ARXIV:
+            self.tools.extend(ArxivToolSpec().to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR:
+            self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
+            self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:
+            self.tools.extend(StringFunctionsToolSpec().to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_TAVILY:
+            self.tools.extend(TavilyToolSpec(api_key=api_key).to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_WIKIPEDIA:
+            self.tools.extend(WikipediaToolSpec().to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_YAHOO_FINANCE:
+            self.tools.extend(YahooFinanceToolSpec().to_tool_list())
+
+    def set_web_search_tool(self, search_tool: str, api_key: str | None = None):
+        """
+        Set the web search tool to use for the Difficult Questions Attempted engine.
+
+        Args:
+            search_tool (str): The web search tool to use.
+            api_key (str): The API key to use with the web search tool.
+        """
+
+        self.remove_toolset(ToolNames.TOOL_NAME_DUCKDUCKGO)
+        self.remove_toolset(ToolNames.TOOL_NAME_TAVILY)
+
+        self.add_or_set_toolset(search_tool, api_key=api_key, remove_existing=False)
+
+    def get_descriptive_tools_dataframe(self):
+        """
+        Get a dataframe consisting of the names and descriptions of the tools currently available.
+        """
+        return [
+            [
+                f"`{tool.metadata.name}`",
+                tool.metadata.description.split("\n\n")[1].strip(),
+            ]
+            for tool in self.tools
+        ]
 
     async def run(self, query: str) -> str:
         """
