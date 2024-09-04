@@ -24,6 +24,11 @@ Install and activate a Python virtual environment in the directory where you hav
 python -m pip install -U pip
 python -m pip install -U -r requirements.txt
 ```
+If necessary, you can uninstall everything previously installed by `pip` (in the virtual environment) by running the following.
+
+```bash
+python -m pip freeze | cut -d "@" -f1 | xargs pip uninstall -y
+```
 
 In addition to Python dependencies, see the installation instructions of [Ollama](https://ollama.com/download) and that of [Qdrant](https://qdrant.tech/documentation/guides/installation/). You can install either of these on separate machines. Download the [tool calling model of Ollama](https://ollama.com/search?c=tools) that you want to use, e.g., `llama3.1` or `mistral-nemo`.
 

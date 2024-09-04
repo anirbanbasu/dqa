@@ -25,25 +25,25 @@ ENV HOME="/home/app_builder"
 
 USER app_builder
 # Set the working directory in the container
-WORKDIR $HOME/app
+WORKDIR ${HOME}/app
 
 # Install the Rust toolchain, which is required by some Python packages during their building processes
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/home/app_builder/.cargo/bin:${PATH}"
+ENV PATH="${HOME}/.cargo/bin:${PATH}"
 
 # Copy the requirements file, which will not be retained in the final image
 COPY ./requirements.txt ./requirements.txt
 
 # Setup a virtual environment
-ENV VIRTUAL_ENV="$HOME/app/venv"
-RUN python -m venv $VIRTUAL_ENV
-RUN $VIRTUAL_ENV/bin/python -m ensurepip
-RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir -U pip
+ENV VIRTUAL_ENV="${HOME}/app/venv"
+RUN python -m venv ${VIRTUAL_ENV}
+RUN ${VIRTUAL_ENV}/bin/python -m ensurepip
+RUN ${VIRTUAL_ENV}/bin/pip install --no-cache-dir -U pip
 
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 # Install and build dependencies
-RUN $VIRTUAL_ENV/bin/pip install --no-cache-dir -U -r requirements.txt
+RUN ${VIRTUAL_ENV}§/bin/pip install --no-cache-dir -U -r requirements.txt
 
 # [Multi-stage build](https://docs.docker.com/build/building/multi-stage/) to reduce the size of the final image to about 30% of the original size!
 FROM python:3.12.5-slim-bookworm
@@ -55,7 +55,7 @@ RUN useradd -m -u 1000 app_user
 ENV HOME="/home/app_user"
 USER app_user
 # Set the working directory in the container
-WORKDIR $HOME/app
+WORKDIR ${HOME}/app
 
 # Copy only the Python virtual environment from the build image
 COPY --from=build /home/app_builder/app/venv ./venv
