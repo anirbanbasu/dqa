@@ -25,7 +25,8 @@ from typing import Any, List
 from llama_index.tools.arxiv import ArxivToolSpec
 
 # from llama_index.tools.wikipedia import WikipediaToolSpec
-from llama_index.tools.tavily_research import TavilyToolSpec
+# from llama_index.tools.tavily_research import TavilyToolSpec
+from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
 
 # from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
 from llama_index.core.tools import FunctionTool
@@ -42,7 +43,7 @@ from llama_index.core.workflow import (
 # from llama_index.core.agent import ReActAgent
 
 from tools import StringFunctionsToolSpec, BasicArithmeticCalculatorSpec
-from utils import EMPTY_STRING, parse_env, EnvironmentVariables
+from utils import EMPTY_STRING  # , parse_env, EnvironmentVariables
 
 
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -74,6 +75,8 @@ class ReActFunctionOutputEvent(Event):
 
 
 class ReActWorkflow(Workflow):
+    """A workflow implementation for a ReAct agent."""
+
     STR_CURRENT_REASONING = "current_reasoning"
 
     def __init__(
@@ -84,6 +87,14 @@ class ReActWorkflow(Workflow):
         extra_context: str | None = None,
         **kwargs: Any,
     ) -> None:
+        """
+        Initialize the ReAct workflow.
+
+        Args:
+            llm (LLM): The LLM instance to use.
+            tools (list[BaseTool]): The list of tools to use.
+            extra_context (str): The extra context to use.
+        """
         super().__init__(*args, **kwargs)
         self.tools = tools or []
 
@@ -96,6 +107,16 @@ class ReActWorkflow(Workflow):
 
     @step
     async def new_user_msg(self, ctx: Context, ev: StartEvent) -> ReActPrepEvent:
+        """
+        Step to handle a new user message.
+
+        Args:
+            ctx (Context): The context object.
+            ev (StartEvent): The start event.
+
+        Returns:
+            ReActPrepEvent: The event to prepare the chat history.
+        """
         # clear sources
         self.sources = []
 
@@ -116,6 +137,16 @@ class ReActWorkflow(Workflow):
     async def prepare_chat_history(
         self, ctx: Context, ev: ReActPrepEvent
     ) -> ReActInputEvent:
+        """
+        Step to prepare the chat history for the ReAct paradigm.
+
+        Args:
+            ctx (Context): The context object.
+            ev (ReActPrepEvent): The event to prepare the chat history.
+
+        Returns:
+            ReActInputEvent: The event containing the input to be used for the LLM.
+        """
         # get chat history
         chat_history = self.memory.get()
         current_reasoning = await ctx.get(
@@ -130,6 +161,16 @@ class ReActWorkflow(Workflow):
     async def handle_llm_input(
         self, ctx: Context, ev: ReActInputEvent
     ) -> ReActToolCallEvent | StopEvent:
+        """
+        Step to query the LLM.
+
+        Args:
+            ctx (Context): The context object.
+            ev (ReActInputEvent): The event containing the input to the LLM.
+
+        Returns:
+            ReActToolCallEvent | StopEvent: The event to call the tools or the event to stop the workflow.
+        """
         chat_history = ev.input
 
         response = await self.llm.achat(chat_history)
@@ -148,14 +189,14 @@ class ReActWorkflow(Workflow):
                     )
                 )
                 return StopEvent(
-                    # result={
-                    #     "response": reasoning_step.response,
-                    #     "sources": [*self.sources],
-                    #     "reasoning": await ctx.get(
-                    #         ReActWorkflow.STR_CURRENT_REASONING, default=[]
-                    #     ),
-                    # }
-                    result=reasoning_step.response
+                    result={
+                        "response": reasoning_step.response,
+                        "sources": [*self.sources],
+                        "reasoning": await ctx.get(
+                            ReActWorkflow.STR_CURRENT_REASONING, default=[]
+                        ),
+                    }
+                    # result=reasoning_step.response
                 )
             elif isinstance(reasoning_step, ActionReasoningStep):
                 tool_name = reasoning_step.action
@@ -183,6 +224,16 @@ class ReActWorkflow(Workflow):
     async def handle_tool_calls(
         self, ctx: Context, ev: ReActToolCallEvent
     ) -> ReActPrepEvent:
+        """
+        Step to call the tools.
+
+        Args:
+            ctx (Context): The context object.
+            ev (ReActToolCallEvent): The event containing the tool calls.
+
+        Returns:
+            ReActPrepEvent: The event to prepare for the next iteration of the ReAct paradigm.
+        """
         tool_calls = ev.tool_calls
         tools_by_name = {tool.metadata.get_name(): tool for tool in self.tools}
 
@@ -225,6 +276,7 @@ class DQAQueryEvent(Event):
 class DQAAnswerEvent(Event):
     question: str
     answer: str
+    sources: List[Any] = []
 
 
 class DQAReviewSubQuestionEvent(Event):
@@ -412,22 +464,28 @@ Sub-questions and answers:
         if self._verbose:
             ic(response)
 
-        return DQAAnswerEvent(question=ev.question, answer=str(response))
+        return DQAAnswerEvent(
+            question=ev.question,
+            answer=response["response"],
+            sources=[tool_output.content for tool_output in response["sources"]],
+        )
 
     @step
-    async def combine_answers(
+    async def combine_refine_answers(
         self, ctx: Context, ev: DQAAnswerEvent
     ) -> StopEvent | None:
         """
         This step receives the answers to the sub-questions and combines them into a single answer to the original
-        question so long as all the sub-questions have been answered.
+        question so long as all the sub-questions have been answered. If there was only one sub-question, then the
+        answer to that sub-question is refined before it is finally returned.
 
         Args:
             ctx (Context): The context object.
             ev (DQAAnswerEvent): The event containing the sub-question and the answer.
 
         Returns:
-            StopEvent | None: The event containing the final answer to the original
+            StopEvent | None: The event containing the final answer to the original question, or None if the sub-questions
+            have not all been answered.
         """
         ready = ctx.collect_events(
             ev, [DQAAnswerEvent] * ctx.data["sub_question_count"]
@@ -435,13 +493,13 @@ Sub-questions and answers:
         if ready is None:
             return None
 
-        if len(ready) == 1:
-            # Nothing to combine if there was only ever one sub-question.
-            return StopEvent(result=ready[0].answer)
+        # if len(ready) == 1:
+        #     # Nothing to combine if there was only ever one sub-question.
+        #     return StopEvent(result=ready[0].answer)
 
         answers = "\n\n".join(
             [
-                f"Question: {event.question}: \n Answer: {event.answer}"
+                f"Question: {event.question}: \n Answer: {event.answer} \n Sources: {", ".join(event.sources)}"
                 for event in ready
             ]
         )
@@ -449,7 +507,9 @@ Sub-questions and answers:
         prompt = f"""
 You are given an overall question that has been split into sub-questions, each of which has been answered.
 Combine the answers to all the sub-questions into a single answer to the original question. Your answer should be a coherent response to the original question.
-Ensure that your final answer includes all the relevant information from the answers to the sub-questions. Do not miss out on any important details and nuances.
+Ensure that your final answer includes all the relevant information from the answers to the sub-questions.
+Include information from the sources and their corresponding URLs, if present, in your final answer.
+Do not miss out on any important details and nuances. Format your final answer as Markdown.
 
 Original question: {ctx.data['original_query']}
 
@@ -478,12 +538,12 @@ class DQAEngine:
         self.tools: List[FunctionTool] = []
         self.tools.extend(ArxivToolSpec().to_tool_list())
         # DuckDuckGo search tool can end up being used even when other better tools are available, so it is commented out.
-        # self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
-        self.tools.extend(
-            TavilyToolSpec(
-                api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
-            ).to_tool_list()
-        )
+        self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
+        # self.tools.extend(
+        #     TavilyToolSpec(
+        #         api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
+        #     ).to_tool_list()
+        # )
         # self.tools.extend(WikipediaToolSpec().to_tool_list())
         # self.tools.extend(YahooFinanceToolSpec().to_tool_list())
 
@@ -494,7 +554,7 @@ class DQAEngine:
         self.workflow = DQAWorkflow(timeout=120, verbose=True)
         self.workflow.add_workflows(
             react_workflow=ReActWorkflow(
-                llm=self.llm, tools=self.tools, timeout=120, verbose=True
+                llm=self.llm, tools=self.tools, timeout=60, verbose=True
             )
         )
 
