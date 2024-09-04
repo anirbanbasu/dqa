@@ -647,6 +647,20 @@ class DQAEngine:
                 [tool.metadata.name for tool in YahooFinanceToolSpec().to_tool_list()]
             )
 
+    def get_selected_web_search_toolset(self) -> str:
+        """
+        Get the name of the web search toolset currently selected.
+
+        Returns:
+            str: The name of the web search toolset.
+        """
+        if self.is_toolset_present(ToolNames.TOOL_NAME_DUCKDUCKGO):
+            return ToolNames.TOOL_NAME_DUCKDUCKGO
+        elif self.is_toolset_present(ToolNames.TOOL_NAME_TAVILY):
+            return ToolNames.TOOL_NAME_TAVILY
+        else:
+            return EMPTY_STRING
+
     def remove_toolset(self, toolset_name: str):
         """
         Remove the tools for the given toolset from the current set of tools.
@@ -729,7 +743,9 @@ class DQAEngine:
         elif toolset_name == ToolNames.TOOL_NAME_YAHOO_FINANCE:
             self.tools.extend(YahooFinanceToolSpec().to_tool_list())
 
-    def set_web_search_tool(self, search_tool: str, api_key: str | None = None):
+    def set_web_search_tool(
+        self, search_tool: str, search_tool_api_key: str | None = None
+    ):
         """
         Set the web search tool to use for the Difficult Questions Attempted engine.
 
@@ -741,7 +757,10 @@ class DQAEngine:
         self.remove_toolset(ToolNames.TOOL_NAME_DUCKDUCKGO)
         self.remove_toolset(ToolNames.TOOL_NAME_TAVILY)
 
-        self.add_or_set_toolset(search_tool, api_key=api_key, remove_existing=False)
+        if search_tool != ToolNames.TOOL_NAME_SELECTION_DISABLE:
+            self.add_or_set_toolset(
+                search_tool, api_key=search_tool_api_key, remove_existing=False
+            )
 
     def get_descriptive_tools_dataframe(self):
         """

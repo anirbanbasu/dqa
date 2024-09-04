@@ -35,6 +35,8 @@ class ToolNames:
     TOOL_NAME_WIKIPEDIA = "Wikipedia"
     TOOL_NAME_YAHOO_FINANCE = "Yahoo! Finance"
 
+    TOOL_NAME_SELECTION_DISABLE = "[Disabled]"
+
 
 class EnvironmentVariables:
     KEY__LLM_PROVIDER = "LLM__PROVIDER"

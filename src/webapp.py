@@ -28,6 +28,7 @@ from gradio_log import Log as GradioLog
 from dqa import DQAEngine
 from utils import (
     COLON_STRING,
+    FAKE_STRING,
     ToolNames,
     check_list_subset,
     parse_env,
@@ -214,7 +215,6 @@ class GradioApp:
             self._llm_provider,
             self._llm.model,
             self._llm.temperature,
-            self.dqa_engine.llm,
         )
 
     def create_component_settings(self) -> gr.Group:
@@ -241,6 +241,8 @@ class GradioApp:
                     value=self._llm_provider,
                     interactive=True,
                     info="Changing the LLM provider will reset the model and temperature settings below to their default values.",
+                    multiselect=False,
+                    allow_custom_value=False,
                 )
                 text_llm_api_key = gr.Textbox(
                     label=f"{self._llm_provider} API key",
@@ -292,7 +294,7 @@ class GradioApp:
 
             with gr.Accordion(label="Tools for agents", open=False):
                 gr.Markdown(
-                    "**Note** that making too many tools available to the agents _may_ cause query performance degradation!"
+                    "**Note** that making too many tools available to the agents _may_ cause query performance degradation! Select only the tools specific to your task."
                 )
                 check_arxiv = gr.Checkbox(
                     label=ToolNames.TOOL_NAME_ARXIV,
@@ -306,10 +308,13 @@ class GradioApp:
                     info="Tool to allow the agents to search the web for information.",
                     show_label=True,
                     choices=[
+                        ToolNames.TOOL_NAME_SELECTION_DISABLE,
                         ToolNames.TOOL_NAME_DUCKDUCKGO,
                         ToolNames.TOOL_NAME_TAVILY,
                     ],
-                    value=ToolNames.TOOL_NAME_DUCKDUCKGO,
+                    allow_custom_value=False,
+                    multiselect=False,
+                    value=self.dqa_engine.get_selected_web_search_toolset(),
                     interactive=True,
                 )
 
@@ -317,9 +322,15 @@ class GradioApp:
                     label=f"{dropdown_web_search.value} API key",
                     type="password",
                     interactive=True,
+                    max_lines=1,
+                    value=EMPTY_STRING,
                     visible=(
                         True
-                        if dropdown_web_search.value != ToolNames.TOOL_NAME_DUCKDUCKGO
+                        if dropdown_web_search.value
+                        not in [
+                            ToolNames.TOOL_NAME_DUCKDUCKGO,
+                            ToolNames.TOOL_NAME_SELECTION_DISABLE,
+                        ]
                         else False
                     ),
                 )
@@ -360,6 +371,7 @@ class GradioApp:
                     ),
                 )
 
+                gr.Markdown("**List of available tools**")
                 list_of_tools = gr.List(
                     label="The list of tools that are available to the agents, including those that are not user-selectable.",
                     show_label=True,
@@ -371,6 +383,22 @@ class GradioApp:
                     datatype="markdown",
                     column_widths=[1, 2],
                     height=300,
+                )
+
+            @text_web_search_api_key.blur(
+                api_name=False,
+                inputs=[dropdown_web_search, text_web_search_api_key],
+                outputs=[text_web_search_api_key, list_of_tools],
+            )
+            def change_web_search_api_key(selected_web_search_tool: str, api_key: str):
+                if api_key is not None and api_key != EMPTY_STRING:
+                    self.dqa_engine.set_web_search_tool(
+                        search_tool=selected_web_search_tool,
+                        search_tool_api_key=api_key,
+                    )
+                return (
+                    EMPTY_STRING,
+                    self.dqa_engine.get_descriptive_tools_dataframe(),
                 )
 
             @check_arxiv.change(
@@ -417,12 +445,25 @@ class GradioApp:
                 outputs=[text_web_search_api_key, list_of_tools],
             )
             def change_web_search_tool(selected_tool: str):
-                self.dqa_engine.set_web_search_tool(selected_tool)
+                if selected_tool == ToolNames.TOOL_NAME_TAVILY:
+                    self.dqa_engine.set_web_search_tool(
+                        selected_tool,
+                        search_tool_api_key=parse_env(
+                            EnvironmentVariables.KEY__TAVILY_API_KEY,
+                            default_value=FAKE_STRING,
+                        ),
+                    )
+                else:
+                    self.dqa_engine.set_web_search_tool(selected_tool)
                 return (
                     gr.update(
                         visible=(
                             True
-                            if selected_tool != ToolNames.TOOL_NAME_DUCKDUCKGO
+                            if selected_tool
+                            not in [
+                                ToolNames.TOOL_NAME_DUCKDUCKGO,
+                                ToolNames.TOOL_NAME_SELECTION_DISABLE,
+                            ]
                             else False
                         ),
                         label=f"{selected_tool} API key",
