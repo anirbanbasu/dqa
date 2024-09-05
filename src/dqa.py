@@ -259,6 +259,9 @@ class ReActWorkflow(Workflow):
                         observation=f"Tool {tool_call.tool_name} does not exist"
                     )
                 )
+                ctx.write_event_to_stream(
+                    Event(msg=f"Tool {tool_call.tool_name} does not exist")
+                )
                 continue
 
             try:
@@ -266,6 +269,11 @@ class ReActWorkflow(Workflow):
                 self.sources.append(tool_output)
                 (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(observation=tool_output.content)
+                )
+                ctx.write_event_to_stream(
+                    Event(
+                        msg=f"Observation: {tool_output.content}",
+                    )
                 )
             except Exception as e:
                 (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
@@ -573,6 +581,8 @@ Sub-questions and answers:
         react_task = asyncio.create_task(react_workflow.run(input=ev.question))
 
         async for nested_ev in react_workflow.stream_events():
+            self._total_steps += 1
+            self._finished_steps += 1
             ctx.write_event_to_stream(
                 DQAStatusEvent(
                     msg=nested_ev.msg,
