@@ -156,7 +156,10 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_GROQ:
             self._llm = Groq(
-                # Pick up the API key from the environment variable GROQ_API_KEY
+                api_key=parse_env(
+                    EnvironmentVariables.KEY__GROQ_API_KEY,
+                    default_value=FAKE_STRING,
+                ),
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_GROQ_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_GROQ_MODEL,
@@ -169,7 +172,10 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_ANTHROPIC:
             self._llm = Anthropic(
-                # Pick up the API key from the environment variable ANTHROPIC_API_KEY
+                api_key=parse_env(
+                    EnvironmentVariables.KEY__ANTHROPIC_API_KEY,
+                    default_value=FAKE_STRING,
+                ),
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_ANTHROPIC_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_ANTHROPIC_MODEL,
@@ -182,7 +188,10 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_COHERE:
             self._llm = Cohere(
-                # Pick up the API key from the environment variable COHERE_API_KEY
+                api_key=parse_env(
+                    EnvironmentVariables.KEY__COHERE_API_KEY,
+                    default_value=FAKE_STRING,
+                ),
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_COHERE_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_COHERE_MODEL,
@@ -195,7 +204,10 @@ class GradioApp:
             )
         elif self._llm_provider == EnvironmentVariables.VALUE__LLM_PROVIDER_OPENAI:
             self._llm = OpenAI(
-                # Pick up the API key from the environment variable OPENAI_API_KEY
+                api_key=parse_env(
+                    EnvironmentVariables.KEY__OPENAI_API_KEY,
+                    default_value=FAKE_STRING,
+                ),
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_OPENAI_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_OPENAI_MODEL,
