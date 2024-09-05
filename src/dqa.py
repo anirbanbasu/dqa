@@ -19,6 +19,7 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
+import asyncio
 import uuid
 import json
 from typing import Any, List
@@ -129,9 +130,6 @@ class ReActWorkflow(Workflow):
         user_msg = ChatMessage(role=MessageRole.USER, content=user_input)
         self.memory.put(user_msg)
 
-        if self._verbose:
-            ic(f"User asked: {ev.input}")
-
         # clear current reasoning
         await ctx.set(ReActWorkflow.STR_CURRENT_REASONING, [])
 
@@ -177,15 +175,23 @@ class ReActWorkflow(Workflow):
         """
         chat_history = ev.input
 
-        response = await self.llm.achat(chat_history)
+        generator = await self.llm.astream_chat(chat_history)
+        async for response in generator:
+            pass
 
         try:
             reasoning_step = self.output_parser.parse(response.message.content)
-            if self._verbose:
-                ic(reasoning_step)
             (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
                 reasoning_step
             )
+            streaming_message = EMPTY_STRING
+            if hasattr(reasoning_step, "thought"):
+                streaming_message = f"Thought: {reasoning_step.thought}"
+            if hasattr(reasoning_step, "action"):
+                streaming_message += f"\nAction: {reasoning_step.action} with {reasoning_step.action_input}"
+            if reasoning_step.is_done:
+                streaming_message += f"\nResponse: {reasoning_step.response}"
+            ctx.write_event_to_stream(Event(msg=streaming_message))
             if reasoning_step.is_done:
                 self.memory.put(
                     ChatMessage(
@@ -219,6 +225,9 @@ class ReActWorkflow(Workflow):
                 ObservationReasoningStep(
                     observation=f"There was an error in parsing my reasoning: {e}"
                 )
+            )
+            ctx.write_event_to_stream(
+                Event(msg=f"There was an error in parsing my reasoning: {e}")
             )
 
         # if no tool calls or final response, iterate again
@@ -258,15 +267,14 @@ class ReActWorkflow(Workflow):
                 (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(observation=tool_output.content)
                 )
-                if self._verbose:
-                    ic(
-                        f"Tool output: {tool_output.content} from {tool.metadata.get_name()}"
-                    )
             except Exception as e:
                 (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(
                         observation=f"Error calling tool {tool.metadata.get_name()}: {e}"
                     )
+                )
+                ctx.write_event_to_stream(
+                    Event(msg=f"Error calling tool {tool.metadata.get_name()}: {e}")
                 )
 
         # prep the next iteraiton
@@ -324,9 +332,12 @@ class DQAWorkflow(Workflow):
         """
         # if hasattr(ev, "query"):
         ctx.data["original_query"] = ev.query
-        print(f"Query is {ctx.data['original_query']}")
+        # print(f"Query is {ctx.data['original_query']}")
+        ctx.write_event_to_stream(
+            Event(msg=f"Assessing query:\n\n{ctx.data['original_query']}")
+        )
 
-        response = self.llm.complete(
+        generator = await self.llm.astream_complete(
             f"""
 You are an assistant for question-answering tasks who performs query decomposition.
 Given a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question.
@@ -334,6 +345,7 @@ Respond with a list containing only the unmodified original question when no dec
 Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
 Each sub-question should clearly state the subject to ensure no ambiguity.
 Do not generate unnecessary sub-questions that are not required to answer the original question.
+Lastly, generate a binary response indicating whether you are satisfied with the generated sub-questions or not.
 
 Example 1:
 Question: Is Hamlet more common on IMDB than Comedy of Errors?
@@ -343,6 +355,7 @@ Decompositions:
         "How many listings of Hamlet are there on IMDB?"
         "How many listings of Comedy of Errors is there on IMDB?"
     ]
+    "satisfied": true
 }}
 
 Example 2:
@@ -350,8 +363,22 @@ Question: What is the capital city of Japan?
 Decompositions:
 {{
     "sub_questions": ["What is the capital city of Japan?"]
+    "satisfied": true
 }}
 Note that this question above needs no decomposition. Hence, the original question is repeated as the only sub-question.
+
+Example 3:
+Question: Are there more hydrogen atoms in methyl alcohol than in ethyl alcohol?
+Decompositions:
+{{
+    "sub_questions": [
+        "How many hydrogen atoms are there in methyl alcohol?",
+        "How many hydrogen atoms are there in ethyl alcohol?",
+        "What is the chemical composition of alcohol?",
+    ]
+    "satisfied": false
+}}
+Note that the third sub-question is unnecessary and should not be included in the response. Hence, the value of satisfied is set to false.
 
 Always, respond in pure JSON without any Markdown, like this:
 {{
@@ -360,6 +387,7 @@ Always, respond in pure JSON without any Markdown, like this:
         "sub question 2",
         "sub question 3",
     ]
+    "satisfied": true or false
 }}
 
 Here is the user question: {ctx.data['original_query']}
@@ -368,18 +396,32 @@ And here is the list of tools: {self.tools}
         """
         )
 
+        async for response in generator:
+            pass
+
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
+        satisfied = response_obj["satisfied"]
 
-        if self._verbose:
-            ic(sub_questions)
+        ctx.write_event_to_stream(
+            Event(
+                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} sub-questions:\n\n{str(sub_questions)}"
+            )
+        )
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
+        # TODO: Ignore the satisfaction level?
         if len(sub_questions) == 1:
             return DQAQueryEvent(question=sub_questions[0])
         else:
-            return DQAReviewSubQuestionEvent(questions=sub_questions)
+            if satisfied:
+                for question in sub_questions:
+                    ctx.send_event(DQAQueryEvent(question=question))
+            else:
+                return DQAReviewSubQuestionEvent(
+                    questions=sub_questions, satisfied=satisfied
+                )
 
     @step
     async def review_sub_questions(
@@ -400,11 +442,15 @@ And here is the list of tools: {self.tools}
         """
 
         if ev.satisfied:
-            # Already satisfied, no need to review.
+            # Already satisfied, no need to review anymore.
             for question in ev.questions:
                 ctx.send_event(DQAQueryEvent(question=question))
 
-        response = self.llm.complete(
+        ctx.write_event_to_stream(
+            Event(msg=f"Reviewing sub-questions:\n\n{str(ev.questions)}")
+        )
+
+        generator = await self.llm.astream_complete(
             f"""
 You are given an overall question that has been decomposed into sub-questions.
 Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query..
@@ -433,14 +479,22 @@ Sub-questions and answers:
 {ev.questions}
             """
         )
+
+        async for response in generator:
+            pass
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
         satisfied = response_obj["satisfied"]
 
-        if self._verbose:
-            ic(sub_questions, satisfied)
+        ctx.write_event_to_stream(
+            Event(
+                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} refined sub-questions:\n\n{str(sub_questions)}"
+            )
+        )
+
         ctx.data["sub_question_count"] = len(sub_questions)
 
+        # TODO: Ignore the satisfaction level?
         if len(sub_questions) == 1:
             return DQAQueryEvent(question=sub_questions[0])
 
@@ -450,14 +504,14 @@ Sub-questions and answers:
         else:
             # Not satisfied, so ask for review again.
             return DQAReviewSubQuestionEvent(
-                questions=sub_questions, satisfied=response_obj["satisfied"]
+                questions=sub_questions, satisfied=satisfied
             )
 
         return None
 
     @step(num_workers=4)
     async def answer_sub_question(
-        self, ctx: Context, ev: DQAQueryEvent, react_workflow: ReActWorkflow
+        self, ctx: Context, ev: DQAQueryEvent
     ) -> DQAAnswerEvent:
         """
         This step receives a sub-question and attempts to answer it using the tools provided in the context.
@@ -477,9 +531,21 @@ Sub-questions and answers:
         #     max_iterations=25,
         # )
         # response = agent.chat(ev.question)
-        response = await react_workflow.run(input=ev.question)
-        if self._verbose:
-            ic(response)
+        ctx.write_event_to_stream(
+            Event(msg=f"Starting ReAct workflow to answer question:\n\n{ev.question}")
+        )
+        react_workflow = ReActWorkflow(
+            llm=self.llm,
+            tools=self.tools,
+            timeout=self._timeout / 2,
+            verbose=self._verbose,
+        )
+        react_task = asyncio.create_task(react_workflow.run(input=ev.question))
+
+        async for nested_ev in react_workflow.stream_events():
+            ctx.write_event_to_stream(Event(msg=nested_ev.msg))
+
+        response = await react_task
 
         return DQAAnswerEvent(
             question=ev.question,
@@ -523,6 +589,12 @@ Sub-questions and answers:
             ]
         )
 
+        ctx.write_event_to_stream(
+            Event(
+                msg=f"Generating the final response to the original query:\n\n{ctx.data['original_query']}"
+            )
+        )
+
         prompt = f"""
 You are given an overall question that has been split into sub-questions, each of which has been answered.
 Combine the answers to all the sub-questions into a single answer to the original question. Your answer should be a coherent response to the original question.
@@ -536,11 +608,10 @@ Sub-questions and answers:
 {answers}
         """
 
-        if self._verbose:
-            ic(prompt)
-        response = self.llm.complete(prompt)
-        if self._verbose:
-            ic(response)
+        generator = await self.llm.astream_complete(prompt)
+        async for response in generator:
+            pass
+
         return StopEvent(result=str(response))
 
 
@@ -555,20 +626,13 @@ class DQAEngine:
         self.llm = llm
         # Add tool specs
         self.tools: List[FunctionTool] = []
-        self.tools.extend(ArxivToolSpec().to_tool_list())
-        # DuckDuckGo search tool can end up being used even when other better tools are available, so it is commented out.
-        self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
-        # self.tools.extend(
-        #     TavilyToolSpec(
-        #         api_key=parse_env(EnvironmentVariables.KEY__TAVILY_API_KEY)
-        #     ).to_tool_list()
-        # )
-        # self.tools.extend(WikipediaToolSpec().to_tool_list())
-        # self.tools.extend(YahooFinanceToolSpec().to_tool_list())
-
-        # Custom tools
+        # Mandatory tools
         self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
+
+        # TODO: Populate the tools based on toolset names specified in the environment variables?
+        self.tools.extend(ArxivToolSpec().to_tool_list())
+        self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
 
     def _are_tools_present(self, tool_names: list[str]) -> bool:
         """
@@ -598,7 +662,7 @@ class DQAEngine:
 
     def is_toolset_present(self, toolset_name: str) -> bool:
         """
-        Check if the tools for the givev toolset are present in the current set of tools.
+        Check if the tools for the given toolset are present in the current set of tools.
 
         Args:
             toolset_name (str): The name of the toolset to check.
@@ -659,7 +723,8 @@ class DQAEngine:
         elif self.is_toolset_present(ToolNames.TOOL_NAME_TAVILY):
             return ToolNames.TOOL_NAME_TAVILY
         else:
-            return EMPTY_STRING
+            # Unknown or no toolset selected.
+            return ToolNames.TOOL_NAME_SELECTION_DISABLE
 
     def remove_toolset(self, toolset_name: str):
         """
@@ -774,7 +839,7 @@ class DQAEngine:
             for tool in self.tools
         ]
 
-    async def run(self, query: str) -> str:
+    async def run(self, query: str):
         """
         Run the Difficult Questions Attempted engine with the given query.
 
@@ -785,15 +850,21 @@ class DQAEngine:
             str: The response from the engine.
         """
         self.workflow = DQAWorkflow(
-            llm=self.llm, tools=self.tools, timeout=120, verbose=True
+            llm=self.llm, tools=self.tools, timeout=180, verbose=False
         )
-        self.workflow.add_workflows(
-            react_workflow=ReActWorkflow(
-                llm=self.llm, tools=self.tools, timeout=60, verbose=True
+        # No need for this, see: https://github.com/run-llama/llama_index/discussions/15838#discussioncomment-10553154
+        # self.workflow.add_workflows(
+        #     react_workflow=ReActWorkflow(
+        #         llm=self.llm, tools=self.tools, timeout=60, verbose=True
+        #     )
+        # )
+        task = asyncio.create_task(
+            self.workflow.run(
+                query=query,
             )
         )
-        result = await self.workflow.run(
-            query=query,
-        )
-        ic(result)
-        return result
+        async for ev in self.workflow.stream_events():
+            ic(ev.msg)
+            yield ev.msg
+        result = await task
+        yield result

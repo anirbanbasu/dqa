@@ -33,7 +33,6 @@ from utils import (
     check_list_subset,
     parse_env,
     EMPTY_STRING,
-    EMPTY_DICT,
     EnvironmentVariables,
 )
 
@@ -698,8 +697,10 @@ class GradioApp:
                     )
                     async def get_agent_response(user_input: str):
                         if user_input is not None and user_input != EMPTY_STRING:
-                            return await self.dqa_engine.run(user_input)
-                        return EMPTY_DICT
+                            # Stream events and results
+                            generator = self.dqa_engine.run(user_input)
+                            async for result in generator:
+                                yield str(result)
 
             # Component actions
             btn_theme_toggle.click(
