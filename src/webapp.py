@@ -79,7 +79,7 @@ class GradioApp:
         }}
 
         .{CSS_CLASS_DIV_OUTLINED} {{
-            outline: dotted;
+            border: dashed;
         }}
 
         .{CSS_CLASS_DIV_PADDED} {{
@@ -662,7 +662,10 @@ class GradioApp:
                 with gr.Column(visible=self._sidebar_state, scale=1) as sidebar:
                     self.create_component_settings()
                 with gr.Column(scale=2):
-                    gr.Markdown(GradioApp.MD_EU_AI_ACT_TRANSPARENCY)
+                    gr.Markdown(
+                        GradioApp.MD_EU_AI_ACT_TRANSPARENCY,
+                        elem_classes=[GradioApp.CSS_CLASS_DIV_PADDED],
+                    )
                     text_user_input = gr.Textbox(
                         label="Question to ask",
                         info="Pose the question that you want to ask the large language model agent. Press ENTER to ask.",
@@ -670,22 +673,15 @@ class GradioApp:
                         max_lines=4,
                         show_copy_button=True,
                     )
-                    agent_response = gr.Markdown(
+                    agent_response = gr.HTML(
                         label="Agent response",
+                        value="The response from the agent(s) will appear here.",
                         show_label=True,
+                        elem_classes=[
+                            GradioApp.CSS_CLASS_DIV_PADDED,
+                            GradioApp.CSS_CLASS_DIV_OUTLINED,
+                        ],
                     )
-
-                    @text_user_input.submit(
-                        api_name="get_agent_response",
-                        inputs=[text_user_input],
-                        outputs=[agent_response],
-                    )
-                    async def get_agent_response(user_input: str):
-                        if user_input is not None and user_input != EMPTY_STRING:
-                            # Stream events and results
-                            generator = self.dqa_engine.run(user_input)
-                            async for result in generator:
-                                yield str(result)
 
             # Component actions
             btn_theme_toggle.click(
@@ -693,6 +689,25 @@ class GradioApp:
                 js=GradioApp.JS_DARK_MODE_TOGGLE,
                 api_name=False,
             )
+
+            @text_user_input.submit(
+                api_name="get_agent_response",
+                inputs=[text_user_input],
+                outputs=[agent_response],
+            )
+            async def get_agent_response(user_input: str, agent_status=gr.Progress()):
+                if user_input is not None and user_input != EMPTY_STRING:
+                    # Stream events and results
+                    generator = self.dqa_engine.run(user_input)
+                    async for status, finished_steps, total_steps, result in generator:
+                        if status:
+                            agent_status(progress=None)
+                            yield str(result)
+                        else:
+                            agent_status(
+                                progress=(finished_steps, total_steps), desc=str(result)
+                            )
+                            yield EMPTY_STRING
 
             @btn_sidebar_toggle.click(
                 api_name=False, outputs=[sidebar, btn_sidebar_toggle]

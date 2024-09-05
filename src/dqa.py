@@ -296,6 +296,12 @@ class DQAReviewSubQuestionEvent(Event):
     satisfied: bool = False
 
 
+class DQAStatusEvent(Event):
+    msg: str
+    total_steps: int
+    finished_steps: int
+
+
 class DQAWorkflow(Workflow):
     def __init__(
         self,
@@ -316,6 +322,9 @@ class DQAWorkflow(Workflow):
 
         self.llm = llm
 
+        self._total_steps: int = 0
+        self._finished_steps: int = 0
+
     @step
     async def query(self, ctx: Context, ev: StartEvent) -> DQAQueryEvent:
         """
@@ -333,8 +342,13 @@ class DQAWorkflow(Workflow):
         # if hasattr(ev, "query"):
         ctx.data["original_query"] = ev.query
         # print(f"Query is {ctx.data['original_query']}")
+        self._total_steps += 1
         ctx.write_event_to_stream(
-            Event(msg=f"Assessing query:\n\n{ctx.data['original_query']}")
+            DQAStatusEvent(
+                msg=f"Assessing query:\n\n{ctx.data['original_query']}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
         )
 
         generator = await self.llm.astream_complete(
@@ -404,8 +418,10 @@ And here is the list of tools: {self.tools}
         satisfied = response_obj["satisfied"]
 
         ctx.write_event_to_stream(
-            Event(
-                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} sub-questions:\n\n{str(sub_questions)}"
+            DQAStatusEvent(
+                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} sub-questions:\n\n{str(sub_questions)}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
             )
         )
 
@@ -446,8 +462,14 @@ And here is the list of tools: {self.tools}
             for question in ev.questions:
                 ctx.send_event(DQAQueryEvent(question=question))
 
+        self._total_steps += 1
+        self._finished_steps += 1
         ctx.write_event_to_stream(
-            Event(msg=f"Reviewing sub-questions:\n\n{str(ev.questions)}")
+            DQAStatusEvent(
+                msg=f"Reviewing sub-questions:\n\n{str(ev.questions)}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
         )
 
         generator = await self.llm.astream_complete(
@@ -487,8 +509,10 @@ Sub-questions and answers:
         satisfied = response_obj["satisfied"]
 
         ctx.write_event_to_stream(
-            Event(
-                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} refined sub-questions:\n\n{str(sub_questions)}"
+            DQAStatusEvent(
+                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} refined sub-questions:\n\n{str(sub_questions)}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
             )
         )
 
@@ -531,8 +555,14 @@ Sub-questions and answers:
         #     max_iterations=25,
         # )
         # response = agent.chat(ev.question)
+        self._total_steps += 1
+        self._finished_steps += 1
         ctx.write_event_to_stream(
-            Event(msg=f"Starting ReAct workflow to answer question:\n\n{ev.question}")
+            DQAStatusEvent(
+                msg=f"Starting ReAct workflow to answer question:\n\n{ev.question}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
         )
         react_workflow = ReActWorkflow(
             llm=self.llm,
@@ -543,7 +573,13 @@ Sub-questions and answers:
         react_task = asyncio.create_task(react_workflow.run(input=ev.question))
 
         async for nested_ev in react_workflow.stream_events():
-            ctx.write_event_to_stream(Event(msg=nested_ev.msg))
+            ctx.write_event_to_stream(
+                DQAStatusEvent(
+                    msg=nested_ev.msg,
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
+                )
+            )
 
         response = await react_task
 
@@ -589,9 +625,12 @@ Sub-questions and answers:
             ]
         )
 
+        self._finished_steps += 1
         ctx.write_event_to_stream(
-            Event(
-                msg=f"Generating the final response to the original query:\n\n{ctx.data['original_query']}"
+            DQAStatusEvent(
+                msg=f"Generating the final response to the original query:\n\n{ctx.data['original_query']}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
             )
         )
 
@@ -600,7 +639,7 @@ You are given an overall question that has been split into sub-questions, each o
 Combine the answers to all the sub-questions into a single answer to the original question. Your answer should be a coherent response to the original question.
 Ensure that your final answer includes all the relevant information from the answers to the sub-questions.
 In your final answer, include information from the sources if they have corresponding URLs.
-Do not miss out on any important details and nuances. Format your final answer as Markdown.
+Do not miss out on any important details and nuances. Format your final answer within a HTML div tag.
 
 Original question: {ctx.data['original_query']}
 
@@ -846,8 +885,9 @@ class DQAEngine:
         Args:
             query (str): The query to process.
 
-        Returns:
-            str: The response from the engine.
+        Yields:
+            bool: A flag indicating whether the workflow is done.
+            Any: The output of the workflow when the status is done. Otherwise, the events streamed by the workflow.
         """
         self.workflow = DQAWorkflow(
             llm=self.llm, tools=self.tools, timeout=180, verbose=False
@@ -863,8 +903,14 @@ class DQAEngine:
                 query=query,
             )
         )
+        done: bool = False
+        total_steps: int = 0
+        finished_steps: int = 0
         async for ev in self.workflow.stream_events():
-            ic(ev.msg)
-            yield ev.msg
+            total_steps = ev.total_steps
+            finished_steps = ev.finished_steps
+            print(ev.msg)
+            yield done, finished_steps, total_steps, ev.msg
         result = await task
-        yield result
+        done = self.workflow.is_done()
+        yield done, finished_steps, total_steps, result
