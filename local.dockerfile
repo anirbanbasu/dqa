@@ -43,7 +43,7 @@ RUN ${VIRTUAL_ENV}/bin/pip install --no-cache-dir -U pip
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 # Install and build dependencies
-RUN ${VIRTUAL_ENV}§/bin/pip install --no-cache-dir -U -r requirements.txt
+RUN ${VIRTUAL_ENV}/bin/pip install --no-cache-dir -U -r requirements.txt
 
 # [Multi-stage build](https://docs.docker.com/build/building/multi-stage/) to reduce the size of the final image to about 30% of the original size!
 FROM python:3.12.5-slim-bookworm
