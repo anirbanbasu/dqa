@@ -52,12 +52,6 @@ With all these setup done, run the following to start the web server. The web se
 python src/webapp.py
 ```
 
-If you want to see the experimental console log on the web UI, run the following command instead. Do remember to delete `/tmp/dqa.log` when you no longer need it.
-
-```bash
-python src/webapp.py 2>&1 | tee /tmp/dqa.log
-```
-
 The web UI will be available at [http://localhost:7860](http://localhost:7860).
 
 ## Usage (Docker)
@@ -74,7 +68,7 @@ docker create -p 7860:7860/tcp --name dqa-container dqa
 docker container start dqa-container
 ```
 
-You can replace the second line above to the following, in order to use a `.env` file on your Docker host that resides at the absolute path `PATH_TO_YOUR_.env_FILE`.
+You can replace the second line above to the following, in order to use a `.env` file on your Docker host that resides at the **absolute** path `PATH_TO_YOUR_.env_FILE`.
 
 ```bash
 docker create -v /PATH_TO_YOUR_.env_FILE:/home/app_user/app/.env -p 7860:7860/tcp --name dqa-container dqa

@@ -19,11 +19,9 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
-import os
 from dotenv import load_dotenv
 import gradio as gr
 
-from gradio_log import Log as GradioLog
 
 from dqa import DQAEngine
 from utils import (
@@ -47,8 +45,6 @@ class GradioApp:
     """This class represents the Gradio webapp for the application."""
 
     PROJECT_LOGO_PATH = "assets/logo.svg"
-    # Send the console output to a file by appending this to the command to start the server: 2>&1 | tee CONSOLE_LOG_FILE
-    CONSOLE_LOG_FILE = "/tmp/dqa.log"
 
     LABEL_THEME_TOGGLE = "Toggle theme"
     LABEL_SHOW_SIDEBAR = "Show sidebar"
@@ -678,17 +674,6 @@ class GradioApp:
                         label="Agent response",
                         show_label=True,
                     )
-
-                    if os.path.exists(GradioApp.CONSOLE_LOG_FILE):
-                        GradioLog(
-                            log_file=GradioApp.CONSOLE_LOG_FILE,
-                            label="The console output of the server",
-                            show_label=True,
-                            info=f"Only available if the server is writing to {GradioApp.CONSOLE_LOG_FILE}.",
-                            dark=True,
-                            xterm_font_size=12,
-                            interactive=False,
-                        )
 
                     @text_user_input.submit(
                         api_name="get_agent_response",
