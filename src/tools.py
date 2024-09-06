@@ -62,7 +62,7 @@ class StringFunctionsToolSpec(BaseToolSpec):
 
 
 class BasicArithmeticCalculatorSpec(BaseToolSpec):
-    """Tool spec for basic arithmetic operations."""
+    """Tool spec for basic arithmetic operations and number comparison."""
 
     def __init__(self):
         self.spec_functions = [
@@ -145,3 +145,50 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
         if b == 0:
             raise ValueError("Modulo by zero is not allowed.")
         return a % b
+
+    def bac_power(self, base: int | float, exponent: int | float) -> int | float:
+        """
+        BasicArithmeticCalculator: Raises one number to the power of another.
+
+        Args:
+            base (int | float): The base. Must not be zero if the exponent is negative.
+            exponent (int | float): The exponent.
+
+        Returns:
+            int | float: The result of the power operation.
+        """
+        if base == 0 and exponent < 0:
+            raise ValueError("Zero raised to a negative power is undefined.")
+        return base**exponent
+
+    def bac_floor_divide(self, a: int | float, b: int | float) -> int:
+        """
+        BasicArithmeticCalculator: Divides one number by another and returns the floor of the quotient.
+
+        Args:
+            a (int | float): The dividend.
+            b (int | float): The divisor.
+
+        Returns:
+            int: The floor of the result of the division.
+
+        Raises:
+            ValueError: If the divisor is zero.
+        """
+        if b == 0:
+            raise ValueError("Division by zero is not allowed.")
+        return a // b
+
+    def bac_compare(self, a: int | float, b: int | float) -> int:
+        """
+        BasicArithmeticCalculator: Compares two numbers.
+
+        Args:
+            a (int | float): The first number.
+            b (int | float): The second number.
+
+        Returns:
+            int: The comparison result, which is 0 if the numbers are equal,
+            1 if the first number is greater, and -1 if the second number is greater.
+        """
+        return (a > b) - (a < b)
