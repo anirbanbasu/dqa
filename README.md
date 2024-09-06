@@ -8,13 +8,49 @@
   <img width="400" height="200" src="https://raw.githubusercontent.com/anirbanbasu/dqa/master/assets/logo.svg" alt="dqa logo" style="filter: invert(0.5)">
 </p>
 
-The DQA aka _difficult questions attempted_ project aims to make large language models attempt difficult questions through an agent-based architecture. The project utilises retrieval augmented generation (RAG) where relevant. The project is inspired by a tutorial [^1] from [Dean Sacoransky](https://www.linkedin.com/in/dean-sacoransky-6a671119a/).
+The DQA aka _difficult questions attempted_ project aims to make large language models attempt difficult questions through an agent-based architecture. The project utilises agents and tools. This project is inspired by a tutorial [^1] from [Dean Sacoransky](https://www.linkedin.com/in/dean-sacoransky-6a671119a/). Unlike the tutorial's use of the [LangGraph framework from LangChain](https://langchain-ai.github.io/langgraph/) for building agents, this project makes use of [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/module_guides/workflow/).
+
+The tutorial uses the question _Which David Fincher film that stars Edward Norton does not star Brad Pitt?_ as a litmus test for assessing new AI systems. The answer is supposed to be _None_, but at the time of writing the tutorial (26 August 2024), the author states that ChatGPT's `gpt-4o` model generates the following response.
+> The David Fincher film starring Edward Norton that does not star Brad Pitt is the "The Game" (1997). Edward Norton appears in an uncredited cameo role in this film.
+
+The author further states that it is impossible "to answer this complex, multi-hop, logical question in one feed-forward pass of a neural network". At the end of the tutorial, the improved response to the question using agents that perform retrieval augmented generation (RAG) is seen to be the following.
+> None, as there is only one mentioned David Fincher film starring Edward Norton, which is "Fight Club" and it stars Brad Pitt.
+
+## Need for agents
+
+This project implements an agent-based framework akin to the one mentioned in the tutorial [^1].
+
+Let's focus on a slightly simpler test question that nonetheless baffles ChatGPT `gpt-4o`. Let's ask _Tell me the result of multiplying the number of 'r's in the word 'strawberry' with the sum of 3 and 4. Explain the process._ ChatGPT hopelessly responds to this with the following.
+> Let's break down the problem step by step:
+>
+>Find the number of 'r's in the word "strawberry": The word "strawberry" contains 2 'r's.
+>
+> Find the sum of 3 and 4: $3+4=7$.
+>
+> Multiply the number of 'r's by the sum: $2 \times 7=14$.
+>
+> So, the result of multiplying the number of 'r's in "strawberry" by the sum of 3 and 4 is 14.
+
+While ChatGPT did not make mistakes with the basic arithmetic operations, it counted the number of 'r's in the word 'strawberry' wrong. In contrast, the DQA workflow gets it right with the following answer, as of September 6, 2024, surprisingly using the `gpt-4o-mini` model.
+>Final Answer: The result of multiplying the number of 'r's in the word 'strawberry' (which is 3) with the sum of 3 and 4 (which is 7) is 21.
+>
+> Detailed Explanation: To arrive at the final answer, we first determined the number of 'r's in the word 'strawberry'. The analysis revealed that there are 3 'r's in the word. Next, we calculated the sum of 3 and 4, which is 7. Finally, we multiplied these two results together: 3 (the number of 'r's) multiplied by 7 (the sum of 3 and 4) equals 21. Therefore, the final result is 21.
+
+The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly is because DQA lets it use a function to calculate the occurrences of a specific character or a sequence of characters in a string.
+
+The approximate workflow for DQA can be summarised as follows.
+![Workflow](./diagrams/workflow.svg)
 
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
 ## Project status
 
- - August 31, 2024: Actively maintained experimental prototype.
+| Date     |  Status   |  Notes   |
+|----------|:-------------:|------|
+| September 7, 2024 |  active |  Qdrant is not used. Cohere is flaky.  |
+| August 31, 2024 |  active |  Using built-in ReAct agent.  |
+| August 29, 2024 |  active |  Project started.  |
+
 
 ## Installation
 
