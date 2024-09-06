@@ -16,7 +16,7 @@ The tutorial uses the question _Which David Fincher film that stars Edward Norto
 The author further states that it is impossible "to answer this complex, multi-hop, logical question in one feed-forward pass of a neural network". At the end of the tutorial, the improved response to the question using agents that perform retrieval augmented generation (RAG) is seen to be the following.
 > None, as there is only one mentioned David Fincher film starring Edward Norton, which is "Fight Club" and it stars Brad Pitt.
 
-## Need for agents
+## Query decomposition, refinement and ReAct to the rescue
 
 This project implements an agent-based framework akin to the one mentioned in the tutorial [^1].
 
@@ -41,7 +41,7 @@ The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly
 The approximate workflow for DQA can be summarised as follows.
 ![Workflow](./diagrams/workflow.svg)
 
-This diagram shows that similar to the tutorial [^1], the DQA workflow performs query decomposition to ensure that complex queries are not sent to the LLM. The workflow further optimises the sub-questions (i.e., decompositions of the complex query) through a query refinement step, which loops if necessary.
+This diagram shows that similar to the tutorial [^1], the DQA workflow performs query decomposition to ensure that complex queries are not sent to the LLM to see how it responds. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary.
 
 Once the refined sub-questions are satisfactory, each such sub-question is sent to an instance of a [ReAct](https://arxiv.org/abs/2210.03629) "agent", also implemented as a workflow. Each ReAct workflow loops as necessary in order to answer the question given to it.
 
@@ -50,6 +50,8 @@ When all ReAct workflows have finished, the final step for answer generation col
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
 ## Project status
+
+Following is a table of some updates regarding the project status. Note that these do not correspond to specific commits or milestones.
 
 | Date     |  Status   |  Notes   |
 |----------|:-------------:|------|
