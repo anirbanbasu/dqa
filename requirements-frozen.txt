@@ -1,0 +1,25 @@
+# User interface
+gradio==4.42.0
+
+# Build, commit and system
+python-dotenv==1.0.1
+
+# LlamaIndex
+llama-index==0.11.5
+llama-index-utils-workflow==0.2.1
+
+# LlamaIndex storage
+llama-index-vector-stores-qdrant==0.3.0
+
+# LlamaIndex LLMs
+llama-index-llms-groq==0.2.0
+llama-index-llms-ollama==0.3.1
+llama-index-llms-anthropic==0.3.0
+llama-index-llms-cohere==0.3.0
+
+# LlamaIndex tools
+llama-index-tools-arxiv==0.2.0
+llama-index-tools-duckduckgo==0.2.1
+llama-index-tools-tavily-research==0.2.0
+llama-index-tools-wikipedia==0.2.0
+llama-index-tools-yahoo-finance==0.2.0
