@@ -41,6 +41,12 @@ The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly
 The approximate workflow for DQA can be summarised as follows.
 ![Workflow](./diagrams/workflow.svg)
 
+This diagram shows that similar to the tutorial [^1], the DQA workflow performs query decomposition to ensure that complex queries are not sent to the LLM. The workflow further optimises the sub-questions (i.e., decompositions of the complex query) through a query refinement step, which loops if necessary.
+
+Once the refined sub-questions are satisfactory, each such sub-question is sent to an instance of a [ReAct](https://arxiv.org/abs/2210.03629) "agent", also implemented as a workflow. Each ReAct workflow loops as necessary in order to answer the question given to it.
+
+When all ReAct workflows have finished, the final step for answer generation collects the answers from the ReAct workflows and asks the LLM to generate a consolidated answer citing sources where relevant.
+
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
 ## Project status
