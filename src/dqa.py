@@ -21,7 +21,10 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 
 import asyncio
 import uuid
-import json
+
+# Weaker LLMs may generate ReActAgent steps whose Action Input are horrible JSON strings.
+# `dirtyjson` is more lenient than `json` in parsing JSON strings.
+import dirtyjson as json
 from typing import Any, List
 from llama_index.tools.arxiv import ArxivToolSpec
 
@@ -53,7 +56,10 @@ from utils import (
 
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.tools import ToolSelection, ToolOutput
-from llama_index.core.agent.react import ReActChatFormatter, ReActOutputParser
+from llama_index.core.agent.react import (
+    ReActChatFormatter,
+    ReActOutputParser,
+)
 from llama_index.core.agent.react.types import (
     ActionReasoningStep,
     ObservationReasoningStep,
@@ -206,7 +212,6 @@ class ReActWorkflow(Workflow):
                             ReActWorkflow.STR_CURRENT_REASONING, default=[]
                         ),
                     }
-                    # result=reasoning_step.response
                 )
             elif isinstance(reasoning_step, ActionReasoningStep):
                 tool_name = reasoning_step.action
@@ -350,6 +355,7 @@ class DQAWorkflow(Workflow):
         # if hasattr(ev, "query"):
         ctx.data["original_query"] = ev.query
         # print(f"Query is {ctx.data['original_query']}")
+        # ctx.data["tool_descriptions"] = get_react_tool_descriptions(self.tools)
         self._total_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
@@ -414,8 +420,6 @@ Always, respond in pure JSON without any Markdown, like this:
 }}
 
 Here is the user question: {ctx.data['original_query']}
-
-And here is the list of tools: {self.tools}
         """
         )
 
@@ -503,8 +507,6 @@ Always, respond in pure JSON without any Markdown, like this:
 }}
 
 Here is the user question: {ctx.data['original_query']}
-
-And here is the list of tools: {self.tools}
 
 Sub-questions to review:
 {ev.questions}
