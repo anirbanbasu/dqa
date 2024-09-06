@@ -186,7 +186,7 @@ class ReActWorkflow(Workflow):
             )
             streaming_message = EMPTY_STRING
             if hasattr(reasoning_step, "thought"):
-                streaming_message = f"Thought: {reasoning_step.thought}"
+                streaming_message = f"\nThought: {reasoning_step.thought}"
             if hasattr(reasoning_step, "action"):
                 streaming_message += f"\nAction: {reasoning_step.action} with {reasoning_step.action_input}"
             if reasoning_step.is_done:
@@ -363,20 +363,21 @@ class DQAWorkflow(Workflow):
             f"""
 You are an assistant for question-answering tasks who performs query decomposition.
 Given a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question.
-Respond with a list containing only the unmodified original question when no decomposition is needed.
+Respond with a list containing the unmodified original question only when no decomposition is needed. Otherwise, do not include the original question in the list of sub-questions.
 Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
 Each sub-question should clearly state the subject to ensure no ambiguity.
 Do not generate unnecessary sub-questions that are not required to answer the original question.
-Lastly, generate a binary response indicating whether you are satisfied with the generated sub-questions or not.
+
+Lastly, reflect on the generated sub-questions and output a binary response indicating whether you are satisfied with the generated sub-questions or not.
 
 Example 1:
 Question: Is Hamlet more common on IMDB than Comedy of Errors?
 Decompositions:
 {{
     "sub_questions": [
-        "How many listings of Hamlet are there on IMDB?"
+        "How many listings of Hamlet are there on IMDB?",
         "How many listings of Comedy of Errors is there on IMDB?"
-    ]
+    ],
     "satisfied": true
 }}
 
@@ -384,7 +385,7 @@ Example 2:
 Question: What is the capital city of Japan?
 Decompositions:
 {{
-    "sub_questions": ["What is the capital city of Japan?"]
+    "sub_questions": ["What is the capital city of Japan?"],
     "satisfied": true
 }}
 Note that this question above needs no decomposition. Hence, the original question is repeated as the only sub-question.
@@ -396,19 +397,19 @@ Decompositions:
     "sub_questions": [
         "How many hydrogen atoms are there in methyl alcohol?",
         "How many hydrogen atoms are there in ethyl alcohol?",
-        "What is the chemical composition of alcohol?",
-    ]
+        "What is the chemical composition of alcohol?"
+    ],
     "satisfied": false
 }}
-Note that the third sub-question is unnecessary and should not be included in the response. Hence, the value of satisfied is set to false.
+Note that the third sub-question is unnecessary and should not be included. Hence, the value of the satisfied flag is set to false.
 
 Always, respond in pure JSON without any Markdown, like this:
 {{
     "sub_questions": [
         "sub question 1",
         "sub question 2",
-        "sub question 3",
-    ]
+        "sub question 3"
+    ],
     "satisfied": true or false
 }}
 
@@ -482,21 +483,21 @@ And here is the list of tools: {self.tools}
 
         generator = await self.llm.astream_complete(
             f"""
-You are given an overall question that has been decomposed into sub-questions.
-Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query..
+You are given an overall question that has been decomposed into sub-questions, which are also given below.
+Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query.
 Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question.
 Ensure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
 Each sub-question should clearly state the subject to ensure no ambiguity.
 Do not output sub-questions that are not required to answer the original question.
 
-Lastly, generate a binary response indicating whether you are satisfied with the amended sub-questions or not.
+Lastly, reflect on the amended generate a binary response indicating whether you are satisfied with the amended sub-questions or not.
 
 Always, respond in pure JSON without any Markdown, like this:
 {{
     "sub_questions": [
         "sub question 1",
         "sub question 2",
-        "sub question 3",
+        "sub question 3"
     ],
     "satisfied": true or false
 }}
@@ -505,7 +506,7 @@ Here is the user question: {ctx.data['original_query']}
 
 And here is the list of tools: {self.tools}
 
-Sub-questions and answers:
+Sub-questions to review:
 {ev.questions}
             """
         )
@@ -646,10 +647,14 @@ Sub-questions and answers:
 
         prompt = f"""
 You are given an overall question that has been split into sub-questions, each of which has been answered.
-Combine the answers to all the sub-questions into a single answer to the original question. Your answer should be a coherent response to the original question.
-Ensure that your final answer includes all the relevant information from the answers to the sub-questions.
-In your final answer, include information from the sources if they have corresponding URLs.
-Do not miss out on any important details and nuances. Format your final answer within a HTML div tag.
+First, combine the answers to all the sub-questions into a single and succinct answer to the original question. Your answer should be a coherent response to the original question.
+
+Then, output a more detailed answer explaining how you arrived at the final answer.
+Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions.
+In your final answer, cite the sources and their corresponding URLs, if sources URLs are available are in the answers to the sub-questions.
+Do not make up sources or URLs if they are not present in the answers to the sub-questions.
+
+Your final answer must be correctly formatted as HTML in a readable and visually pleasing way. Enclose the HTML with a <div> tag that has an attribute `id` set to the value 'workflow_response'.
 
 Original question: {ctx.data['original_query']}
 
