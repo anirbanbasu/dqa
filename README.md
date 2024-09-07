@@ -55,7 +55,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes   |
 |----------|:-------------:|------|
-| September 7, 2024 |  active |  Qdrant is not used. Cohere is flaky.  |
+| September 7, 2024 |  active |  Cohere `command-r-plus` is _very_ slow.  |
 | August 31, 2024 |  active |  Using built-in ReAct agent.  |
 | August 29, 2024 |  active |  Project started.  |
 
