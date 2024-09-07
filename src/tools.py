@@ -14,6 +14,11 @@
 
 """Functions wrapped as tools used by LLMs and agents for various tasks."""
 
+try:
+    from icecream import ic
+except ImportError:  # Graceful fallback if IceCream isn't installed.
+    ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
+
 from llama_index.core.tools.tool_spec.base import BaseToolSpec
 
 from utils import EMPTY_STRING

@@ -201,9 +201,7 @@ class ReActWorkflow(Workflow):
         """
         chat_history = ev.input
 
-        generator = await self.llm.astream_chat(chat_history)
-        async for response in generator:
-            pass
+        response = await self.llm.achat(chat_history)
 
         try:
             reasoning_step = self.output_parser.parse(response.message.content)
@@ -439,10 +437,14 @@ class DQAWorkflow(Workflow):
             "}"
             f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
         )
-        generator = await self.llm.astream_complete(prompt)
+        # TODO: Is streaming mode really necessary?
+        # if type(self.llm).__name__ != EnvironmentVariables.VALUE__LLM_PROVIDER_COHERE:
+        #     generator = await self.llm.astream_complete(prompt)
 
-        async for response in generator:
-            pass
+        #     async for response in generator:
+        #         pass
+        # else:
+        response = await self.llm.acomplete(prompt)
 
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
@@ -523,10 +525,8 @@ class DQAWorkflow(Workflow):
             f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
             f"\n\nHere are the sub-questions for you to review:\n{ev.questions}"
         )
-        generator = await self.llm.astream_complete(prompt)
+        response = await self.llm.acomplete(prompt)
 
-        async for response in generator:
-            pass
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
         satisfied = response_obj["satisfied"]
@@ -660,15 +660,13 @@ class DQAWorkflow(Workflow):
             "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
             "In your final answer, cite the sources and their corresponding URLs, if source URLs are available are in the answers to the sub-questions."
             "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions."
-            "\nYour final answer must be correctly formatted as HTML in a concise, readable and visually pleasing way. "
-            "Enclose the HTML with a <div> tag that has an attribute `id` set to the value 'dqa_workflow_response'."
+            "\nYour final answer must be correctly formatted as pure HTML (with no Javascript or Markdown) in a concise, readable and visually pleasing way. "
+            "Enclose your HTML response with a <div> tag that has an attribute `id` set to the value 'dqa_workflow_response'."
             f"\n\nOriginal question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
             f"\n\nSub-questions and answers:\n{answers}"
         )
 
-        generator = await self.llm.astream_complete(prompt)
-        async for response in generator:
-            pass
+        response = await self.llm.acomplete(prompt)
 
         return StopEvent(result=str(response))
 
