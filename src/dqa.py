@@ -594,7 +594,7 @@ class DQAWorkflow(Workflow):
             self._finished_steps += 1
             ctx.write_event_to_stream(
                 DQAStatusEvent(
-                    msg=nested_ev.msg,
+                    msg=f"[{ReActWorkflow.__name__}] {nested_ev.msg}",
                     total_steps=self._total_steps,
                     finished_steps=self._finished_steps,
                 )

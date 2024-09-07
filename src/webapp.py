@@ -707,8 +707,8 @@ class GradioApp:
                             yield str(result)
                         else:
                             status = (
-                                str(result)[:100] + "..."
-                                if len(str(result)) > 100
+                                str(result)[:150] + "..."
+                                if len(str(result)) > 150
                                 else str(result)
                             )
                             agent_status(
