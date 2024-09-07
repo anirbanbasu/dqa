@@ -17,6 +17,8 @@
 import os
 from typing import Any
 
+APP_TITLE_FULL = "DQA: Dificult Questions Attempted"
+
 FAKE_STRING = "fake"
 EMPTY_STRING = ""
 SPACE_STRING = " "

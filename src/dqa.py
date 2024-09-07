@@ -22,7 +22,7 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 import asyncio
 import uuid
 
-# Weaker LLMs may generate ReActAgent steps whose Action Input are horrible JSON strings.
+# Weaker LLMs may generate horrible JSON strings.
 # `dirtyjson` is more lenient than `json` in parsing JSON strings.
 import dirtyjson as json
 from typing import Any, List
@@ -88,7 +88,12 @@ class ReActFunctionOutputEvent(Event):
 class ReActWorkflow(Workflow):
     """A workflow implementation for a ReAct agent."""
 
-    STR_CURRENT_REASONING = "current_reasoning"
+    KEY_CURRENT_REASONING = "current_reasoning"
+    KEY_THOUGHT = "thought"
+    KEY_ACTION = "action"
+    KEY_RESPONSE = "response"
+    KEY_REASONING = "reasoning"
+    KEY_SOURCES = "sources"
 
     def __init__(
         self,
@@ -96,6 +101,7 @@ class ReActWorkflow(Workflow):
         llm: LLM | None = None,
         tools: list[BaseTool] | None = None,
         extra_context: str | None = None,
+        max_iterations: int = 10,
         **kwargs: Any,
     ) -> None:
         """
@@ -105,11 +111,13 @@ class ReActWorkflow(Workflow):
             llm (LLM): The LLM instance to use.
             tools (list[BaseTool]): The list of tools to use.
             extra_context (str): The extra context to use.
+            max_iterations (int): The maximum number of iterations to run.
         """
         super().__init__(*args, **kwargs)
         self.tools = tools or []
 
         self.llm = llm
+        self.max_iterations = max_iterations
 
         self.memory = ChatMemoryBuffer.from_defaults(llm=llm)
         self.formatter = ReActChatFormatter(context=extra_context or EMPTY_STRING)
@@ -130,6 +138,7 @@ class ReActWorkflow(Workflow):
         """
         # clear sources
         self.sources = []
+        self._current_iteration = 0
 
         # get user input
         user_input = ev.input
@@ -137,7 +146,7 @@ class ReActWorkflow(Workflow):
         self.memory.put(user_msg)
 
         # clear current reasoning
-        await ctx.set(ReActWorkflow.STR_CURRENT_REASONING, [])
+        await ctx.set(ReActWorkflow.KEY_CURRENT_REASONING, [])
 
         return ReActPrepEvent()
 
@@ -156,9 +165,20 @@ class ReActWorkflow(Workflow):
             ReActInputEvent: The event containing the input to be used for the LLM.
         """
         # get chat history
+        self._current_iteration += 1
+        if self._current_iteration > self.max_iterations:
+            return StopEvent(
+                result={
+                    ReActWorkflow.KEY_RESPONSE: f"I must stop because I have reached the specified maximum number of iterations ({self.max_iterations}).",
+                    ReActWorkflow.KEY_SOURCES: [*self.sources],
+                    ReActWorkflow.KEY_REASONING: await ctx.get(
+                        ReActWorkflow.KEY_CURRENT_REASONING, default=[]
+                    ),
+                }
+            )
         chat_history = self.memory.get()
         current_reasoning = await ctx.get(
-            ReActWorkflow.STR_CURRENT_REASONING, default=[]
+            ReActWorkflow.KEY_CURRENT_REASONING, default=[]
         )
         llm_input = self.formatter.format(
             self.tools, chat_history, current_reasoning=current_reasoning
@@ -187,16 +207,16 @@ class ReActWorkflow(Workflow):
 
         try:
             reasoning_step = self.output_parser.parse(response.message.content)
-            (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+            (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                 reasoning_step
             )
             streaming_message = EMPTY_STRING
-            if hasattr(reasoning_step, "thought"):
-                streaming_message = f"\nThought: {reasoning_step.thought}"
-            if hasattr(reasoning_step, "action"):
-                streaming_message += f"\nAction: {reasoning_step.action} with {reasoning_step.action_input}"
+            if hasattr(reasoning_step, ReActWorkflow.KEY_THOUGHT):
+                streaming_message = f"\n{ReActWorkflow.KEY_THOUGHT.capitalize()}: {reasoning_step.thought}"
+            if hasattr(reasoning_step, ReActWorkflow.KEY_ACTION):
+                streaming_message += f"\n{ReActWorkflow.KEY_ACTION.capitalize()}: {reasoning_step.action} with {reasoning_step.action_input}"
             if reasoning_step.is_done:
-                streaming_message += f"\nResponse: {reasoning_step.response}"
+                streaming_message += f"\n{ReActWorkflow.KEY_RESPONSE.capitalize()}: {reasoning_step.response}"
             ctx.write_event_to_stream(Event(msg=streaming_message))
             if reasoning_step.is_done:
                 self.memory.put(
@@ -206,10 +226,10 @@ class ReActWorkflow(Workflow):
                 )
                 return StopEvent(
                     result={
-                        "response": reasoning_step.response,
-                        "sources": [*self.sources],
-                        "reasoning": await ctx.get(
-                            ReActWorkflow.STR_CURRENT_REASONING, default=[]
+                        ReActWorkflow.KEY_RESPONSE: reasoning_step.response,
+                        ReActWorkflow.KEY_SOURCES: [*self.sources],
+                        ReActWorkflow.KEY_REASONING: await ctx.get(
+                            ReActWorkflow.KEY_CURRENT_REASONING, default=[]
                         ),
                     }
                 )
@@ -226,7 +246,7 @@ class ReActWorkflow(Workflow):
                     ]
                 )
         except Exception as e:
-            (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+            (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                 ObservationReasoningStep(
                     observation=f"There was an error in parsing my reasoning: {e}"
                 )
@@ -259,7 +279,7 @@ class ReActWorkflow(Workflow):
         for tool_call in tool_calls:
             tool = tools_by_name.get(tool_call.tool_name)
             if not tool:
-                (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(
                         observation=f"Tool {tool_call.tool_name} does not exist"
                     )
@@ -272,7 +292,7 @@ class ReActWorkflow(Workflow):
             try:
                 tool_output = tool(**tool_call.tool_kwargs)
                 self.sources.append(tool_output)
-                (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(observation=tool_output.content)
                 )
                 ctx.write_event_to_stream(
@@ -281,7 +301,7 @@ class ReActWorkflow(Workflow):
                     )
                 )
             except Exception as e:
-                (await ctx.get(ReActWorkflow.STR_CURRENT_REASONING, default=[])).append(
+                (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(
                         observation=f"Error calling tool {tool.metadata.get_name()}: {e}"
                     )
@@ -316,6 +336,10 @@ class DQAStatusEvent(Event):
 
 
 class DQAWorkflow(Workflow):
+    """A workflow implementation for the DQA paradigm."""
+
+    KEY_ORIGINAL_QUERY = "original_query"
+
     def __init__(
         self,
         *args: Any,
@@ -339,7 +363,7 @@ class DQAWorkflow(Workflow):
         self._finished_steps: int = 0
 
     @step
-    async def query(self, ctx: Context, ev: StartEvent) -> DQAQueryEvent:
+    async def query(self, ctx: Context, ev: StartEvent) -> DQAQueryEvent | StopEvent:
         """
         As a start event of the workflow, this step receives the original query and stores it in the context.
         It then asks the LLM to decompose the query into sub-questions. Upon decomposition, it emits every
@@ -350,78 +374,72 @@ class DQAWorkflow(Workflow):
             ev (StartEvent): The start event.
 
         Returns:
-            DQAQueryEvent: The event containing the original query.
+            DQAQueryEvent | StopEvent: The event containing the sub-question or the event to stop the workflow if there is no query specified.
         """
-        # if hasattr(ev, "query"):
-        ctx.data["original_query"] = ev.query
-        # print(f"Query is {ctx.data['original_query']}")
-        # ctx.data["tool_descriptions"] = get_react_tool_descriptions(self.tools)
+        if hasattr(ev, "query"):
+            ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY] = ev.query
+        else:
+            return StopEvent(result="No query provided. Try again!")
+
         self._total_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Assessing query:\n\n{ctx.data['original_query']}",
+                msg=f"Assessing query:\n\n{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
         )
 
-        generator = await self.llm.astream_complete(
-            f"""
-You are an assistant for question-answering tasks who performs query decomposition.
-Given a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question.
-Respond with a list containing the unmodified original question only when no decomposition is needed. Otherwise, do not include the original question in the list of sub-questions.
-Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
-Each sub-question should clearly state the subject to ensure no ambiguity.
-Do not generate unnecessary sub-questions that are not required to answer the original question.
-
-Lastly, reflect on the generated sub-questions and output a binary response indicating whether you are satisfied with the generated sub-questions or not.
-
-Example 1:
-Question: Is Hamlet more common on IMDB than Comedy of Errors?
-Decompositions:
-{{
-    "sub_questions": [
-        "How many listings of Hamlet are there on IMDB?",
-        "How many listings of Comedy of Errors is there on IMDB?"
-    ],
-    "satisfied": true
-}}
-
-Example 2:
-Question: What is the capital city of Japan?
-Decompositions:
-{{
-    "sub_questions": ["What is the capital city of Japan?"],
-    "satisfied": true
-}}
-Note that this question above needs no decomposition. Hence, the original question is repeated as the only sub-question.
-
-Example 3:
-Question: Are there more hydrogen atoms in methyl alcohol than in ethyl alcohol?
-Decompositions:
-{{
-    "sub_questions": [
-        "How many hydrogen atoms are there in methyl alcohol?",
-        "How many hydrogen atoms are there in ethyl alcohol?",
-        "What is the chemical composition of alcohol?"
-    ],
-    "satisfied": false
-}}
-Note that the third sub-question is unnecessary and should not be included. Hence, the value of the satisfied flag is set to false.
-
-Always, respond in pure JSON without any Markdown, like this:
-{{
-    "sub_questions": [
-        "sub question 1",
-        "sub question 2",
-        "sub question 3"
-    ],
-    "satisfied": true or false
-}}
-
-Here is the user question: {ctx.data['original_query']}
-        """
+        prompt = (
+            "You are a linguistic expert who performs query decomposition."
+            "\nGiven a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question. "
+            "Respond with a list containing the unmodified original question only when no decomposition is needed. Otherwise, do not include the original question in the list of sub-questions. "
+            "Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
+            "Each sub-question should clearly state the subject to ensure no ambiguity. "
+            "Do not generate sub-questions that are not required to answer the original question. "
+            "\n\nLastly, reflect on the generated sub-questions and output a binary response indicating whether you are satisfied with the generated sub-questions or not. "
+            "\n\nExample 1:\n"
+            "Question: Is Hamlet more common on IMDB than Comedy of Errors?\n"
+            "Decompositions:\n"
+            "{\n"
+            '    "sub_questions": [\n'
+            '        "How many listings of Hamlet are there on IMDB?",\n'
+            '        "How many listings of Comedy of Errors is there on IMDB?"\n'
+            "    ],\n"
+            '    "satisfied": true\n'
+            "}"
+            "\n\nExample 2:\n"
+            "Question: What is the capital city of Japan?\n"
+            "Decompositions:\n"
+            "{\n"
+            '    "sub_questions": ["What is the capital city of Japan?"],\n'
+            '    "satisfied": true\n'
+            "}\n"
+            "Note that this question above needs no decomposition. Hence, the original question is repeated as the only sub-question."
+            "\n\nExample 3:\n"
+            "Question: Are there more hydrogen atoms in methyl alcohol than in ethyl alcohol?\n"
+            "Decompositions:\n"
+            "{\n"
+            '    "sub_questions": [\n'
+            '        "How many hydrogen atoms are there in methyl alcohol?",\n'
+            '        "How many hydrogen atoms are there in ethyl alcohol?",\n'
+            '        "What is the chemical composition of alcohol?"\n'
+            "    ],\n"
+            '    "satisfied": false\n'
+            "}\n"
+            "Note that the third sub-question is unnecessary and should not be included. Hence, the value of the satisfied flag is set to false."
+            "\n\nAlways, respond in pure JSON without any Markdown, like this:\n"
+            "{\n"
+            '    "sub_questions": [\n'
+            '        "sub question 1",\n'
+            '        "sub question 2",\n'
+            '        "sub question 3"\n'
+            "    ],\n"
+            '    "satisfied": true or false\n'
+            "}"
+            f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
         )
+        generator = await self.llm.astream_complete(prompt)
 
         async for response in generator:
             pass
@@ -440,8 +458,7 @@ Here is the user question: {ctx.data['original_query']}
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
-        # TODO: Ignore the satisfaction level?
-        if len(sub_questions) == 1:
+        if len(sub_questions) == 1 and satisfied:
             return DQAQueryEvent(question=sub_questions[0])
         else:
             if satisfied:
@@ -485,33 +502,28 @@ Here is the user question: {ctx.data['original_query']}
             )
         )
 
-        generator = await self.llm.astream_complete(
-            f"""
-You are given an overall question that has been decomposed into sub-questions, which are also given below.
-Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query.
-Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question.
-Ensure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on.
-Each sub-question should clearly state the subject to ensure no ambiguity.
-Do not output sub-questions that are not required to answer the original question.
-
-Lastly, reflect on the amended generate a binary response indicating whether you are satisfied with the amended sub-questions or not.
-
-Always, respond in pure JSON without any Markdown, like this:
-{{
-    "sub_questions": [
-        "sub question 1",
-        "sub question 2",
-        "sub question 3"
-    ],
-    "satisfied": true or false
-}}
-
-Here is the user question: {ctx.data['original_query']}
-
-Sub-questions to review:
-{ev.questions}
-            """
+        prompt = (
+            "You are a linguistic expert who performs a review of query decomposition."
+            "\nYou are given an overall question that has been decomposed into sub-questions, which are also given below. "
+            "Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query."
+            "Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question. "
+            "\nEnsure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
+            "Each sub-question should clearly state the subject to ensure no ambiguity. "
+            "Do not output sub-questions that are not required to answer the original question. "
+            "\n\nLastly, reflect on the amended generate a binary response indicating whether you are satisfied with the amended sub-questions or not."
+            "\n\nAlways, respond in pure JSON without any Markdown, like this:"
+            "{\n"
+            '    "sub_questions": [\n'
+            '        "sub question 1",\n'
+            '        "sub question 2",\n'
+            '        "sub question 3"\n'
+            "    ],\n"
+            '    "satisfied": true or false\n'
+            "}"
+            f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
+            f"\n\nHere are the sub-questions for you to review:\n{ev.questions}"
         )
+        generator = await self.llm.astream_complete(prompt)
 
         async for response in generator:
             pass
@@ -529,8 +541,7 @@ Sub-questions to review:
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
-        # TODO: Ignore the satisfaction level?
-        if len(sub_questions) == 1:
+        if len(sub_questions) == 1 and satisfied:
             return DQAQueryEvent(question=sub_questions[0])
 
         if satisfied:
@@ -559,18 +570,11 @@ Sub-questions to review:
             DQAAnswerEvent: The event containing the sub-question and the answer.
         """
 
-        # agent = ReActAgent.from_tools(
-        #     ctx.data["tools"],
-        #     llm=self.llm,
-        #     verbose=True,
-        #     max_iterations=25,
-        # )
-        # response = agent.chat(ev.question)
         self._total_steps += 1
         self._finished_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Starting ReAct workflow to answer question:\n\n{ev.question}",
+                msg=f"Starting a {ReActWorkflow.__name__} to answer question:\n\n{ev.question}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -578,8 +582,10 @@ Sub-questions to review:
         react_workflow = ReActWorkflow(
             llm=self.llm,
             tools=self.tools,
+            # Let's set the timeout of the ReAct workflow to half of the DQA workflow's timeout.
             timeout=self._timeout / 2,
             verbose=self._verbose,
+            # Let's set the maximum iterations of the ReAct workflow to its default value.
         )
         react_task = asyncio.create_task(react_workflow.run(input=ev.question))
 
@@ -598,8 +604,11 @@ Sub-questions to review:
 
         return DQAAnswerEvent(
             question=ev.question,
-            answer=response["response"],
-            sources=[tool_output.content for tool_output in response["sources"]],
+            answer=response[ReActWorkflow.KEY_RESPONSE],
+            sources=[
+                tool_output.content
+                for tool_output in response[ReActWorkflow.KEY_SOURCES]
+            ],
         )
 
     @step
@@ -625,15 +634,13 @@ Sub-questions to review:
         if ready is None:
             return None
 
-        # if len(ready) == 1:
-        #     # Nothing to combine if there was only ever one sub-question.
-        #     return StopEvent(result=ready[0].answer)
-
         answers = "\n\n".join(
             [
-                f"""Question: {event.question}
-                \n Answer: {event.answer}
-                \n Sources: {", ".join(event.sources)}"""
+                (
+                    f"Question: {event.question}"
+                    f"\nAnswer: {event.answer}"
+                    f"\nSources: {', '.join(event.sources)}"
+                )
                 for event in ready
             ]
         )
@@ -641,28 +648,23 @@ Sub-questions to review:
         self._finished_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Generating the final response to the original query:\n\n{ctx.data['original_query']}",
+                msg=f"Generating the final response to the original query:\n\n{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
         )
 
-        prompt = f"""
-You are given an overall question that has been split into sub-questions, each of which has been answered.
-First, combine the answers to all the sub-questions into a single and succinct answer to the original question. Your answer should be a coherent response to the original question.
-
-Then, output a more detailed answer explaining how you arrived at the final answer.
-Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions.
-In your final answer, cite the sources and their corresponding URLs, if sources URLs are available are in the answers to the sub-questions.
-Do not make up sources or URLs if they are not present in the answers to the sub-questions.
-
-Your final answer must be correctly formatted as HTML in a readable and visually pleasing way. Enclose the HTML with a <div> tag that has an attribute `id` set to the value 'workflow_response'.
-
-Original question: {ctx.data['original_query']}
-
-Sub-questions and answers:
-{answers}
-        """
+        prompt = (
+            "You are given an overall question that has been split into sub-questions, each of which has been answered."
+            "\nCombine the answers to all the sub-questions into a single and coherent response to the original question. "
+            "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
+            "In your final answer, cite the sources and their corresponding URLs, if source URLs are available are in the answers to the sub-questions."
+            "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions."
+            "\nYour final answer must be correctly formatted as HTML in a concise, readable and visually pleasing way. "
+            "Enclose the HTML with a <div> tag that has an attribute `id` set to the value 'dqa_workflow_response'."
+            f"\n\nOriginal question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
+            f"\n\nSub-questions and answers:\n{answers}"
+        )
 
         generator = await self.llm.astream_complete(prompt)
         async for response in generator:

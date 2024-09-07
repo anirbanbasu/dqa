@@ -25,6 +25,7 @@ import gradio as gr
 
 from dqa import DQAEngine
 from utils import (
+    APP_TITLE_FULL,
     COLON_STRING,
     FAKE_STRING,
     ToolNames,
@@ -615,6 +616,7 @@ class GradioApp:
     def create_app_ui(self):
         """Construct the Gradio user interface and make it available through the `interface` property of this class."""
         with gr.Blocks(
+            title=APP_TITLE_FULL,
             # See theming guide at https://www.gradio.app/guides/theming-guide
             fill_width=True,
             fill_height=True,
@@ -704,8 +706,13 @@ class GradioApp:
                             agent_status(progress=None)
                             yield str(result)
                         else:
+                            status = (
+                                str(result)[:100] + "..."
+                                if len(str(result)) > 100
+                                else str(result)
+                            )
                             agent_status(
-                                progress=(finished_steps, total_steps), desc=str(result)
+                                progress=(finished_steps, total_steps), desc=status
                             )
                             yield EMPTY_STRING
 
