@@ -23,6 +23,7 @@ import os
 from typing import Any
 
 APP_TITLE_FULL = "DQA: Dificult Questions Attempted"
+APP_TITLE_SHORT = "DQA"
 
 FAKE_STRING = "fake"
 EMPTY_STRING = ""

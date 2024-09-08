@@ -19,6 +19,8 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
+from tqdm import tqdm
+import os
 import asyncio
 import uuid
 
@@ -48,6 +50,7 @@ from llama_index.core.workflow import (
 
 from tools import StringFunctionsToolSpec, BasicArithmeticCalculatorSpec
 from utils import (
+    APP_TITLE_SHORT,
     EMPTY_STRING,
     FAKE_STRING,
     ToolNames,
@@ -93,6 +96,9 @@ class ReActWorkflow(Workflow):
     KEY_ACTION = "action"
     KEY_RESPONSE = "response"
     KEY_REASONING = "reasoning"
+    KEY_OBSERVATION = "observation"
+    KEY_ERROR = "error"
+    KEY_WARNING = "warning"
     KEY_SOURCES = "sources"
 
     def __init__(
@@ -210,7 +216,7 @@ class ReActWorkflow(Workflow):
             )
             streaming_message = EMPTY_STRING
             if hasattr(reasoning_step, ReActWorkflow.KEY_THOUGHT):
-                streaming_message = f"\n{ReActWorkflow.KEY_THOUGHT.capitalize()}: {reasoning_step.thought}"
+                streaming_message = f"{ReActWorkflow.KEY_THOUGHT.capitalize()}: {reasoning_step.thought}"
             if hasattr(reasoning_step, ReActWorkflow.KEY_ACTION):
                 streaming_message += f"\n{ReActWorkflow.KEY_ACTION.capitalize()}: {reasoning_step.action} with {reasoning_step.action_input}"
             if reasoning_step.is_done:
@@ -250,7 +256,7 @@ class ReActWorkflow(Workflow):
                 )
             )
             ctx.write_event_to_stream(
-                Event(msg=f"There was an error in parsing my reasoning: {e}")
+                Event(msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: {e}")
             )
 
         # if no tool calls or final response, iterate again
@@ -279,11 +285,13 @@ class ReActWorkflow(Workflow):
             if not tool:
                 (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(
-                        observation=f"Tool {tool_call.tool_name} does not exist"
+                        observation=f"Tool {tool_call.tool_name} does not exist."
                     )
                 )
                 ctx.write_event_to_stream(
-                    Event(msg=f"Tool {tool_call.tool_name} does not exist")
+                    Event(
+                        msg=f"{ReActWorkflow.KEY_WARNING.capitalize()}: Tool {tool_call.tool_name} does not exist."
+                    )
                 )
                 continue
 
@@ -295,17 +303,19 @@ class ReActWorkflow(Workflow):
                 )
                 ctx.write_event_to_stream(
                     Event(
-                        msg=f"Observation: {tool_output.content}",
+                        msg=f"{ReActWorkflow.KEY_OBSERVATION.capitalize()}: {tool_output.content}",
                     )
                 )
             except Exception as e:
                 (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(
-                        observation=f"Error calling tool {tool.metadata.get_name()}: {e}"
+                        observation="Error calling tool {tool.metadata.get_name()}: {e}"
                     )
                 )
                 ctx.write_event_to_stream(
-                    Event(msg=f"Error calling tool {tool.metadata.get_name()}: {e}")
+                    Event(
+                        msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: Failed calling tool {tool.metadata.get_name()}: {e}"
+                    )
                 )
 
         # prep the next iteraiton
@@ -382,7 +392,7 @@ class DQAWorkflow(Workflow):
         self._total_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Assessing query:\n\n{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                msg=f"Assessing query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -452,7 +462,7 @@ class DQAWorkflow(Workflow):
 
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} sub-questions:\n\n{str(sub_questions)}",
+                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} sub-questions:\n\t{str(sub_questions)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -498,7 +508,7 @@ class DQAWorkflow(Workflow):
         self._finished_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Reviewing sub-questions:\n\n{str(ev.questions)}",
+                msg=f"Reviewing sub-questions:\n\t{str(ev.questions)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -533,7 +543,7 @@ class DQAWorkflow(Workflow):
 
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} refined sub-questions:\n\n{str(sub_questions)}",
+                msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} refined sub-questions:\n\t{str(sub_questions)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -574,7 +584,7 @@ class DQAWorkflow(Workflow):
         self._finished_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Starting a {ReActWorkflow.__name__} to answer question:\n\n{ev.question}",
+                msg=f"Starting a {ReActWorkflow.__name__} to answer question:\n\t{ev.question}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -594,7 +604,7 @@ class DQAWorkflow(Workflow):
             self._finished_steps += 1
             ctx.write_event_to_stream(
                 DQAStatusEvent(
-                    msg=f"[{ReActWorkflow.__name__}] {nested_ev.msg}",
+                    msg=f"[{ReActWorkflow.__name__}]\n{nested_ev.msg}",
                     total_steps=self._total_steps,
                     finished_steps=self._finished_steps,
                 )
@@ -648,7 +658,7 @@ class DQAWorkflow(Workflow):
         self._finished_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
-                msg=f"Generating the final response to the original query:\n\n{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                msg=f"Generating the final response to the original query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -923,11 +933,24 @@ class DQAEngine:
         done: bool = False
         total_steps: int = 0
         finished_steps: int = 0
+        terminal_columns, _ = os.get_terminal_size()
+        progress_bar = tqdm(
+            total=total_steps,
+            leave=True,
+            unit="step",
+            ncols=int(terminal_columns / 2),
+            desc=APP_TITLE_SHORT,
+            colour="yellow",
+        )
         async for ev in self.workflow.stream_events():
             total_steps = ev.total_steps
             finished_steps = ev.finished_steps
-            print(ev.msg)
+            print(f"\n{str(ev.msg)}")
+            progress_bar.reset(total=total_steps)
+            progress_bar.update(finished_steps)
+            progress_bar.refresh()
             yield done, finished_steps, total_steps, ev.msg
         result = await task
         done = self.workflow.is_done()
+        progress_bar.close()
         yield done, finished_steps, total_steps, result
