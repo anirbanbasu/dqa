@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 import gradio as gr
 
 
-from dqa import DQAEngine
+from workflows import DQAEngine
 from utils import (
     APP_TITLE_FULL,
     COLON_STRING,
@@ -292,7 +292,12 @@ class GradioApp:
                 )
                 number_llm_temperature = gr.Slider(
                     minimum=0.0,
-                    maximum=1.0,
+                    maximum=(
+                        2.0
+                        if self._llm_provider
+                        == EnvironmentVariables.VALUE__LLM_PROVIDER_OPENAI
+                        else 1.0
+                    ),
                     step=0.1,
                     value=self._llm.temperature,
                     label="Temperature",

@@ -40,13 +40,13 @@ class StringFunctionsToolSpec(BaseToolSpec):
 
         Args:
             string (str): The string to search.
-            substring (str): The substring to search for. This could be a single character or a sequence of characters.
+            substring (str): The substring to search for. This can be a single character or a sequence of characters.
 
         Returns:
             int: The number of times the substring appears in the string.
         """
         if not string or not substring:
-            raise ValueError("Both string and substring must be provided.")
+            raise ValueError("Both the string and the substring must be provided.")
         if string == EMPTY_STRING or substring == EMPTY_STRING:
             return 0
         return string.count(substring)
@@ -125,9 +125,6 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
 
         Returns:
             int | float: The result of the division.
-
-        Raises:
-            ValueError: If the divisor is zero.
         """
         if b == 0:
             raise ValueError("Division by zero is not allowed.")
@@ -143,9 +140,6 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
 
         Returns:
             int: The result of the modulo operation.
-
-        Raises:
-            ValueError: If the modulo is zero.
         """
         if b == 0:
             raise ValueError("Modulo by zero is not allowed.")
@@ -176,9 +170,6 @@ class BasicArithmeticCalculatorSpec(BaseToolSpec):
 
         Returns:
             int: The floor of the result of the division.
-
-        Raises:
-            ValueError: If the divisor is zero.
         """
         if b == 0:
             raise ValueError("Division by zero is not allowed.")
