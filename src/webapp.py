@@ -99,6 +99,7 @@ class GradioApp:
         ic(load_dotenv())
         self.dqa_engine = DQAEngine()
         self.set_llm_provider()
+        self.agent_task_pending = False
 
     def set_llm_provider(self, provider: str | None = None):
         """Set the LLM provider for the application."""
@@ -673,13 +674,25 @@ class GradioApp:
                         GradioApp.MD_EU_AI_ACT_TRANSPARENCY,
                         elem_classes=[GradioApp.CSS_CLASS_DIV_PADDED],
                     )
-                    text_user_input = gr.Textbox(
-                        label="Question to ask",
-                        info="Pose the question that you want to ask the large language model agent. Press ENTER to ask.",
-                        placeholder="Enter your question here...",
-                        max_lines=4,
-                        show_copy_button=True,
-                    )
+                    with gr.Row(
+                        equal_height=True,
+                        elem_classes=[GradioApp.CSS_CLASS_DIV_PADDED],
+                    ):
+                        text_user_input = gr.Textbox(
+                            label="Question to ask",
+                            info="Pose the question that you want to ask the large language model agent.",
+                            placeholder="Enter your question here...",
+                            max_lines=10,
+                            show_copy_button=True,
+                            scale=4,
+                        )
+                        btn_ask_agent = gr.Button(
+                            value="Ask",
+                            scale=1,
+                            size="lg",
+                            variant="primary",
+                            interactive=True,
+                        )
                     agent_response = gr.HTML(
                         label="Agent response",
                         value="The response from the agent(s) will appear here.",
@@ -697,18 +710,34 @@ class GradioApp:
                 api_name=False,
             )
 
-            @text_user_input.submit(
+            @btn_ask_agent.click(
                 api_name="get_agent_response",
                 inputs=[text_user_input],
                 outputs=[agent_response],
             )
             async def get_agent_response(user_input: str, agent_status=gr.Progress()):
-                if user_input is not None and user_input != EMPTY_STRING:
+                if self.agent_task_pending:
+                    gr.Warning(
+                        "DQA is busy, please wait for the current task to complete."
+                    )
+                    return
+                if (
+                    user_input is not None
+                    and user_input != EMPTY_STRING
+                    and self.agent_task_pending is False
+                ):
                     # Stream events and results
+                    self.agent_task_pending = True
                     generator = self.dqa_engine.run(user_input)
-                    async for status, finished_steps, total_steps, result in generator:
-                        if status:
+                    async for (
+                        done,
+                        finished_steps,
+                        total_steps,
+                        result,
+                    ) in generator:
+                        if done:
                             agent_status(progress=None)
+                            self.agent_task_pending = False
                             yield str(result)
                         else:
                             status = (
@@ -743,7 +772,6 @@ class GradioApp:
         allowed_static_file_paths = [
             GradioApp.PROJECT_LOGO_PATH,
         ]
-        ic(allowed_static_file_paths)
         if self.interface is not None:
             self.interface.queue().launch(
                 show_api=True,

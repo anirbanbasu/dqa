@@ -655,6 +655,7 @@ class DQAWorkflow(Workflow):
             ]
         )
 
+        self._total_steps += 1
         self._finished_steps += 1
         ctx.write_event_to_stream(
             DQAStatusEvent(
@@ -677,6 +678,15 @@ class DQAWorkflow(Workflow):
         )
 
         response = await self.llm.acomplete(prompt)
+
+        self._finished_steps += 1
+        ctx.write_event_to_stream(
+            DQAStatusEvent(
+                msg="Done, final response generated.",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
 
         return StopEvent(result=str(response))
 
