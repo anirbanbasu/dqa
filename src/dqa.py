@@ -20,7 +20,6 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
 from tqdm import tqdm
-import os
 import asyncio
 import uuid
 
@@ -54,6 +53,7 @@ from utils import (
     EMPTY_STRING,
     FAKE_STRING,
     ToolNames,
+    get_terminal_size,
 )  # , parse_env, EnvironmentVariables
 
 
@@ -933,7 +933,7 @@ class DQAEngine:
         done: bool = False
         total_steps: int = 0
         finished_steps: int = 0
-        terminal_columns, _ = os.get_terminal_size()
+        terminal_columns, _ = get_terminal_size()
         progress_bar = tqdm(
             total=total_steps,
             leave=True,
@@ -945,7 +945,9 @@ class DQAEngine:
         async for ev in self.workflow.stream_events():
             total_steps = ev.total_steps
             finished_steps = ev.finished_steps
-            print(f"\n{str(ev.msg)}")
+            print(f"\n{str(ev.msg)}", flush=True)
+            # TODO: Is tqdm.write better than printf?
+            # tqdm.write(f"\n{str(ev.msg)}")
             progress_bar.reset(total=total_steps)
             progress_bar.update(finished_steps)
             progress_bar.refresh()

@@ -141,6 +141,28 @@ def parse_env(
     return value
 
 
+def get_terminal_size(fallback=(100, 25)) -> tuple[int, int]:
+    """
+    Get the terminal size.
+    See: https://granitosaur.us/getting-terminal-size.html
+
+    Args:
+        fallback (tuple[int, int]): The fallback size to use if the terminal size cannot be determined.
+
+    Returns:
+        tuple[int, int]: The terminal size as a tuple of (columns, rows).
+    """
+    for i in range(0, 3):
+        try:
+            columns, rows = os.get_terminal_size(i)
+        except OSError:
+            continue
+        break
+    else:  # set default if the loop completes which means all failed
+        columns, rows = fallback
+    return columns, rows
+
+
 def check_list_subset(list_a: list[Any], list_b: list[Any]) -> list[Any]:
     """
     Check if the elements of list_a forms a set that is a subset of the set formed by the elements of list_a.
