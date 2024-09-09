@@ -308,12 +308,12 @@ class GradioApp:
 
             with gr.Accordion(label="Tools for agents", open=False):
                 gr.Markdown(
-                    "**Note** that making too many tools available to the agents _may_ cause query performance degradation! Select only the tools specific to your task."
+                    "**Note** that making too many tools available to the agents _is likely to_ cause query performance degradation. Therefore, select only the tools specific to your task."
                 )
                 check_arxiv = gr.Checkbox(
                     label=ToolNames.TOOL_NAME_ARXIV,
                     interactive=True,
-                    info="Tool to allow the agents to search for research papers.",
+                    info="Tool to allow the agents to search for research papers on arXiv.",
                     value=self.dqa_engine.is_toolset_present(ToolNames.TOOL_NAME_ARXIV),
                 )
 
@@ -367,6 +367,15 @@ class GradioApp:
                     ),
                 )
 
+                check_mathematical_functions = gr.Checkbox(
+                    label=ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS,
+                    interactive=True,
+                    info="Tool to allow the agents to call some mathematical functions.",
+                    value=self.dqa_engine.is_toolset_present(
+                        ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS
+                    ),
+                )
+
                 gr.Markdown("**Basic tools (cannot be deselected)**")
                 with gr.Row(equal_height=True):
                     gr.Checkbox(
@@ -384,15 +393,6 @@ class GradioApp:
                         info="Tool to allow the agents to perform some basic string operations.",
                         value=self.dqa_engine.is_toolset_present(
                             ToolNames.TOOL_NAME_STRING_FUNCTIONS
-                        ),
-                    )
-
-                    gr.Checkbox(
-                        label=ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS,
-                        interactive=False,
-                        info="Tool to allow the agents to call some mathematical functions.",
-                        value=self.dqa_engine.is_toolset_present(
-                            ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS
                         ),
                     )
 
@@ -462,6 +462,22 @@ class GradioApp:
                     )
                 else:
                     self.dqa_engine.remove_toolset(ToolNames.TOOL_NAME_YAHOO_FINANCE)
+                return self.dqa_engine.get_descriptive_tools_dataframe()
+
+            @check_mathematical_functions.change(
+                api_name=False,
+                inputs=[check_mathematical_functions],
+                outputs=[list_of_tools],
+            )
+            def toggle_mathematical_functions_tool(checked: bool):
+                if checked:
+                    self.dqa_engine.add_or_set_toolset(
+                        ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS
+                    )
+                else:
+                    self.dqa_engine.remove_toolset(
+                        ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS
+                    )
                 return self.dqa_engine.get_descriptive_tools_dataframe()
 
             @dropdown_web_search.change(

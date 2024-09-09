@@ -31,7 +31,6 @@ from llama_index.tools.arxiv import ArxivToolSpec
 
 from llama_index.tools.wikipedia import WikipediaToolSpec
 from llama_index.tools.tavily_research import TavilyToolSpec
-from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
 
 from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
 from llama_index.core.tools import FunctionTool
@@ -48,6 +47,7 @@ from llama_index.core.workflow import (
 # from llama_index.core.agent import ReActAgent
 
 from tools import (
+    DuckDuckGoFullSearchOnlyToolSpec,
     StringFunctionsToolSpec,
     BasicArithmeticCalculatorSpec,
     MathematicalFunctionsSpec,
@@ -709,11 +709,9 @@ class DQAEngine:
         # Mandatory tools
         self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
-        self.tools.extend(MathematicalFunctionsSpec().to_tool_list())
 
         # TODO: Populate the tools based on toolset names specified in the environment variables?
-        self.tools.extend(ArxivToolSpec().to_tool_list())
-        self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
+        self.tools.extend(DuckDuckGoFullSearchOnlyToolSpec().to_tool_list())
 
     def _are_tools_present(self, tool_names: list[str]) -> bool:
         """
@@ -773,7 +771,7 @@ class DQAEngine:
             return self._are_tools_present(
                 [
                     tool.metadata.name
-                    for tool in DuckDuckGoSearchToolSpec().to_tool_list()
+                    for tool in DuckDuckGoFullSearchOnlyToolSpec().to_tool_list()
                 ]
             )
         elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:
@@ -843,7 +841,7 @@ class DQAEngine:
             self._remove_tools_by_names(
                 [
                     tool.metadata.name
-                    for tool in DuckDuckGoSearchToolSpec().to_tool_list()
+                    for tool in DuckDuckGoFullSearchOnlyToolSpec().to_tool_list()
                 ]
             )
         elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:
@@ -895,7 +893,7 @@ class DQAEngine:
         elif toolset_name == ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS:
             self.tools.extend(MathematicalFunctionsSpec().to_tool_list())
         elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
-            self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
+            self.tools.extend(DuckDuckGoFullSearchOnlyToolSpec().to_tool_list())
         elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:
             self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         elif toolset_name == ToolNames.TOOL_NAME_TAVILY:

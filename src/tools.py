@@ -20,9 +20,18 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
 from llama_index.core.tools.tool_spec.base import BaseToolSpec
+
+from llama_index.tools.duckduckgo import DuckDuckGoSearchToolSpec
+
 import math
 
 from utils import EMPTY_STRING
+
+
+class DuckDuckGoFullSearchOnlyToolSpec(DuckDuckGoSearchToolSpec):
+    """Modified version of DuckDuckGoSearch tool spec because we do not need the duckduckgo_instant_search."""
+
+    spec_functions = ["duckduckgo_full_search"]
 
 
 class StringFunctionsToolSpec(BaseToolSpec):
@@ -292,6 +301,20 @@ class MathematicalFunctionsSpec(BaseToolSpec):
         """
         return math.cbrt(n)
 
+    def math_nth_root(self, x: int | float, n: int) -> float:
+        """
+        MathematicalFunctions: Computes the nth root of a number.
+
+        Args:
+            x (int | float): The number to find the nth root of.
+            n (int): The root to find.
+
+        Returns:
+            float: The nth root of the number.
+        """
+        # Alternatively: x ** (1 / n)
+        return math.pow(x, 1 / n)
+
     def math_exponential(self, n: int | float) -> float:
         """
         MathematicalFunctions: Computes the value of e raised to the power n,
@@ -318,3 +341,202 @@ class MathematicalFunctionsSpec(BaseToolSpec):
             float: The logarithm of the number to the given base.
         """
         return math.log(n, base)
+
+    def math_sine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the sine of an angle in radians.
+
+        Args:
+            x (int | float): The angle in radians.
+
+        Returns:
+            float: The sine of the angle.
+        """
+        return math.sin(x)
+
+    def math_cosine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the cosine of an angle in radians.
+
+        Args:
+            x (int | float): The angle in radians.
+
+        Returns:
+            float: The cosine of the angle.
+        """
+        return math.cos(x)
+
+    def math_tangent(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the tangent of an angle in radians.
+
+        Args:
+            x (int | float): The angle in radians.
+
+        Returns:
+            float: The tangent of the angle.
+        """
+        return math.tan(x)
+
+    def math_arc_sine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the inverse sine of a number.
+
+        Args:
+            x (int | float): The number to find the inverse sine of.
+
+        Returns:
+            float: The inverse sine of the number.
+        """
+        return math.asin(x)
+
+    def math_arc_cosine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the inverse cosine of a number.
+
+        Args:
+            x (int | float): The number to find the inverse cosine of.
+
+        Returns:
+            float: The inverse cosine of the number.
+        """
+        return math.acos(x)
+
+    def math_arc_tangent(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the inverse tangent of a number.
+
+        Args:
+            x (int | float): The number to find the inverse tangent of.
+
+        Returns:
+            float: The inverse tangent of the number.
+        """
+        return math.atan(x)
+
+    def math_radians_to_degrees(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Converts an angle from radians to degrees.
+
+        Args:
+            x (int | float): The angle in radians.
+
+        Returns:
+            float: The angle in degrees.
+        """
+        return math.degrees(x)
+
+    def math_degrees_to_radians(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Converts an angle from degrees to radians.
+
+        Args:
+            x (int | float): The angle in degrees.
+
+        Returns:
+            float: The angle in radians.
+        """
+        return math.radians(x)
+
+    def math_distance(
+        self, x1: int | float, y1: int | float, x2: int | float, y2: int | float
+    ) -> float:
+        """
+        MathematicalFunctions: Computes the Euclidean distance between two points in a plane.
+
+        Args:
+            x1 (int | float): The x-coordinate of the first point.
+            y1 (int | float): The y-coordinate of the first point.
+            x2 (int | float): The x-coordinate of the second point.
+            y2 (int | float): The y-coordinate of the second point.
+
+        Returns:
+            float: The Euclidean distance between the two points.
+        """
+        return math.dist([x1, y1], [x2, y2])
+
+    # TODO: Wrap math.hypot
+
+    def math_hyperbolic_sine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the hyperbolic sine of a number.
+
+        Args:
+            x (int | float): The number to find the hyperbolic sine of.
+
+        Returns:
+            float: The hyperbolic sine of the number.
+        """
+        return math.sinh(x)
+
+    def math_hyperbolic_cosine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the hyperbolic cosine of a number.
+
+        Args:
+            x (int | float): The number to find the hyperbolic cosine of.
+
+        Returns:
+            float: The hyperbolic cosine of the number.
+        """
+        return math.cosh(x)
+
+    def math_hyperbolic_tangent(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the hyperbolic tangent of a number.
+
+        Args:
+            x (int | float): The number to find the hyperbolic tangent of.
+
+        Returns:
+            float: The hyperbolic tangent of the number.
+        """
+        return math.tanh(x)
+
+    def math_hyperbolic_arc_sine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the inverse hyperbolic sine of a number.
+
+        Args:
+            x (int | float): The number to find the inverse hyperbolic sine of.
+
+        Returns:
+            float: The inverse hyperbolic sine of the number.
+        """
+        return math.asinh(x)
+
+    def math_hyperbolic_arc_cosine(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the inverse hyperbolic cosine of a number.
+
+        Args:
+            x (int | float): The number to find the inverse hyperbolic cosine of.
+
+        Returns:
+            float: The inverse hyperbolic cosine of the number.
+        """
+        return math.acosh(x)
+
+    def math_hyperbolic_arc_tangent(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the inverse hyperbolic tangent of a number.
+
+        Args:
+            x (int | float): The number to find the inverse hyperbolic tangent of.
+
+        Returns:
+            float: The inverse hyperbolic tangent of the number.
+        """
+        return math.atanh(x)
+
+    def math_gamma(self, x: int | float) -> float:
+        """
+        MathematicalFunctions: Computes the gamma function of a number.
+
+        Args:
+            x (int | float): The number to find the gamma function of.
+
+        Returns:
+            float: The gamma function of the number.
+        """
+        return math.gamma(x)
