@@ -367,23 +367,34 @@ class GradioApp:
                     ),
                 )
 
-                gr.Checkbox(
-                    label=ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR,
-                    interactive=False,
-                    info="Tool to allow the agents to perform some basic arithmetic operations.",
-                    value=self.dqa_engine.is_toolset_present(
-                        ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR
-                    ),
-                )
+                gr.Markdown("**Basic tools (cannot be deselected)**")
+                with gr.Row(equal_height=True):
+                    gr.Checkbox(
+                        label=ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR,
+                        interactive=False,
+                        info="Tool to allow the agents to perform some basic arithmetic operations.",
+                        value=self.dqa_engine.is_toolset_present(
+                            ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR
+                        ),
+                    )
 
-                gr.Checkbox(
-                    label=ToolNames.TOOL_NAME_STRING_FUNCTIONS,
-                    interactive=False,
-                    info="Tool to allow the agents to perform some basic string operations.",
-                    value=self.dqa_engine.is_toolset_present(
-                        ToolNames.TOOL_NAME_STRING_FUNCTIONS
-                    ),
-                )
+                    gr.Checkbox(
+                        label=ToolNames.TOOL_NAME_STRING_FUNCTIONS,
+                        interactive=False,
+                        info="Tool to allow the agents to perform some basic string operations.",
+                        value=self.dqa_engine.is_toolset_present(
+                            ToolNames.TOOL_NAME_STRING_FUNCTIONS
+                        ),
+                    )
+
+                    gr.Checkbox(
+                        label=ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS,
+                        interactive=False,
+                        info="Tool to allow the agents to call some mathematical functions.",
+                        value=self.dqa_engine.is_toolset_present(
+                            ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS
+                        ),
+                    )
 
                 gr.Markdown("**List of available tools**")
                 list_of_tools = gr.List(

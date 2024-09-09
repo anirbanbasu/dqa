@@ -47,7 +47,11 @@ from llama_index.core.workflow import (
 
 # from llama_index.core.agent import ReActAgent
 
-from tools import StringFunctionsToolSpec, BasicArithmeticCalculatorSpec
+from tools import (
+    StringFunctionsToolSpec,
+    BasicArithmeticCalculatorSpec,
+    MathematicalFunctionsSpec,
+)
 from utils import (
     APP_TITLE_SHORT,
     EMPTY_STRING,
@@ -705,6 +709,7 @@ class DQAEngine:
         # Mandatory tools
         self.tools.extend(StringFunctionsToolSpec().to_tool_list())
         self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
+        self.tools.extend(MathematicalFunctionsSpec().to_tool_list())
 
         # TODO: Populate the tools based on toolset names specified in the environment variables?
         self.tools.extend(ArxivToolSpec().to_tool_list())
@@ -755,6 +760,13 @@ class DQAEngine:
                 [
                     tool.metadata.name
                     for tool in BasicArithmeticCalculatorSpec().to_tool_list()
+                ]
+            )
+        elif toolset_name == ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS:
+            return self._are_tools_present(
+                [
+                    tool.metadata.name
+                    for tool in MathematicalFunctionsSpec().to_tool_list()
                 ]
             )
         elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
@@ -820,6 +832,13 @@ class DQAEngine:
                     for tool in BasicArithmeticCalculatorSpec().to_tool_list()
                 ]
             )
+        elif toolset_name == ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS:
+            self._remove_tools_by_names(
+                [
+                    tool.metadata.name
+                    for tool in MathematicalFunctionsSpec().to_tool_list()
+                ]
+            )
         elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
             self._remove_tools_by_names(
                 [
@@ -873,6 +892,8 @@ class DQAEngine:
             self.tools.extend(ArxivToolSpec().to_tool_list())
         elif toolset_name == ToolNames.TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR:
             self.tools.extend(BasicArithmeticCalculatorSpec().to_tool_list())
+        elif toolset_name == ToolNames.TOOL_NAME_MATHEMATICAL_FUNCTIONS:
+            self.tools.extend(MathematicalFunctionsSpec().to_tool_list())
         elif toolset_name == ToolNames.TOOL_NAME_DUCKDUCKGO:
             self.tools.extend(DuckDuckGoSearchToolSpec().to_tool_list())
         elif toolset_name == ToolNames.TOOL_NAME_STRING_FUNCTIONS:

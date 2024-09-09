@@ -37,6 +37,7 @@ TRUE_VALUES_LIST = ["true", "yes", "t", "y", "on"]
 class ToolNames:
     TOOL_NAME_ARXIV = "ArXiV"
     TOOL_NAME_BASIC_ARITHMETIC_CALCULATOR = "Basic arithmetic calculator"
+    TOOL_NAME_MATHEMATICAL_FUNCTIONS = "Mathematical functions"
     TOOL_NAME_DUCKDUCKGO = "DuckDuckGo"
     TOOL_NAME_STRING_FUNCTIONS = "String functions"
     TOOL_NAME_TAVILY = "Tavily"
