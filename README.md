@@ -71,6 +71,12 @@ Install and activate a Python virtual environment in the directory where you hav
 python -m pip install -U pip
 python -m pip install -U -r requirements.txt
 ```
+While calling `pip install` with `-U` on `requirements.txt` will install the latest packages, this may create an environment with unforeseen bugs and incompatibilities. To create a more stable environment, run `pip` on a list of packages that specifies package versions.
+
+```bash
+python -m pip install -r requirements-frozen.txt
+```
+
 If necessary, you can uninstall everything previously installed by `pip` (in the virtual environment) by running the following.
 
 ```bash
