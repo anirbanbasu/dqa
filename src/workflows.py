@@ -19,6 +19,7 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
+import sys
 from tqdm import tqdm
 import asyncio
 import uuid
@@ -963,13 +964,14 @@ class DQAEngine:
                 query=query,
             )
         )
+        # done = -1 => error; done = 0 => in-progress; done = 1 => done
         done: bool = False
         total_steps: int = 0
         finished_steps: int = 0
         terminal_columns, _ = get_terminal_size()
         progress_bar = tqdm(
             total=total_steps,
-            leave=True,
+            leave=False,
             unit="step",
             ncols=int(terminal_columns / 2),
             desc=APP_TITLE_SHORT,
@@ -985,7 +987,14 @@ class DQAEngine:
             progress_bar.update(finished_steps)
             progress_bar.refresh()
             yield done, finished_steps, total_steps, ev.msg
-        result = await task
-        done = self.workflow.is_done()
-        progress_bar.close()
+        try:
+            result = await task
+            done = self.workflow.is_done()
+            progress_bar.close()
+        except Exception as e:
+            result = f"Exception in running the workflow(s): {str(e)}"
+            # Set this to done, otherwise another workflow call cannot be made.
+            done = True
+            progress_bar.close()
+            print(result, file=sys.stderr)
         yield done, finished_steps, total_steps, result
