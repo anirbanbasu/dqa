@@ -404,7 +404,9 @@ class DQAWorkflow(Workflow):
 
         prompt = (
             "You are a linguistic expert who performs query decomposition."
-            "\nGiven a user question, generate a list of distinct sub-questions that you need to answer in order to answer the original question. "
+            "\nGiven a user question, generate a minimalist list of distinct sub-questions that you need to answer in order to answer the original question. DO NOT hallucinate! "
+            "Each sub-question should be independent of one another such that answering one sub-question does not require the answer to another sub-question. "
+            "Similarly, a sub-question should not be a subset of another sub-question. "
             "Respond with a list containing the unmodified original question only when no decomposition is needed. Otherwise, do not include the original question in the list of sub-questions. "
             "Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
             "Each sub-question should clearly state the subject to ensure no ambiguity. "
@@ -521,12 +523,14 @@ class DQAWorkflow(Workflow):
         prompt = (
             "You are a linguistic expert who performs a review of query decomposition."
             "\nYou are given an overall question that has been decomposed into sub-questions, which are also given below. "
-            "Review each sub-questions and improve it, if necessary. Remove any sub-questions that is not required to answer the original query."
+            "Review each sub-questions and improve it, if necessary. Minimise the number of sub-questions. DO NOT hallucinate! "
+            "Each sub-question should be independent of one another such that answering one sub-question does not require the answer to another sub-question. "
+            "Similarly, a sub-question should not be a subset of another sub-question. "
+            "Remove any sub-question that is not required to answer the original query."
             "Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question. "
             "\nEnsure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
             "Each sub-question should clearly state the subject to ensure no ambiguity. "
-            "Do not output sub-questions that are not required to answer the original question. "
-            "\n\nLastly, reflect on the amended generate a binary response indicating whether you are satisfied with the amended sub-questions or not."
+            "\n\nLastly, reflect on the amended sub-questions and generate a binary response indicating whether you are satisfied with the amended sub-questions or not."
             "\n\nAlways, respond in pure JSON without any Markdown, like this:"
             "{\n"
             '    "sub_questions": [\n'
@@ -674,7 +678,7 @@ class DQAWorkflow(Workflow):
             "\nCombine the answers to all the sub-questions into a single and coherent response to the original question. "
             "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
             "In your final answer, cite the sources and their corresponding URLs, if source URLs are available are in the answers to the sub-questions."
-            "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions."
+            "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions. DO NOT hallucinate! "
             "\nYour final answer must be correctly formatted as pure HTML (with no Javascript or Markdown) in a concise, readable and visually pleasing way. "
             "Enclose your HTML response with a <div> tag that has an attribute `id` set to the value 'dqa_workflow_response'."
             f"\n\nOriginal question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"

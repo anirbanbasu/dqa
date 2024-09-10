@@ -47,14 +47,17 @@ Once the refined sub-questions are satisfactory, each such sub-question is sent 
 
 When all ReAct workflows have finished, the final step for answer generation collects the answers from the ReAct workflows and asks the LLM to generate a consolidated answer citing sources where relevant.
 
+Note that a ReAct workflow can generate the answer to a relatively complex query by breaking it down. The purpose of breaking down the question in the main workflow before invoking the ReAct workflows is to find answers to sub-questions in parallel. This is based on the assumption that the sub-questions are independent: answering one does not depend on the answer of another. However, this assumption may not always hold true due to the response from the LLM. Hence, the main workflow may create unnecessary ReAct workflows!
+
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
 ## Project status
 
 Following is a table of some updates regarding the project status. Note that these do not correspond to specific commits or milestones.
 
-| Date     |  Status   |  Notes   |
-|----------|:-------------:|------|
+| Date     |  Status   |  Notes or observations   |
+|----------|:-------------:|----------------------|
+| September 10, 2024 |  active |  Query decomposition may generate unnecessary sub-workflows.  |
 | September 7, 2024 |  active |  Cohere `command-r-plus` is _very_ slow.  |
 | August 31, 2024 |  active |  Using built-in ReAct agent.  |
 | August 29, 2024 |  active |  Project started.  |
