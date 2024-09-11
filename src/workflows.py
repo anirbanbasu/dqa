@@ -226,7 +226,7 @@ class ReActWorkflow(Workflow):
                 streaming_message += f"\n{ReActWorkflow.KEY_ACTION.capitalize()}: {reasoning_step.action} with {reasoning_step.action_input}"
             if reasoning_step.is_done:
                 streaming_message += f"\n{ReActWorkflow.KEY_RESPONSE.capitalize()}: {reasoning_step.response}"
-            ctx.write_event_to_stream(Event(msg=streaming_message))
+            ctx.write_event_to_stream(WorkflowStatusEvent(msg=streaming_message))
             if reasoning_step.is_done:
                 self.memory.put(
                     ChatMessage(
@@ -261,7 +261,7 @@ class ReActWorkflow(Workflow):
                 )
             )
             ctx.write_event_to_stream(
-                Event(msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: {e}")
+                WorkflowStatusEvent(msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: {e}")
             )
 
         # if no tool calls or final response, iterate again
@@ -294,7 +294,7 @@ class ReActWorkflow(Workflow):
                     )
                 )
                 ctx.write_event_to_stream(
-                    Event(
+                    WorkflowStatusEvent(
                         msg=f"{ReActWorkflow.KEY_WARNING.capitalize()}: Tool {tool_call.tool_name} does not exist."
                     )
                 )
@@ -307,7 +307,7 @@ class ReActWorkflow(Workflow):
                     ObservationReasoningStep(observation=tool_output.content)
                 )
                 ctx.write_event_to_stream(
-                    Event(
+                    WorkflowStatusEvent(
                         msg=f"{ReActWorkflow.KEY_OBSERVATION.capitalize()}: {tool_output.content}",
                     )
                 )
@@ -318,7 +318,7 @@ class ReActWorkflow(Workflow):
                     )
                 )
                 ctx.write_event_to_stream(
-                    Event(
+                    WorkflowStatusEvent(
                         msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: Failed calling tool {tool.metadata.get_name()}: {e}"
                     )
                 )
@@ -342,10 +342,10 @@ class DQAReviewSubQuestionEvent(Event):
     satisfied: bool = False
 
 
-class DQAStatusEvent(Event):
+class WorkflowStatusEvent(Event):
     msg: str
-    total_steps: int
-    finished_steps: int
+    total_steps: int = 0
+    finished_steps: int = 0
 
 
 class DQAWorkflow(Workflow):
@@ -396,7 +396,7 @@ class DQAWorkflow(Workflow):
 
         self._total_steps += 1
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg=f"Assessing query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -404,12 +404,13 @@ class DQAWorkflow(Workflow):
         )
 
         prompt = (
-            "You are a linguistic expert who performs query decomposition."
-            "\nGiven a user question, generate a minimalist list of distinct sub-questions that you need to answer in order to answer the original question. DO NOT hallucinate! "
-            "Each sub-question should be independent of one another such that answering one sub-question does not require the answer to another sub-question. "
-            "Similarly, a sub-question should not be a subset of another sub-question. "
-            "Respond with a list containing the unmodified original question only when no decomposition is needed. Otherwise, do not include the original question in the list of sub-questions. "
-            "Generate sub-questions that explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
+            "You are a linguistic expert who performs efficient query decomposition."
+            "\nGiven a question, generate a minimalist list of distinct and independent sub-questions, each of which must be answered to answer the original question. "
+            "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
+            "A sub-question should not be a subset of another sub-question. "
+            "If the original question cannot be or need not be decomposed then output a list of sub-questions that contain the original question as the only sub-question. "
+            "Otherwise, do not include the original question in the list of sub-questions. "
+            "In the sub-questions, explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
             "Each sub-question should clearly state the subject to ensure no ambiguity. "
             "Do not generate sub-questions that are not required to answer the original question. "
             "\n\nLastly, reflect on the generated sub-questions and output a binary response indicating whether you are satisfied with the generated sub-questions or not. "
@@ -430,7 +431,7 @@ class DQAWorkflow(Workflow):
             '    "sub_questions": ["What is the capital city of Japan?"],\n'
             '    "satisfied": true\n'
             "}\n"
-            "Note that this question above needs no decomposition. Hence, the original question is repeated as the only sub-question."
+            "Note that this question above needs no decomposition. Hence, the original question is output as the only sub-question."
             "\n\nExample 3:\n"
             "Question: Are there more hydrogen atoms in methyl alcohol than in ethyl alcohol?\n"
             "Decompositions:\n"
@@ -452,6 +453,7 @@ class DQAWorkflow(Workflow):
             "    ],\n"
             '    "satisfied": true or false\n'
             "}"
+            "\nDO NOT hallucinate!"
             f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
         )
         # TODO: Is streaming mode really necessary?
@@ -468,7 +470,7 @@ class DQAWorkflow(Workflow):
         satisfied = response_obj["satisfied"]
 
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} sub-questions:\n\t{str(sub_questions)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -514,7 +516,7 @@ class DQAWorkflow(Workflow):
         self._total_steps += 1
         self._finished_steps += 1
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg=f"Reviewing sub-questions:\n\t{str(ev.questions)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -522,12 +524,14 @@ class DQAWorkflow(Workflow):
         )
 
         prompt = (
-            "You are a linguistic expert who performs a review of query decomposition."
-            "\nYou are given an overall question that has been decomposed into sub-questions, which are also given below. "
-            "Review each sub-questions and improve it, if necessary. Minimise the number of sub-questions. DO NOT hallucinate! "
-            "Each sub-question should be independent of one another such that answering one sub-question does not require the answer to another sub-question. "
-            "Similarly, a sub-question should not be a subset of another sub-question. "
-            "Remove any sub-question that is not required to answer the original query."
+            "You are a linguistic expert who performs query decomposition and its systematic review."
+            "\nYou are given a question that has been decomposed into sub-questions, which are also given below. "
+            "Review each sub-question and improve it, if necessary. Minimise the number of sub-questions. "
+            "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
+            "A sub-question should not be a subset of another sub-question. "
+            "If the original question cannot be or need not be decomposed then output a list of sub-questions that contain the original question as the only sub-question. "
+            "Otherwise, do not include the original question in the list of sub-questions. "
+            "Remove any sub-question that is not absolutely required to answer the original query."
             "Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question. "
             "\nEnsure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
             "Each sub-question should clearly state the subject to ensure no ambiguity. "
@@ -541,6 +545,7 @@ class DQAWorkflow(Workflow):
             "    ],\n"
             '    "satisfied": true or false\n'
             "}"
+            "\nDO NOT hallucinate!"
             f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
             f"\n\nHere are the sub-questions for you to review:\n{ev.questions}"
         )
@@ -551,7 +556,7 @@ class DQAWorkflow(Workflow):
         satisfied = response_obj["satisfied"]
 
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg=f"{'Satisfactory' if satisfied else 'Unsatisfactory'} refined sub-questions:\n\t{str(sub_questions)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -592,7 +597,7 @@ class DQAWorkflow(Workflow):
         self._total_steps += 1
         self._finished_steps += 1
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg=f"Starting a {ReActWorkflow.__name__} to answer question:\n\t{ev.question}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -612,7 +617,7 @@ class DQAWorkflow(Workflow):
             self._total_steps += 1
             self._finished_steps += 1
             ctx.write_event_to_stream(
-                DQAStatusEvent(
+                WorkflowStatusEvent(
                     msg=f"[{ReActWorkflow.__name__}]\n{nested_ev.msg}",
                     total_steps=self._total_steps,
                     finished_steps=self._finished_steps,
@@ -667,7 +672,7 @@ class DQAWorkflow(Workflow):
         self._total_steps += 1
         self._finished_steps += 1
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg=f"Generating the final response to the original query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -675,22 +680,26 @@ class DQAWorkflow(Workflow):
         )
 
         prompt = (
-            "You are given an overall question that has been split into sub-questions, each of which has been answered."
+            "You are a linguistic expert who generates a coherent summary of the information provided to you."
+            "\nYou are given a question that has been split into sub-questions, each of which has been answered."
             "\nCombine the answers to all the sub-questions into a single and coherent response to the original question. "
             "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
+            "If the original question has been answered by a single sub-question, refine the answer to make it more concise and coherent. "
+            "If the answer to any of the sub-questions contain errors, state those errors in the final answer without correcting them. "
             "In your final answer, cite the sources and their corresponding URLs, if source URLs are available are in the answers to the sub-questions."
-            "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions. DO NOT hallucinate! "
-            "\nYour final answer must be correctly formatted as pure HTML (with no Javascript or Markdown) in a concise, readable and visually pleasing way. "
+            "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions. "
+            "\nYour final answer must be correctly formatted as pure HTML (with no Javascript and Markdown) in a concise, readable and visually pleasing way. "
             "Enclose your HTML response with a <div> tag that has an attribute `id` set to the value 'dqa_workflow_response'."
+            "\nDO NOT hallucinate!"
             f"\n\nOriginal question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
-            f"\n\nSub-questions and answers:\n{answers}"
+            f"\n\nSub-questions, answers and relevant sources:\n{answers}"
         )
 
         response = await self.llm.acomplete(prompt)
 
         self._finished_steps += 1
         ctx.write_event_to_stream(
-            DQAStatusEvent(
+            WorkflowStatusEvent(
                 msg="Done, final response generated.",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
@@ -947,9 +956,10 @@ class DQAEngine:
             query (str): The query to process.
 
         Yields:
-            bool: A flag indicating whether the workflow is done.
-            Any: The output of the workflow when the status is done. Otherwise, the events streamed by the workflow.
+            tuple: A tuple containing the done status, the number of finished steps, the total number of steps, and the message
+            for each step of the workflow. The message is the response to the query when the workflow is done.
         """
+        # Instantiating the ReAct workflow instead may not be always enough to get the desired responses to certain questions.
         self.workflow = DQAWorkflow(
             llm=self.llm, tools=self.tools, timeout=180, verbose=False
         )
@@ -962,9 +972,9 @@ class DQAEngine:
         task = asyncio.create_task(
             self.workflow.run(
                 query=query,
+                # input=query,
             )
         )
-        # done = -1 => error; done = 0 => in-progress; done = 1 => done
         done: bool = False
         total_steps: int = 0
         finished_steps: int = 0
