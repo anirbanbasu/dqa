@@ -724,6 +724,7 @@ class DQAWorkflow(Workflow):
             )
 
         response = await self_discover_task
+        self._finished_steps += 1
 
         return DQAReasoningStructureEvent(reasoning_structure=response)
 
@@ -814,6 +815,7 @@ class DQAWorkflow(Workflow):
             f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
         )
         response = await self.llm.acomplete(prompt)
+        self._finished_steps += 1
 
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
@@ -867,7 +869,6 @@ class DQAWorkflow(Workflow):
                 ctx.send_event(DQAQueryEvent(question=question))
 
         self._total_steps += 1
-        self._finished_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
                 msg=f"Reviewing sub-questions:\n\t{str(ev.questions)}",
@@ -906,6 +907,7 @@ class DQAWorkflow(Workflow):
             f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
         )
         response = await self.llm.acomplete(prompt)
+        self._finished_steps += 1
         self._refinement_iterations += 1
 
         response_obj = json.loads(str(response))
@@ -952,7 +954,6 @@ class DQAWorkflow(Workflow):
         """
 
         self._total_steps += 1
-        self._finished_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
                 msg=f"Starting a {ReActWorkflow.__name__} to answer question:\n\t{ev.question}",
@@ -982,6 +983,7 @@ class DQAWorkflow(Workflow):
             )
 
         response = await react_task
+        self._finished_steps += 1
 
         return DQAAnswerEvent(
             question=ev.question,
@@ -1027,7 +1029,6 @@ class DQAWorkflow(Workflow):
         )
 
         self._total_steps += 1
-        self._finished_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
                 msg=f"Generating the final response to the original query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
@@ -1055,16 +1056,15 @@ class DQAWorkflow(Workflow):
         )
 
         response = await self.llm.acomplete(prompt)
-
         self._finished_steps += 1
+
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg=f"Done, final response generated.\n\nFinal response: {response}",
+                msg=("Done, final response generated.\n" f"{response}" "\n"),
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
         )
-
         return StopEvent(result=str(response))
 
 
@@ -1365,11 +1365,11 @@ class DQAEngine:
         try:
             result = await task
             done = self.workflow.is_done()
-            progress_bar.close()
         except Exception as e:
             result = f"Exception in running the workflow(s): {str(e)}"
             # Set this to done, otherwise another workflow call cannot be made.
             done = True
-            progress_bar.close()
             print(result, file=sys.stderr)
+        finally:
+            progress_bar.close()
         yield done, finished_steps, total_steps, result

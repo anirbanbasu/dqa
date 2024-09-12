@@ -127,7 +127,8 @@ class GradioApp:
                     default_value=EnvironmentVariables.VALUE__LLM_TEMPERATURE,
                     type_cast=float,
                 ),
-                json_mode=True,
+                # JSON mode is not required because the LLM will be only sometimes instructed to output JSON.
+                # json_mode=True,
                 additional_kwargs={
                     "top_p": parse_env(
                         EnvironmentVariables.KEY__LLM_TOP_P,

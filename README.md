@@ -57,6 +57,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
+| September 13, 2024 |  active |  Low parameter LLMs perform badly in unnecessary self-discovery, query refinements and ReAct tool selections.  |
 | September 12, 2024 |  active |  Self-discover may need to be conditionally bypassed to reduce the number of unnecessary LLM calls.  |
 | September 10, 2024 |  active |  Query decomposition may generate unnecessary sub-workflows.  |
 | September 7, 2024 |  active |  Cohere `command-r-plus` is _very_ slow.  |
