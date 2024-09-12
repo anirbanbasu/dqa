@@ -41,7 +41,7 @@ The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly
 The approximate workflow for DQA can be summarised as follows.
 ![Workflow](./diagrams/workflow.svg)
 
-This diagram shows that similar to the tutorial [^1], the DQA workflow performs query decomposition to ensure that complex queries are not sent to the LLM to see how it responds. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary.
+The DQA workflow uses a [self-discover](https://arxiv.org/abs/2402.03620) "agent" to produce a reasoning structure but not answer the question. Similar to the tutorial [^1], the DQA workflow performs query decomposition with respect to the reasoning structure to ensure that complex queries are not directly sent to the LLM to see how it responds. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary.
 
 Once the refined sub-questions are satisfactory, each such sub-question is sent to an instance of a [ReAct](https://arxiv.org/abs/2210.03629) "agent", also implemented as a workflow. Each ReAct workflow loops as necessary in order to answer the question given to it.
 
@@ -57,6 +57,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
+| September 12, 2024 |  active |  Self-discover may need to be conditionally bypassed to reduce the number of unnecessary LLM calls.  |
 | September 10, 2024 |  active |  Query decomposition may generate unnecessary sub-workflows.  |
 | September 7, 2024 |  active |  Cohere `command-r-plus` is _very_ slow.  |
 | August 31, 2024 |  active |  Using built-in ReAct agent.  |

@@ -411,6 +411,8 @@ class SelfDiscoverReasoningStructureEvent(Event):
 class SelfDiscoverWorkflow(Workflow):
     """Self discover workflow: https://arxiv.org/abs/2402.03620 with a plan-only option"""
 
+    REASONING_OUTPUT_BYPASS_NONE = "None"
+
     _REASONING_MODULES = [
         "1. How could I devise an experiment to help solve that problem?",
         "2. Make a list of ideas for solving this problem, and apply them one by one to the problem to see if any progress can be made.",
@@ -455,8 +457,10 @@ class SelfDiscoverWorkflow(Workflow):
 
     _REASONING_MODULES = "\n".join(_REASONING_MODULES)
 
-    SELECT_PRMOPT_TEMPLATE = PromptTemplate(
-        "Given the task: {task}, which of the following reasoning modules are relevant? Do not elaborate on why.\n\n {reasoning_modules}"
+    SELECT_PROMPT_TEMPLATE = PromptTemplate(
+        "Given the task: {task}, assess if it requires a reasoning structure to solve. "
+        "If a reasoning structure is necessary to solve the task, which of the following reasoning modules are relevant? Do not elaborate on why.\n\n {reasoning_modules}"
+        f"If a reasoning structure is unnecessary, please output '{REASONING_OUTPUT_BYPASS_NONE}' only without selecting any reasoning module."
     )
 
     ADAPT_PROMPT_TEMPLATE = PromptTemplate(
@@ -493,7 +497,7 @@ class SelfDiscoverWorkflow(Workflow):
     @step
     async def get_modules(
         self, ctx: Context, ev: StartEvent
-    ) -> SelfDiscoverGetModulesEvent:
+    ) -> SelfDiscoverGetModulesEvent | StopEvent:
         """Get modules step."""
         # get input data, store llm into ctx
         task = ev.get("task")
@@ -505,16 +509,24 @@ class SelfDiscoverWorkflow(Workflow):
             raise ValueError("LLM is required for this workflow.")
 
         # format prompt and get result from LLM
-        prompt = SelfDiscoverWorkflow.SELECT_PRMOPT_TEMPLATE.format(
+        prompt = SelfDiscoverWorkflow.SELECT_PROMPT_TEMPLATE.format(
             task=task, reasoning_modules=SelfDiscoverWorkflow._REASONING_MODULES
         )
         result = await self.llm.acomplete(prompt)
 
-        ctx.write_event_to_stream(
-            WorkflowStatusEvent(msg=f"Selected modules: {result}")
-        )
-
-        return SelfDiscoverGetModulesEvent(task=task, modules=str(result))
+        if str(result) == SelfDiscoverWorkflow.REASONING_OUTPUT_BYPASS_NONE:
+            # Too simple, bypass self-discovery
+            ctx.write_event_to_stream(
+                WorkflowStatusEvent(
+                    msg="Task is too simple to need a reasoning structure, bypassing self-discovery."
+                )
+            )
+            return StopEvent(result=str(result))
+        else:
+            ctx.write_event_to_stream(
+                WorkflowStatusEvent(msg=f"Selected modules: {result}")
+            )
+            return SelfDiscoverGetModulesEvent(task=task, modules=str(result))
 
     @step
     async def refine_modules(
@@ -640,6 +652,7 @@ class DQAWorkflow(Workflow):
         *args: Any,
         llm: LLM | None = None,
         tools: list[BaseTool] | None = None,
+        max_refinement_iterations: int = 3,
         **kwargs: Any,
     ) -> None:
         """
@@ -656,6 +669,9 @@ class DQAWorkflow(Workflow):
 
         self._total_steps: int = 0
         self._finished_steps: int = 0
+
+        self._max_refinement_iterations: int = max_refinement_iterations
+        self._refinement_iterations: int = 0
 
     @step
     async def start(
@@ -813,7 +829,8 @@ class DQAWorkflow(Workflow):
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
-        if len(sub_questions) == 1 and satisfied:
+        # Ignore the satisfied flag if there is only one sub-question.
+        if len(sub_questions) == 1:
             return DQAQueryEvent(question=sub_questions[0])
         else:
             if satisfied:
@@ -823,6 +840,8 @@ class DQAWorkflow(Workflow):
                 return DQAReviewSubQuestionEvent(
                     questions=sub_questions, satisfied=satisfied
                 )
+
+        return None
 
     @step
     async def review_sub_questions(
@@ -887,6 +906,7 @@ class DQAWorkflow(Workflow):
             f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
         )
         response = await self.llm.acomplete(prompt)
+        self._refinement_iterations += 1
 
         response_obj = json.loads(str(response))
         sub_questions = response_obj["sub_questions"]
@@ -902,15 +922,14 @@ class DQAWorkflow(Workflow):
 
         ctx.data["sub_question_count"] = len(sub_questions)
 
-        if len(sub_questions) == 1 and satisfied:
+        # Ignore the satisfied flag if there is only one sub-question.
+        if len(sub_questions) == 1:
             return DQAQueryEvent(question=sub_questions[0])
 
-        if satisfied:
+        if satisfied or self._refinement_iterations >= self._max_refinement_iterations:
             for question in sub_questions:
                 ctx.send_event(DQAQueryEvent(question=question))
         else:
-            # Not satisfied, so ask for review again.
-            # TODO: Add a limit to the number of reviews?
             return DQAReviewSubQuestionEvent(
                 questions=sub_questions, satisfied=satisfied
             )
