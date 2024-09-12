@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Difficult Questions Attempted core module"""
+"""Difficult Questions Attempted module containing various workflows."""
 
 try:
     from icecream import ic
@@ -44,6 +44,8 @@ from llama_index.core.workflow import (
     StartEvent,
     StopEvent,
 )
+
+from llama_index.core.prompts import PromptTemplate
 
 # from llama_index.core.agent import ReActAgent
 
@@ -77,24 +79,64 @@ from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.tools.types import BaseTool
 
 
+# Generic Events
+class WorkflowStatusEvent(Event):
+    """
+    Event to update the status of the workflow.
+
+    Fields:
+        msg (str): The message to display.
+        total_steps (int): Optional total number of steps, defaults to zero.
+        finished_steps (int): Optional number of steps finished, defaults to zero.
+    """
+
+    msg: str
+    total_steps: int = 0
+    finished_steps: int = 0
+
+
+# ReAct Events
 class ReActPrepEvent(Event):
+    """Event to prepare the chat history."""
+
     pass
 
 
 class ReActInputEvent(Event):
+    """
+    Event to manage the input to the LLM for the ReAct workflow.
+
+    Fields:
+        list[ChatMessage]: The chat history.
+    """
+
     input: list[ChatMessage]
 
 
 class ReActToolCallEvent(Event):
+    """
+    Event to call the tools in the ReAct workflow.
+
+    Fields:
+        list[ToolSelection]: The selected tools to call.
+    """
+
     tool_calls: list[ToolSelection]
 
 
 class ReActFunctionOutputEvent(Event):
+    """
+    Event to handle the output of a tool call in the ReAct workflow.
+
+    Fields:
+        ToolOutput: The output of the tool call.
+    """
+
     output: ToolOutput
 
 
 class ReActWorkflow(Workflow):
-    """A workflow implementation for a ReAct agent."""
+    """A workflow implementation for a ReAct agent: https://arxiv.org/abs/2210.03629"""
 
     KEY_CURRENT_REASONING = "current_reasoning"
     KEY_THOUGHT = "thought"
@@ -327,31 +369,271 @@ class ReActWorkflow(Workflow):
         return ReActPrepEvent()
 
 
+class SelfDiscoverGetModulesEvent(Event):
+    """
+    Event to get modules.
+
+    Fields:
+        task (str): The task.
+        modules (str): The modules.
+    """
+
+    task: str
+    modules: str
+
+
+class SelfDiscoverRefineModulesEvent(Event):
+    """
+    Event to refine modules.
+
+    Fields:
+        task (str): The task.
+        refined_modules (str): The refined modules
+    """
+
+    task: str
+    refined_modules: str
+
+
+class SelfDiscoverReasoningStructureEvent(Event):
+    """
+    Event to create reasoning structure.
+
+    Fields:
+        task (str): The task.
+        reasoning_structure (str): The reasoning structure.
+    """
+
+    task: str
+    reasoning_structure: str
+
+
+class SelfDiscoverWorkflow(Workflow):
+    """Self discover workflow: https://arxiv.org/abs/2402.03620 with a plan-only option"""
+
+    _REASONING_MODULES = [
+        "1. How could I devise an experiment to help solve that problem?",
+        "2. Make a list of ideas for solving this problem, and apply them one by one to the problem to see if any progress can be made.",
+        "3. How could I measure progress on this problem?",
+        "4. How can I simplify the problem so that it is easier to solve?",
+        "5. What are the key assumptions underlying this problem?",
+        "6. What are the potential risks and drawbacks of each solution?",
+        "7. What are the alternative perspectives or viewpoints on this problem?",
+        "8. What are the long-term implications of this problem and its solutions?",
+        "9. How can I break down this problem into smaller, more manageable parts?",
+        "10. Critical Thinking: This style involves analyzing the problem from different perspectives, questioning assumptions, and evaluating the evidence or information available. It focuses on logical reasoning, evidence-based decision-making, and identifying potential biases or flaws in thinking.",
+        "11. Try creative thinking, generate innovative and out-of-the-box ideas to solve the problem. Explore unconventional solutions, thinking beyond traditional boundaries, and encouraging imagination and originality.",
+        "12. Seek input and collaboration from others to solve the problem. Emphasize teamwork, open communication, and leveraging the diverse perspectives and expertise of a group to come up with effective solutions.",
+        "13. Use systems thinking: Consider the problem as part of a larger system and understanding the interconnectedness of various elements. Focuses on identifying the underlying causes, feedback loops, and interdependencies that influence the problem, and developing holistic solutions that address the system as a whole.",
+        "14. Use Risk Analysis: Evaluate potential risks, uncertainties, and tradeoffs associated with different solutions or approaches to a problem. Emphasize assessing the potential consequences and likelihood of success or failure, and making informed decisions based on a balanced analysis of risks and benefits.",
+        "15. Use Reflective Thinking: Step back from the problem, take the time for introspection and self-reflection. Examine personal biases, assumptions, and mental models that may influence problem-solving, and being open to learning from past experiences to improve future approaches.",
+        "16. What is the core issue or problem that needs to be addressed?",
+        "17. What are the underlying causes or factors contributing to the problem?",
+        "18. Are there any potential solutions or strategies that have been tried before? If yes, what were the outcomes and lessons learned?",
+        "19. What are the potential obstacles or challenges that might arise in solving this problem?",
+        "20. Are there any relevant data or information that can provide insights into the problem? If yes, what data sources are available, and how can they be analyzed?",
+        "21. Are there any stakeholders or individuals who are directly affected by the problem? What are their perspectives and needs?",
+        "22. What resources (financial, human, technological, etc.) are needed to tackle the problem effectively?",
+        "23. How can progress or success in solving the problem be measured or evaluated?",
+        "24. What indicators or metrics can be used?",
+        "25. Is the problem a technical or practical one that requires a specific expertise or skill set? Or is it more of a conceptual or theoretical problem?",
+        "26. Does the problem involve a physical constraint, such as limited resources, infrastructure, or space?",
+        "27. Is the problem related to human behavior, such as a social, cultural, or psychological issue?",
+        "28. Does the problem involve decision-making or planning, where choices need to be made under uncertainty or with competing objectives?",
+        "29. Is the problem an analytical one that requires data analysis, modeling, or optimization techniques?",
+        "30. Is the problem a design challenge that requires creative solutions and innovation?",
+        "31. Does the problem require addressing systemic or structural issues rather than just individual instances?",
+        "32. Is the problem time-sensitive or urgent, requiring immediate attention and action?",
+        "33. What kinds of solution typically are produced for this kind of problem specification?",
+        "34. Given the problem specification and the current best solution, have a guess about other possible solutions."
+        "35. Let's imagine the current best solution is totally wrong, what other ways are there to think about the problem specification?"
+        "36. What is the best way to modify this current best solution, given what you know about these kinds of problem specification?"
+        "37. Ignoring the current best solution, create an entirely new solution to the problem."
+        "38. Let's think step by step."
+        "39. Let's make a step by step plan and implement it with good notation and explanation.",
+    ]
+
+    _REASONING_MODULES = "\n".join(_REASONING_MODULES)
+
+    SELECT_PRMOPT_TEMPLATE = PromptTemplate(
+        "Given the task: {task}, which of the following reasoning modules are relevant? Do not elaborate on why.\n\n {reasoning_modules}"
+    )
+
+    ADAPT_PROMPT_TEMPLATE = PromptTemplate(
+        "Without working out the full solution, adapt the following reasoning modules to be specific to our task:\n{selected_modules}\n\nOur task:\n{task}"
+    )
+
+    IMPLEMENT_PROMPT_TEMPLATE = PromptTemplate(
+        "Without working out the full solution, create an actionable reasoning structure for the task using these adapted reasoning modules:\n{adapted_modules}\n\nTask Description:\n{task}"
+    )
+
+    REASONING_PROMPT_TEMPLATE = PromptTemplate(
+        "Using the following reasoning structure: {reasoning_structure}\n\nSolve this task, providing your final answer: {task}"
+    )
+
+    def __init__(
+        self,
+        *args: Any,
+        llm: LLM | None = None,
+        plan_only: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Initialize the SelfDiscover workflow.
+
+        Args:
+            llm (LLM): The LLM instance to use.
+            plan_only (bool): Whether to plan only or output a final result.
+        """
+        super().__init__(*args, **kwargs)
+
+        self.llm = llm
+        self.plan_only = plan_only
+
+    @step
+    async def get_modules(
+        self, ctx: Context, ev: StartEvent
+    ) -> SelfDiscoverGetModulesEvent:
+        """Get modules step."""
+        # get input data, store llm into ctx
+        task = ev.get("task")
+
+        if task is None:
+            raise ValueError("'task' argument is required.")
+
+        if self.llm is None:
+            raise ValueError("LLM is required for this workflow.")
+
+        # format prompt and get result from LLM
+        prompt = SelfDiscoverWorkflow.SELECT_PRMOPT_TEMPLATE.format(
+            task=task, reasoning_modules=SelfDiscoverWorkflow._REASONING_MODULES
+        )
+        result = await self.llm.acomplete(prompt)
+
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(msg=f"Selected modules: {result}")
+        )
+
+        return SelfDiscoverGetModulesEvent(task=task, modules=str(result))
+
+    @step
+    async def refine_modules(
+        self, ctx: Context, ev: SelfDiscoverGetModulesEvent
+    ) -> SelfDiscoverRefineModulesEvent:
+        """Refine modules step."""
+        task = ev.task
+        modules = ev.modules
+
+        # format prompt and get result
+        prompt = SelfDiscoverWorkflow.ADAPT_PROMPT_TEMPLATE.format(
+            task=task, selected_modules=modules
+        )
+        result = await self.llm.acomplete(prompt)
+
+        ctx.write_event_to_stream(WorkflowStatusEvent(msg=f"Refined modules: {result}"))
+
+        return SelfDiscoverRefineModulesEvent(task=task, refined_modules=str(result))
+
+    @step
+    async def create_reasoning_structure(
+        self, ctx: Context, ev: SelfDiscoverRefineModulesEvent
+    ) -> SelfDiscoverReasoningStructureEvent:
+        """Create reasoning structures step."""
+        task = ev.task
+        refined_modules = ev.refined_modules
+
+        # format prompt, get result
+        prompt = SelfDiscoverWorkflow.IMPLEMENT_PROMPT_TEMPLATE.format(
+            task=task, adapted_modules=refined_modules
+        )
+        result = await self.llm.acomplete(prompt)
+
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(msg=f"Reasoning structure: {result}")
+        )
+
+        if self.plan_only:
+            return StopEvent(result=str(result))
+        else:
+            return SelfDiscoverReasoningStructureEvent(
+                task=task, reasoning_structure=str(result)
+            )
+
+    @step
+    async def get_final_result(
+        self, ctx: Context, ev: SelfDiscoverReasoningStructureEvent
+    ) -> StopEvent:
+        """Gets final result from reasoning structure event."""
+        task = ev.task
+        reasoning_structure = ev.reasoning_structure
+
+        # format prompt, get res
+        prompt = SelfDiscoverWorkflow.REASONING_PROMPT_TEMPLATE.format(
+            task=task, reasoning_structure=reasoning_structure
+        )
+        result = await self.llm.acomplete(prompt)
+
+        ctx.write_event_to_stream(WorkflowStatusEvent(msg=f"Final result: {result}"))
+
+        return StopEvent(result=result)
+
+
+class DQAReasoningStructureEvent(Event):
+    """
+    Event to handle reasoning structure for DQA.
+
+    Fields:
+        question (str): The question.
+        reasoning_structure (str): The reasoning structure.
+    """
+
+    reasoning_structure: str
+
+
 class DQAQueryEvent(Event):
+    """
+    Event to handle an individual DQA query.
+
+    Fields:
+        question (str): The question to handle.
+    """
+
     question: str
 
 
 class DQAAnswerEvent(Event):
+    """
+    Event to handle a DQA answer.
+
+    Fields:
+        question (str): The question.
+        answer (str): The answer.
+        sources (List[Any]): The sources.
+    """
+
     question: str
     answer: str
     sources: List[Any] = []
 
 
 class DQAReviewSubQuestionEvent(Event):
+    """
+    Event to review the sub-questions.
+
+    Fields:
+        questions (List[str]): The sub-questions.
+        satisfied (bool): Whether the sub-questions are satisfied.
+    """
+
     questions: List[str]
     satisfied: bool = False
 
 
-class WorkflowStatusEvent(Event):
-    msg: str
-    total_steps: int = 0
-    finished_steps: int = 0
-
-
 class DQAWorkflow(Workflow):
-    """A workflow implementation for the DQA paradigm."""
+    """A workflow implementation for DQA: Difficult Questions Attempted."""
 
     KEY_ORIGINAL_QUERY = "original_query"
+    KEY_REASONING_STRUCTURE = "reasoning_structure"
 
     def __init__(
         self,
@@ -376,18 +658,18 @@ class DQAWorkflow(Workflow):
         self._finished_steps: int = 0
 
     @step
-    async def query(self, ctx: Context, ev: StartEvent) -> DQAQueryEvent | StopEvent:
+    async def start(
+        self, ctx: Context, ev: StartEvent
+    ) -> DQAReasoningStructureEvent | StopEvent:
         """
         As a start event of the workflow, this step receives the original query and stores it in the context.
-        It then asks the LLM to decompose the query into sub-questions. Upon decomposition, it emits every
-        sub-question as a `DQAQueryEvent`.
 
         Args:
             ctx (Context): The context object.
             ev (StartEvent): The start event.
 
         Returns:
-            DQAQueryEvent | StopEvent: The event containing the sub-question or the event to stop the workflow if there is no query specified.
+            DQAReasoningStructureEvent | StopEvent: The event containing the reasoning structure or the event to stop the workflow.
         """
         if hasattr(ev, "query"):
             ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY] = ev.query
@@ -397,7 +679,63 @@ class DQAWorkflow(Workflow):
         self._total_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg=f"Assessing query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                msg=f"Generating structured reasoning for the query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
+
+        self_discover_workflow = SelfDiscoverWorkflow(
+            llm=self.llm,
+            # Let's set the timeout of the ReAct workflow to half of the DQA workflow's timeout.
+            timeout=self._timeout / 2,
+            verbose=self._verbose,
+            plan_only=True,
+        )
+        self_discover_task = asyncio.create_task(
+            self_discover_workflow.run(task=ev.query)
+        )
+
+        async for nested_ev in self_discover_workflow.stream_events():
+            self._total_steps += 1
+            self._finished_steps += 1
+            ctx.write_event_to_stream(
+                WorkflowStatusEvent(
+                    msg=f"[{SelfDiscoverWorkflow.__name__}]\n{nested_ev.msg}",
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
+                )
+            )
+
+        response = await self_discover_task
+
+        return DQAReasoningStructureEvent(reasoning_structure=response)
+
+    @step
+    async def query(
+        self, ctx: Context, ev: DQAReasoningStructureEvent
+    ) -> DQAQueryEvent | DQAReviewSubQuestionEvent | StopEvent:
+        """
+        This step receives the structured reasoning for the query.
+        It then asks the LLM to decompose the query into sub-questions. Upon decomposition, it emits every
+        sub-question as a `DQAQueryEvent`. Alternatively, if the LLM is not satisfied with the sub-questions, it
+        emits a `DQAReviewSubQuestionEvent` to review the sub-questions.
+
+        Args:
+            ctx (Context): The context object.
+            ev (DQAStructuredReasoningEvent): The event containing the structured reasoning.
+
+        Returns:
+            DQAQueryEvent | DQAReviewSubQuestionEvent | StopEvent: The event containing the sub-question or the event
+            to review the sub-questions or the event to stop the workflow.
+        """
+
+        ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE] = ev.reasoning_structure
+
+        self._total_steps += 1
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Assessing query and plan:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -405,7 +743,9 @@ class DQAWorkflow(Workflow):
 
         prompt = (
             "You are a linguistic expert who performs efficient query decomposition."
-            "\nGiven a question, generate a minimalist list of distinct and independent sub-questions, each of which must be answered to answer the original question. "
+            "\nBelow, you are given a question and a corresponding reasoning structure to answer it. "
+            "Generate a minimalist list of distinct, independent and absolutely essential sub-questions, each of which must be answered in order to answer the original question according to the suggested structured reasoning. "
+            "If a sub-question is already implicitly answered through the reasoning structure then do not include it in the list of sub-questions. "
             "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
             "A sub-question should not be a subset of another sub-question. "
             "If the original question cannot be or need not be decomposed then output a list of sub-questions that contain the original question as the only sub-question. "
@@ -455,14 +795,8 @@ class DQAWorkflow(Workflow):
             "}"
             "\nDO NOT hallucinate!"
             f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
+            f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
         )
-        # TODO: Is streaming mode really necessary?
-        # if type(self.llm).__name__ != EnvironmentVariables.VALUE__LLM_PROVIDER_COHERE:
-        #     generator = await self.llm.astream_complete(prompt)
-
-        #     async for response in generator:
-        #         pass
-        # else:
         response = await self.llm.acomplete(prompt)
 
         response_obj = json.loads(str(response))
@@ -526,12 +860,14 @@ class DQAWorkflow(Workflow):
         prompt = (
             "You are a linguistic expert who performs query decomposition and its systematic review."
             "\nYou are given a question that has been decomposed into sub-questions, which are also given below. "
+            "Furthermore, you are provided with the reasoning structure to answer the original question. The sub-questions are generated in accordance with the reasoning structure. "
             "Review each sub-question and improve it, if necessary. Minimise the number of sub-questions. "
             "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
             "A sub-question should not be a subset of another sub-question. "
             "If the original question cannot be or need not be decomposed then output a list of sub-questions that contain the original question as the only sub-question. "
             "Otherwise, do not include the original question in the list of sub-questions. "
-            "Remove any sub-question that is not absolutely required to answer the original query."
+            "Remove any sub-question that is not absolutely required to answer the original query. "
+            "Remove any sub-question that is already implicitly answered through the reasoning structure. "
             "Do not add new sub-questions, unless necessary. Remember that the sub-questions represent a concise decomposition of the original question. "
             "\nEnsure that sub-questions explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
             "Each sub-question should clearly state the subject to ensure no ambiguity. "
@@ -548,6 +884,7 @@ class DQAWorkflow(Workflow):
             "\nDO NOT hallucinate!"
             f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
             f"\n\nHere are the sub-questions for you to review:\n{ev.questions}"
+            f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
         )
         response = await self.llm.acomplete(prompt)
 
@@ -573,6 +910,7 @@ class DQAWorkflow(Workflow):
                 ctx.send_event(DQAQueryEvent(question=question))
         else:
             # Not satisfied, so ask for review again.
+            # TODO: Add a limit to the number of reviews?
             return DQAReviewSubQuestionEvent(
                 questions=sub_questions, satisfied=satisfied
             )
@@ -609,7 +947,7 @@ class DQAWorkflow(Workflow):
             # Let's set the timeout of the ReAct workflow to half of the DQA workflow's timeout.
             timeout=self._timeout / 2,
             verbose=self._verbose,
-            # Let's set the maximum iterations of the ReAct workflow to its default value.
+            # Let's keep the maximum iterations of the ReAct workflow to its default value.
         )
         react_task = asyncio.create_task(react_workflow.run(input=ev.question))
 
@@ -682,7 +1020,9 @@ class DQAWorkflow(Workflow):
         prompt = (
             "You are a linguistic expert who generates a coherent summary of the information provided to you."
             "\nYou are given a question that has been split into sub-questions, each of which has been answered."
+            "\nYou are also given a reasoning structure that was used to generate the sub-questions. "
             "\nCombine the answers to all the sub-questions into a single and coherent response to the original question. "
+            "Your response should be in accordance with the reasoning structure. "
             "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
             "If the original question has been answered by a single sub-question, refine the answer to make it more concise and coherent. "
             "If the answer to any of the sub-questions contain errors, state those errors in the final answer without correcting them. "
@@ -700,7 +1040,7 @@ class DQAWorkflow(Workflow):
         self._finished_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg="Done, final response generated.",
+                msg=f"Done, final response generated.\n\nFinal response: {response}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -710,6 +1050,8 @@ class DQAWorkflow(Workflow):
 
 
 class DQAEngine:
+    """The Difficult Questions Attempted engine."""
+
     def __init__(self, llm: LLM | None = None):
         """
         Initialize the Difficult Questions Attempted engine.
@@ -961,7 +1303,10 @@ class DQAEngine:
         """
         # Instantiating the ReAct workflow instead may not be always enough to get the desired responses to certain questions.
         self.workflow = DQAWorkflow(
-            llm=self.llm, tools=self.tools, timeout=180, verbose=False
+            llm=self.llm,
+            tools=self.tools,
+            timeout=180,
+            verbose=False,
         )
         # No need for this, see: https://github.com/run-llama/llama_index/discussions/15838#discussioncomment-10553154
         # self.workflow.add_workflows(
@@ -973,6 +1318,7 @@ class DQAEngine:
             self.workflow.run(
                 query=query,
                 # input=query,
+                # task=query,
             )
         )
         done: bool = False
