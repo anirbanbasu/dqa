@@ -8,8 +8,11 @@
   <img width="400" height="200" src="https://raw.githubusercontent.com/anirbanbasu/dqa/master/assets/logo.svg" alt="dqa logo" style="filter: invert(0.5)">
 </p>
 
+## Overview
+
 The DQA aka _difficult questions attempted_ project aims to make large language models attempt difficult questions through an agent-based architecture. The project utilises agents and tools. This project is inspired by a tutorial [^1] from [Dean Sacoransky](https://www.linkedin.com/in/dean-sacoransky-6a671119a/). Unlike the tutorial's use of the [LangGraph framework from LangChain](https://langchain-ai.github.io/langgraph/) for building agents, this project makes use of [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/module_guides/workflow/).
 
+### An example of a difficult question and LLM responses
 The tutorial uses the question _Which David Fincher film that stars Edward Norton does not star Brad Pitt?_ as a litmus test for assessing new AI systems. The answer is supposed to be _None_, but at the time of writing the tutorial (26 August 2024), the author states that ChatGPT's `gpt-4o` model generates the following response.
 > The David Fincher film starring Edward Norton that does not star Brad Pitt is the "The Game" (1997). Edward Norton appears in an uncredited cameo role in this film.
 
@@ -20,6 +23,7 @@ The author further states that it is impossible "to answer this complex, multi-h
 
 This project implements an agent-based framework akin to the one mentioned in the tutorial [^1].
 
+### A simpler difficult question
 Let's focus on a slightly simpler test question that nonetheless baffles ChatGPT `gpt-4o`. Let's ask _Tell me the result of multiplying the number of 'r's in the word 'strawberry' with the sum of 3 and 4. Explain the process._ ChatGPT hopelessly responds to this with the following.
 > Let's break down the problem step by step:
 >
@@ -38,6 +42,7 @@ While ChatGPT did not make mistakes with the basic arithmetic operations, it cou
 
 The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly is because DQA lets it use a function to calculate the occurrences of a specific character or a sequence of characters in a string.
 
+### The agent workflow
 The approximate workflow for DQA can be summarised as follows.
 ![Workflow](./diagrams/workflow.svg)
 
@@ -49,6 +54,25 @@ When all ReAct workflows have finished, the final step for answer generation col
 
 Note that a ReAct workflow can generate the answer to a relatively complex query by breaking it down. The purpose of breaking down the question in the main workflow before invoking the ReAct workflows is to find answers to sub-questions in parallel. This is based on the assumption that the sub-questions are independent: answering one does not depend on the answer of another. However, this assumption may not always hold true due to the response from the LLM. Hence, the main workflow may create unnecessary ReAct workflows!
 
+### Response to the initial difficult question
+Recalling the litmus test question (i.e., _Which David Fincher film that stars Edward Norton does not star Brad Pitt?_), the response from DQA with `gpt-4o-mini` is correct, as in the answer is _none_, but the response is long-winded.
+> The David Fincher film that stars Edward Norton but does not feature Brad Pitt is **none**. The only film directed by David Fincher that includes both Edward Norton and Brad Pitt is Fight Club (1999). In this film, Edward Norton plays the unnamed narrator, while Brad Pitt portrays Tyler Durden. Therefore, there are no David Fincher films starring Edward Norton that exclude Brad Pitt.
+>
+> To summarize:
+>
+> Film featuring both Edward Norton and Brad Pitt: Fight Club (1999)
+> Other films directed by David Fincher include:
+> - Alien 3 (1992)
+> - Se7en (1995)
+> - The Game (1997)
+> - Panic Room (2002)
+> - Zodiac (2007)
+> - The Curious Case of Benjamin Button (2008)
+> - The Social Network (2010)
+> - The Girl with the Dragon Tattoo (2011)
+> - Gone Girl (2014)
+> - Mank (2020)
+
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
 ## Project status
@@ -57,6 +81,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
+| September 15, 2024 |  active |  Vectore storage is not used as of now. Qdrant may be removed in the future.  |
 | September 13, 2024 |  active |  Low parameter LLMs perform badly in unnecessary self-discovery, query refinements and ReAct tool selections.  |
 | September 12, 2024 |  active |  Self-discover may need to be conditionally bypassed to reduce the number of unnecessary LLM calls.  |
 | September 10, 2024 |  active |  Query decomposition may generate unnecessary sub-workflows.  |

@@ -646,6 +646,9 @@ class DQAWorkflow(Workflow):
 
     KEY_ORIGINAL_QUERY = "original_query"
     KEY_REASONING_STRUCTURE = "reasoning_structure"
+    KEY_SUB_QUESTIONS = "sub_questions"
+    KEY_SUB_QUESTIONS_COUNT = "sub_questions_count"
+    KEY_SATISFIED = "satisfied"
 
     def __init__(
         self,
@@ -688,14 +691,14 @@ class DQAWorkflow(Workflow):
             DQAReasoningStructureEvent | StopEvent: The event containing the reasoning structure or the event to stop the workflow.
         """
         if hasattr(ev, "query"):
-            ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY] = ev.query
+            await ctx.set(DQAWorkflow.KEY_ORIGINAL_QUERY, ev.query)
         else:
             return StopEvent(result="No query provided. Try again!")
 
         self._total_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg=f"Generating structured reasoning for the query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                msg=f"Generating structured reasoning for the query:\n\t{await ctx.get(DQAWorkflow.KEY_ORIGINAL_QUERY)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -747,12 +750,12 @@ class DQAWorkflow(Workflow):
             to review the sub-questions or the event to stop the workflow.
         """
 
-        ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE] = ev.reasoning_structure
+        await ctx.set(DQAWorkflow.KEY_REASONING_STRUCTURE, ev.reasoning_structure)
 
         self._total_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg=f"Assessing query and plan:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                msg=f"Assessing query and plan:\n\t{await ctx.get(DQAWorkflow.KEY_ORIGINAL_QUERY)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -775,51 +778,51 @@ class DQAWorkflow(Workflow):
             "Question: Is Hamlet more common on IMDB than Comedy of Errors?\n"
             "Decompositions:\n"
             "{\n"
-            '    "sub_questions": [\n'
+            f'    "{DQAWorkflow.KEY_SUB_QUESTIONS}": [\n'
             '        "How many listings of Hamlet are there on IMDB?",\n'
             '        "How many listings of Comedy of Errors is there on IMDB?"\n'
             "    ],\n"
-            '    "satisfied": true\n'
+            f'    "{DQAWorkflow.KEY_SATISFIED}": true\n'
             "}"
             "\n\nExample 2:\n"
             "Question: What is the capital city of Japan?\n"
             "Decompositions:\n"
             "{\n"
-            '    "sub_questions": ["What is the capital city of Japan?"],\n'
-            '    "satisfied": true\n'
+            f'    "{DQAWorkflow.KEY_SUB_QUESTIONS}": ["What is the capital city of Japan?"],\n'
+            f'    "{DQAWorkflow.KEY_SATISFIED}": true\n'
             "}\n"
             "Note that this question above needs no decomposition. Hence, the original question is output as the only sub-question."
             "\n\nExample 3:\n"
             "Question: Are there more hydrogen atoms in methyl alcohol than in ethyl alcohol?\n"
             "Decompositions:\n"
             "{\n"
-            '    "sub_questions": [\n'
+            f'    "{DQAWorkflow.KEY_SUB_QUESTIONS}": [\n'
             '        "How many hydrogen atoms are there in methyl alcohol?",\n'
             '        "How many hydrogen atoms are there in ethyl alcohol?",\n'
             '        "What is the chemical composition of alcohol?"\n'
             "    ],\n"
-            '    "satisfied": false\n'
+            f'    "{DQAWorkflow.KEY_SATISFIED}": false\n'
             "}\n"
             "Note that the third sub-question is unnecessary and should not be included. Hence, the value of the satisfied flag is set to false."
             "\n\nAlways, respond in pure JSON without any Markdown, like this:\n"
             "{\n"
-            '    "sub_questions": [\n'
+            f'    "{DQAWorkflow.KEY_SUB_QUESTIONS}": [\n'
             '        "sub question 1",\n'
             '        "sub question 2",\n'
             '        "sub question 3"\n'
             "    ],\n"
-            '    "satisfied": true or false\n'
+            f'    "{DQAWorkflow.KEY_SATISFIED}": true or false\n'
             "}"
             "\nDO NOT hallucinate!"
-            f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
-            f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
+            f"\n\nHere is the user question: {await ctx.get(DQAWorkflow.KEY_ORIGINAL_QUERY)}"
+            f"\n\nAnd, here is the corresponding reasoning structure:\n{await ctx.get(DQAWorkflow.KEY_REASONING_STRUCTURE)}"
         )
         response = await self.llm.acomplete(prompt)
         self._finished_steps += 1
 
         response_obj = json.loads(str(response))
-        sub_questions = response_obj["sub_questions"]
-        satisfied = response_obj["satisfied"]
+        sub_questions = response_obj[DQAWorkflow.KEY_SUB_QUESTIONS]
+        satisfied = response_obj[DQAWorkflow.KEY_SATISFIED]
 
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
@@ -829,7 +832,7 @@ class DQAWorkflow(Workflow):
             )
         )
 
-        ctx.data["sub_question_count"] = len(sub_questions)
+        await ctx.set(DQAWorkflow.KEY_SUB_QUESTIONS_COUNT, len(sub_questions))
 
         # Ignore the satisfied flag if there is only one sub-question.
         if len(sub_questions) == 1:
@@ -894,25 +897,25 @@ class DQAWorkflow(Workflow):
             "\n\nLastly, reflect on the amended sub-questions and generate a binary response indicating whether you are satisfied with the amended sub-questions or not."
             "\n\nAlways, respond in pure JSON without any Markdown, like this:"
             "{\n"
-            '    "sub_questions": [\n'
+            f'    "{DQAWorkflow.KEY_SUB_QUESTIONS}": [\n'
             '        "sub question 1",\n'
             '        "sub question 2",\n'
             '        "sub question 3"\n'
             "    ],\n"
-            '    "satisfied": true or false\n'
+            f'    "{DQAWorkflow.KEY_SATISFIED}": true or false\n'
             "}"
             "\nDO NOT hallucinate!"
-            f"\n\nHere is the user question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
+            f"\n\nHere is the user question: {await ctx.get(DQAWorkflow.KEY_ORIGINAL_QUERY)}"
             f"\n\nHere are the sub-questions for you to review:\n{ev.questions}"
-            f"\n\nAnd, here is the corresponding reasoning structure:\n{ctx.data[DQAWorkflow.KEY_REASONING_STRUCTURE]}"
+            f"\n\nAnd, here is the corresponding reasoning structure:\n{await ctx.get(DQAWorkflow.KEY_REASONING_STRUCTURE)}"
         )
         response = await self.llm.acomplete(prompt)
         self._finished_steps += 1
         self._refinement_iterations += 1
 
         response_obj = json.loads(str(response))
-        sub_questions = response_obj["sub_questions"]
-        satisfied = response_obj["satisfied"]
+        sub_questions = response_obj[DQAWorkflow.KEY_SUB_QUESTIONS]
+        satisfied = response_obj[DQAWorkflow.KEY_SATISFIED]
 
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
@@ -922,7 +925,7 @@ class DQAWorkflow(Workflow):
             )
         )
 
-        ctx.data["sub_question_count"] = len(sub_questions)
+        await ctx.set(DQAWorkflow.KEY_SUB_QUESTIONS_COUNT, len(sub_questions))
 
         # Ignore the satisfied flag if there is only one sub-question.
         if len(sub_questions) == 1:
@@ -1012,7 +1015,7 @@ class DQAWorkflow(Workflow):
             have not all been answered.
         """
         ready = ctx.collect_events(
-            ev, [DQAAnswerEvent] * ctx.data["sub_question_count"]
+            ev, [DQAAnswerEvent] * await ctx.get(DQAWorkflow.KEY_SUB_QUESTIONS_COUNT)
         )
         if ready is None:
             return None
@@ -1031,7 +1034,7 @@ class DQAWorkflow(Workflow):
         self._total_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg=f"Generating the final response to the original query:\n\t{ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}",
+                msg=f"Generating the final response to the original query:\n\t{await ctx.get(DQAWorkflow.KEY_ORIGINAL_QUERY)}",
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -1044,14 +1047,16 @@ class DQAWorkflow(Workflow):
             "\nCombine the answers to all the sub-questions into a single and coherent response to the original question. "
             "Your response should be in accordance with the reasoning structure. "
             "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
-            "If the original question has been answered by a single sub-question, refine the answer to make it more concise and coherent. "
+            "If the original question has been answered by a single sub-question, refine the answer to make it concise and coherent. "
+            "Likewise, if there are ambiguities and/or conflicting information in the answers to the sub-questions, resolve them to generate the final answer. "
+            "However, state the ambiguities and conflicting information that you encountered. "
             "If the answer to any of the sub-questions contain errors, state those errors in the final answer without correcting them. "
-            "In your final answer, cite the sources and their corresponding URLs, if source URLs are available are in the answers to the sub-questions."
+            "In your final answer, cite each source and its corresponding URLs, only if such source URLs are available are in the answers to the sub-questions."
             "\nDo not make up sources or URLs if they are not present in the answers to the sub-questions. "
             "\nYour final answer must be correctly formatted as pure HTML (with no Javascript and Markdown) in a concise, readable and visually pleasing way. "
             "Enclose your HTML response with a <div> tag that has an attribute `id` set to the value 'dqa_workflow_response'."
             "\nDO NOT hallucinate!"
-            f"\n\nOriginal question: {ctx.data[DQAWorkflow.KEY_ORIGINAL_QUERY]}"
+            f"\n\nOriginal question: {await ctx.get(DQAWorkflow.KEY_ORIGINAL_QUERY)}"
             f"\n\nSub-questions, answers and relevant sources:\n{answers}"
         )
 
