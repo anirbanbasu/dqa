@@ -60,18 +60,18 @@ Recalling the litmus test question (i.e., _Which David Fincher film that stars E
 >
 > To summarize:
 >
-> Film featuring both Edward Norton and Brad Pitt: Fight Club (1999)
-> Other films directed by David Fincher include:
-> - Alien 3 (1992)
-> - Se7en (1995)
-> - The Game (1997)
-> - Panic Room (2002)
-> - Zodiac (2007)
-> - The Curious Case of Benjamin Button (2008)
-> - The Social Network (2010)
-> - The Girl with the Dragon Tattoo (2011)
-> - Gone Girl (2014)
-> - Mank (2020)
+> - Film featuring both Edward Norton and Brad Pitt: Fight Club (1999)
+> - Other films directed by David Fincher include:
+>   - Alien 3 (1992)
+>   - Se7en (1995)
+>   - The Game (1997)
+>   - Panic Room (2002)
+>   - Zodiac (2007)
+>   - The Curious Case of Benjamin Button (2008)
+>   - The Social Network (2010)
+>   - The Girl with the Dragon Tattoo (2011)
+>   - Gone Girl (2014)
+>   - Mank (2020)
 
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
