@@ -118,6 +118,8 @@ class GradioApp:
                     EnvironmentVariables.KEY__LLM_OLLAMA_URL,
                     default_value=EnvironmentVariables.VALUE__LLM_OLLAMA_URL,
                 ),
+                # Increase the timeout to 180 seconds to allow for longer queries on slower computers.
+                request_timeout=180.0,
                 model=parse_env(
                     EnvironmentVariables.KEY__LLM_OLLAMA_MODEL,
                     default_value=EnvironmentVariables.VALUE__LLM_OLLAMA_MODEL,

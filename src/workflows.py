@@ -1371,7 +1371,7 @@ class DQAEngine:
             result = await task
             done = self.workflow.is_done()
         except Exception as e:
-            result = f"Exception in running the workflow(s): {str(e)}"
+            result = f"\nException in running the workflow(s). Type: {type(e).__name__}. Message: '{str(e)}'"
             # Set this to done, otherwise another workflow call cannot be made.
             done = True
             print(result, file=sys.stderr)
