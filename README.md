@@ -46,13 +46,11 @@ The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly
 The approximate workflow for DQA can be summarised as follows.
 ![Workflow](./diagrams/workflow.svg)
 
-The DQA workflow uses a [self-discover](https://arxiv.org/abs/2402.03620) "agent" to produce a reasoning structure but not answer the question. Similar to the tutorial [^1], the DQA workflow performs query decomposition with respect to the reasoning structure to ensure that complex queries are not directly sent to the LLM to see how it responds. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary.
+The DQA workflow uses a [self-discover](https://arxiv.org/abs/2402.03620) "agent" to produce a reasoning structure but not answer the question. Similar to the tutorial [^1], the DQA workflow performs query decomposition with respect to the reasoning structure to ensure that complex queries are not directly sent to the LLM. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary, for a maximum number of allowed iterations.
 
-Once the refined sub-questions are satisfactory, each such sub-question is sent to an instance of a [ReAct](https://arxiv.org/abs/2210.03629) "agent", also implemented as a workflow. Each ReAct workflow loops as necessary in order to answer the question given to it.
+Once the refined sub-questions are satisfactory, the sub-questions are answered sequentially by separate instances of a [ReAct](https://arxiv.org/abs/2210.03629) "agent", also implemented as a workflow. ReAct workflows have the responses from previous ReAct workflows as contextual information.
 
-When all ReAct workflows have finished, the final step for answer generation collects the answers from the ReAct workflows and asks the LLM to generate a consolidated answer citing sources where relevant.
-
-Note that a ReAct workflow can generate the answer to a relatively complex query by breaking it down. The purpose of breaking down the question in the main workflow before invoking the ReAct workflows is to find answers to sub-questions in parallel. This is based on the assumption that the sub-questions are independent: answering one does not depend on the answer of another. However, this assumption may not always hold true due to the response from the LLM. Hence, the main workflow may create unnecessary ReAct workflows!
+When all ReAct workflows have finished, the final step for answer generation collects the responses from the ReAct workflows and asks the LLM to generate a consolidated answer citing sources where relevant, in accordance with the initially generated reasoning structure.
 
 ### Response to the initial difficult question
 Recalling the litmus test question (i.e., _Which David Fincher film that stars Edward Norton does not star Brad Pitt?_), the response from DQA with `gpt-4o-mini` is correct, as in the answer is _none_, but the response is long-winded.
@@ -73,6 +71,9 @@ Recalling the litmus test question (i.e., _Which David Fincher film that stars E
 >   - Gone Girl (2014)
 >   - Mank (2020)
 
+### Inconsistency and the need for improvement
+The generated responses depend heavily on the LLM making them very inconsistent. In addition, while the workflow passes on the examples shown here, there remains room for improvement, with respect to wasteful LLM calls, wasteful tool calls, consistency of the answer from the same LLM, ability to generate reliable answers from low parameter quantised models (available on Ollama, for instance), amongst others.
+
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 
 ## Project status
@@ -81,7 +82,8 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
-| September 15, 2024 |  active |  Vectore storage is not used as of now. Qdrant may be removed in the future.  |
+| September 17, 2024 |  active |  ReAct workflows handle questions sequentially instead of in parallel.  |
+| September 15, 2024 |  active |  Vector storage is not used as of now. Qdrant may be removed in the future.  |
 | September 13, 2024 |  active |  Low parameter LLMs perform badly in unnecessary self-discovery, query refinements and ReAct tool selections.  |
 | September 12, 2024 |  active |  Self-discover may need to be conditionally bypassed to reduce the number of unnecessary LLM calls.  |
 | September 10, 2024 |  active |  Query decomposition may generate unnecessary sub-workflows.  |

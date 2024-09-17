@@ -173,7 +173,9 @@ class ReActWorkflow(Workflow):
         self.max_iterations = max_iterations
 
         self.memory = ChatMemoryBuffer.from_defaults(llm=llm)
-        self.formatter = ReActChatFormatter(context=extra_context or EMPTY_STRING)
+        self.formatter = ReActChatFormatter.from_defaults(
+            context=extra_context or EMPTY_STRING,
+        )
         self.output_parser = ReActOutputParser()
         self.sources = []
 
@@ -460,7 +462,7 @@ class SelfDiscoverWorkflow(Workflow):
     SELECT_PROMPT_TEMPLATE = PromptTemplate(
         "Given the task: {task}, assess if it requires a reasoning structure to solve. "
         "If a reasoning structure is necessary to solve the task, which of the following reasoning modules are relevant? Do not elaborate on why.\n\n {reasoning_modules}"
-        f"If a reasoning structure is unnecessary, please output '{REASONING_OUTPUT_BYPASS_NONE}' only without selecting any reasoning module."
+        # f"If the given task does not need a multi-step approach to find a solution, please output '{REASONING_OUTPUT_BYPASS_NONE}' only without selecting any reasoning module."
     )
 
     ADAPT_PROMPT_TEMPLATE = PromptTemplate(
@@ -469,6 +471,7 @@ class SelfDiscoverWorkflow(Workflow):
 
     IMPLEMENT_PROMPT_TEMPLATE = PromptTemplate(
         "Without working out the full solution, create an actionable reasoning structure for the task using these adapted reasoning modules:\n{adapted_modules}\n\nTask Description:\n{task}"
+        "Refrain from working out any partial solution. Focus on creating a reasoning structure that can be used to solve the task."
     )
 
     REASONING_PROMPT_TEMPLATE = PromptTemplate(
@@ -602,15 +605,23 @@ class DQAReasoningStructureEvent(Event):
     reasoning_structure: str
 
 
-class DQAQueryEvent(Event):
+class DQASequentialQueryEvent(Event):
     """
-    Event to handle an individual DQA query.
+    Event to handle a DQA query from a list of questions. This event is used to handle questions sequentially.
+    The question index is used to keep track of the current question being handled. The list of questions are
+    expected to be stored in the context.
 
     Fields:
-        question (str): The question to handle.
+        query_index (int): The index of the query in the list of queries.
     """
 
-    question: str
+    # TODO: Always send the first sub-question and let the answer step loop through the rest.
+    # This is to ensure that all sub-questions are answered even if they are dependent on each other.
+    # In contrast, the current mechanism of sending all sub-questions in parallel may lead incomplete answers, if
+    # the LLM is unable to answer a sub-question due to dependencies.
+    # Make sure that the first sub-question is not dependent on any of the rest -- prompt engineering.
+
+    question_index: int = 0
 
 
 class DQAAnswerEvent(Event):
@@ -649,6 +660,7 @@ class DQAWorkflow(Workflow):
     KEY_SUB_QUESTIONS = "sub_questions"
     KEY_SUB_QUESTIONS_COUNT = "sub_questions_count"
     KEY_SATISFIED = "satisfied"
+    KEY_REACT_CONTEXT = "react_context"
 
     def __init__(
         self,
@@ -692,6 +704,16 @@ class DQAWorkflow(Workflow):
         """
         if hasattr(ev, "query"):
             await ctx.set(DQAWorkflow.KEY_ORIGINAL_QUERY, ev.query)
+            await ctx.set(
+                DQAWorkflow.KEY_REACT_CONTEXT,
+                (
+                    "\nPAY ATTENTION since the given question may make implicit references to information in the context. "
+                    "If you find or can deduce the answer to the given question from the context below, PLEASE refrain from calling any further tools. "
+                    "Instead, formulate the answer to the given question from the context. "
+                    "PLEASE answer the given question only. Do NOT answer the original question below. It is provided for context only."
+                    f"\nOriginal question: {ev.query}"
+                ),
+            )
         else:
             return StopEvent(result="No query provided. Try again!")
 
@@ -734,19 +756,19 @@ class DQAWorkflow(Workflow):
     @step
     async def query(
         self, ctx: Context, ev: DQAReasoningStructureEvent
-    ) -> DQAQueryEvent | DQAReviewSubQuestionEvent | StopEvent:
+    ) -> DQASequentialQueryEvent | DQAReviewSubQuestionEvent | StopEvent:
         """
         This step receives the structured reasoning for the query.
         It then asks the LLM to decompose the query into sub-questions. Upon decomposition, it emits every
-        sub-question as a `DQAQueryEvent`. Alternatively, if the LLM is not satisfied with the sub-questions, it
-        emits a `DQAReviewSubQuestionEvent` to review the sub-questions.
+        sub-question as a query event. Alternatively, if the LLM is not satisfied with the sub-questions, it
+        emits a sub question review event to review the sub-questions.
 
         Args:
             ctx (Context): The context object.
             ev (DQAStructuredReasoningEvent): The event containing the structured reasoning.
 
         Returns:
-            DQAQueryEvent | DQAReviewSubQuestionEvent | StopEvent: The event containing the sub-question or the event
+            DQASequentialQueryEvent | DQAReviewSubQuestionEvent | StopEvent: The event containing the sub-question index to process or the event
             to review the sub-questions or the event to stop the workflow.
         """
 
@@ -764,10 +786,8 @@ class DQAWorkflow(Workflow):
         prompt = (
             "You are a linguistic expert who performs efficient query decomposition."
             "\nBelow, you are given a question and a corresponding reasoning structure to answer it. "
-            "Generate a minimalist list of distinct, independent and absolutely essential sub-questions, each of which must be answered in order to answer the original question according to the suggested structured reasoning. "
+            "Generate a minimalist list of distinct and absolutely essential sub-questions, each of which must be answered in order to answer the original question according to the suggested structured reasoning. "
             "If a sub-question is already implicitly answered through the reasoning structure then do not include it in the list of sub-questions. "
-            "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
-            "A sub-question should not be a subset of another sub-question. "
             "If the original question cannot be or need not be decomposed then output a list of sub-questions that contain the original question as the only sub-question. "
             "Otherwise, do not include the original question in the list of sub-questions. "
             "In the sub-questions, explicitly mention the subject by name, avoiding pronouns like 'these,' 'they,' 'he,' 'she,' 'it,', and so on. "
@@ -832,26 +852,24 @@ class DQAWorkflow(Workflow):
             )
         )
 
+        await ctx.set(DQAWorkflow.KEY_SUB_QUESTIONS, sub_questions)
         await ctx.set(DQAWorkflow.KEY_SUB_QUESTIONS_COUNT, len(sub_questions))
 
         # Ignore the satisfied flag if there is only one sub-question.
         if len(sub_questions) == 1:
-            return DQAQueryEvent(question=sub_questions[0])
+            return DQASequentialQueryEvent()
         else:
             if satisfied:
-                for question in sub_questions:
-                    ctx.send_event(DQAQueryEvent(question=question))
+                return DQASequentialQueryEvent()
             else:
                 return DQAReviewSubQuestionEvent(
                     questions=sub_questions, satisfied=satisfied
                 )
 
-        return None
-
     @step
     async def review_sub_questions(
         self, ctx: Context, ev: DQAReviewSubQuestionEvent
-    ) -> DQAQueryEvent | DQAReviewSubQuestionEvent:
+    ) -> DQASequentialQueryEvent | DQAReviewSubQuestionEvent:
         """
         This step receives the sub-questions and asks the LLM to review them. If the LLM is satisfied with the
         sub-questions, they can be used to answer the original question. Otherwise, the LLM can provide updated
@@ -859,17 +877,16 @@ class DQAWorkflow(Workflow):
 
         Args:
             ctx (Context): The context object.
-            ev (DQAQueryEvent): The event containing the sub-question.
+            ev (DQAReviewSubQuestionEvent): The event containing the sub-questions.
 
         Returns:
-            DQAQueryEvent | DQAReviewSubQuestionEvent: The event containing the sub-question or the event to review the
+            DQASequentialQueryEvent | DQAReviewSubQuestionEvent: The event containing the sub-question index to process or the event to review the
             sub-questions.
         """
 
         if ev.satisfied:
             # Already satisfied, no need to review anymore.
-            for question in ev.questions:
-                ctx.send_event(DQAQueryEvent(question=question))
+            return DQASequentialQueryEvent()
 
         self._total_steps += 1
         ctx.write_event_to_stream(
@@ -885,8 +902,8 @@ class DQAWorkflow(Workflow):
             "\nYou are given a question that has been decomposed into sub-questions, which are also given below. "
             "Furthermore, you are provided with the reasoning structure to answer the original question. The sub-questions are generated in accordance with the reasoning structure. "
             "Review each sub-question and improve it, if necessary. Minimise the number of sub-questions. "
-            "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
-            "A sub-question should not be a subset of another sub-question. "
+            # "Each sub-question must be possible to answer without depending on the answer from another sub-question. "
+            # "A sub-question should not be a subset of another sub-question. "
             "If the original question cannot be or need not be decomposed then output a list of sub-questions that contain the original question as the only sub-question. "
             "Otherwise, do not include the original question in the list of sub-questions. "
             "Remove any sub-question that is not absolutely required to answer the original query. "
@@ -925,41 +942,52 @@ class DQAWorkflow(Workflow):
             )
         )
 
+        await ctx.set(DQAWorkflow.KEY_SUB_QUESTIONS, sub_questions)
         await ctx.set(DQAWorkflow.KEY_SUB_QUESTIONS_COUNT, len(sub_questions))
 
         # Ignore the satisfied flag if there is only one sub-question.
         if len(sub_questions) == 1:
-            return DQAQueryEvent(question=sub_questions[0])
+            return DQASequentialQueryEvent()
 
         if satisfied or self._refinement_iterations >= self._max_refinement_iterations:
-            for question in sub_questions:
-                ctx.send_event(DQAQueryEvent(question=question))
+            return DQASequentialQueryEvent()
         else:
             return DQAReviewSubQuestionEvent(
                 questions=sub_questions, satisfied=satisfied
             )
 
-        return None
-
-    @step(num_workers=4)
+    @step
     async def answer_sub_question(
-        self, ctx: Context, ev: DQAQueryEvent
-    ) -> DQAAnswerEvent:
+        self, ctx: Context, ev: DQASequentialQueryEvent
+    ) -> DQAAnswerEvent | DQASequentialQueryEvent:
         """
         This step receives a sub-question and attempts to answer it using the tools provided in the context.
 
         Args:
             ctx (Context): The context object.
-            ev (DQAQueryEvent): The event containing the sub-question.
+            ev (DQASequentialQueryEvent): The event containing the sub-question index to process.
 
         Returns:
             DQAAnswerEvent: The event containing the sub-question and the answer.
         """
 
+        if isinstance(ev, DQASequentialQueryEvent):
+            sub_questions = await ctx.get(DQAWorkflow.KEY_SUB_QUESTIONS)
+            if not sub_questions or len(sub_questions) == 0:
+                raise ValueError("No questions to answer.")
+            question = sub_questions[ev.question_index]
+        else:
+            question = ev.question
+
+        react_context = await ctx.get(DQAWorkflow.KEY_REACT_CONTEXT)
+
         self._total_steps += 1
         ctx.write_event_to_stream(
             WorkflowStatusEvent(
-                msg=f"Starting a {ReActWorkflow.__name__} to answer question:\n\t{ev.question}",
+                msg=(
+                    f"Starting a {ReActWorkflow.__name__} to answer question:\n\t{question}"
+                    f"\n\nAdditional context:{react_context}"
+                ),
                 total_steps=self._total_steps,
                 finished_steps=self._finished_steps,
             )
@@ -971,8 +999,10 @@ class DQAWorkflow(Workflow):
             timeout=self._timeout / 2,
             verbose=self._verbose,
             # Let's keep the maximum iterations of the ReAct workflow to its default value.
+            extra_context=react_context,
         )
-        react_task = asyncio.create_task(react_workflow.run(input=ev.question))
+
+        react_task = asyncio.create_task(react_workflow.run(input=question))
 
         async for nested_ev in react_workflow.stream_events():
             self._total_steps += 1
@@ -988,14 +1018,33 @@ class DQAWorkflow(Workflow):
         response = await react_task
         self._finished_steps += 1
 
-        return DQAAnswerEvent(
-            question=ev.question,
+        react_answer_event = DQAAnswerEvent(
+            question=question,
             answer=response[ReActWorkflow.KEY_RESPONSE],
+            # TODO: Should we format the sources nicely here so that the LLM does not have to deal with it later?
             sources=[
                 tool_output.content
                 for tool_output in response[ReActWorkflow.KEY_SOURCES]
             ],
         )
+
+        react_context += (
+            f"\n\nRelated question: {question}\n"
+            f"> Answer: {react_answer_event.answer}\n"
+            # TODO: Do we need the sources or is that too much information?
+            # f"> Sources: {', '.join(react_answer_event.sources)}"
+        )
+
+        await ctx.set(DQAWorkflow.KEY_REACT_CONTEXT, react_context)
+
+        ctx.send_event(react_answer_event)
+
+        if isinstance(ev, DQASequentialQueryEvent):
+            if ev.question_index + 1 < len(sub_questions):
+                # Let's move to the next sub-question.
+                return DQASequentialQueryEvent(question_index=ev.question_index + 1)
+
+        return None
 
     @step
     async def combine_refine_answers(
@@ -1045,7 +1094,7 @@ class DQAWorkflow(Workflow):
             "\nYou are given a question that has been split into sub-questions, each of which has been answered."
             "\nYou are also given a reasoning structure that was used to generate the sub-questions. "
             "\nCombine the answers to all the sub-questions into a single and coherent response to the original question. "
-            "Your response should be in accordance with the reasoning structure. "
+            "Your response should match the reasoning structure. "
             "Ensure that your final answer includes all the relevant details and nuances from the answers to the sub-questions. "
             "If the original question has been answered by a single sub-question, refine the answer to make it concise and coherent. "
             "Likewise, if there are ambiguities and/or conflicting information in the answers to the sub-questions, resolve them to generate the final answer. "
