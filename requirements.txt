@@ -12,8 +12,8 @@ llama-index
 llama-index-utils-workflow
 
 # LlamaIndex storage
-llama-index-vector-stores-qdrant
-qdrant_client
+# llama-index-vector-stores-qdrant
+# qdrant_client
 
 # LlamaIndex LLMs
 llama-index-llms-groq

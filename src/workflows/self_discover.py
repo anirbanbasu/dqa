@@ -132,7 +132,7 @@ class SelfDiscoverWorkflow(Workflow):
 
     SELECT_PROMPT_TEMPLATE = PromptTemplate(
         "Given the task: {task}, which of the following reasoning modules are relevant? Do not elaborate on why.\n\n{reasoning_modules}"
-        "{bypass_information}"
+        "{bypass_instruction}"
     )
 
     ADAPT_PROMPT_TEMPLATE = PromptTemplate(
@@ -187,7 +187,7 @@ class SelfDiscoverWorkflow(Workflow):
         prompt = SelfDiscoverWorkflow.SELECT_PROMPT_TEMPLATE.format(
             task=task,
             reasoning_modules=SelfDiscoverWorkflow._REASONING_MODULES,
-            bypass_information=(
+            bypass_instruction=(
                 "If the given task can be solved without a reasoning structure, please output "
                 f"'{SelfDiscoverWorkflow.REASONING_OUTPUT_BYPASS_NONE}' only without selecting any reasoning module."
                 if self.allow_bypass

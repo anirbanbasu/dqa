@@ -206,9 +206,7 @@ class DQAWorkflow(Workflow):
             verbose=self._verbose,
             plan_only=True,
         )
-        self_discover_task = asyncio.create_task(
-            self_discover_workflow.run(task=ev.query)
-        )
+        self_discover_task: asyncio.Future = self_discover_workflow.run(task=ev.query)
 
         async for nested_ev in self_discover_workflow.stream_events():
             self._total_steps += 1
@@ -221,7 +219,9 @@ class DQAWorkflow(Workflow):
                 )
             )
 
-        response = await self_discover_task
+        done, _ = await asyncio.wait([self_discover_task])
+        if done:
+            response = self_discover_task.result()
         self._finished_steps += 1
 
         return DQAReasoningStructureEvent(reasoning_structure=response)
@@ -475,7 +475,7 @@ class DQAWorkflow(Workflow):
             extra_context=react_context,
         )
 
-        react_task = asyncio.create_task(react_workflow.run(input=question))
+        react_task: asyncio.Future = react_workflow.run(input=question)
 
         async for nested_ev in react_workflow.stream_events():
             self._total_steps += 1
@@ -488,7 +488,9 @@ class DQAWorkflow(Workflow):
                 )
             )
 
-        response = await react_task
+        done, _ = await asyncio.wait([react_task])
+        if done:
+            response = react_task.result()
         self._finished_steps += 1
 
         react_answer_event = DQAAnswerEvent(
@@ -860,12 +862,14 @@ class DQAEngine:
         #         llm=self.llm, tools=self.tools, timeout=60, verbose=True
         #     )
         # )
-        task = asyncio.create_task(
-            self.workflow.run(
-                query=query,
-                # input=query,
-                # task=query,
-            )
+        # No longer usable in this way, due to breaking changes in LlamaIndex Workflows.
+        # task = asyncio.create_task(
+        #     self.workflow.run(
+        #         query=query,
+        #     )
+        # )
+        task: asyncio.Future = self.workflow.run(
+            query=query,
         )
         done: bool = False
         total_steps: int = 0
@@ -890,8 +894,9 @@ class DQAEngine:
             progress_bar.refresh()
             yield done, finished_steps, total_steps, ev.msg
         try:
-            result = await task
-            done = self.workflow.is_done()
+            done, _ = await asyncio.wait([task])
+            if done:
+                result = task.result()
         except Exception as e:
             result = f"\nException in running the workflow(s). Type: {type(e).__name__}. Message: '{str(e)}'"
             # Set this to done, otherwise another workflow call cannot be made.
