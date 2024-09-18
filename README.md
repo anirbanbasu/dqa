@@ -26,23 +26,21 @@ This project implements an agent-based framework akin to the one mentioned in th
 ### A simpler difficult question
 Let's focus on a slightly simpler test question that nonetheless baffles ChatGPT `gpt-4o`. Let's ask _Tell me the result of multiplying the number of 'r's in the word 'strawberry' with the sum of 3 and 4. Explain the process._ ChatGPT hopelessly responds to this with the following.
 
-<div style="background-color: #707070; padding: 0.25rem; margin: 0.75rem">
-Let's break down the problem step by step:<br/><br/>
-Find the number of 'r's in the word "strawberry": The word "strawberry" contains 2 'r's.<br/><br/>
-Find the sum of 3 and 4: $3+4=7$.
-
-Multiply the number of 'r's by the sum: $2 \times 7=14$.
-
-So, the result of multiplying the number of 'r's in "strawberry" by the sum of 3 and 4 is 14.
-</div>
+> Let's break down the problem step by step:
+>
+> Find the number of 'r's in the word "strawberry": The word "strawberry" contains 2 'r's.
+>
+> Find the sum of 3 and 4: $3+4=7$.
+>
+> Multiply the number of 'r's by the sum: $2 \times 7=14$.
+>
+> So, the result of multiplying the number of 'r's in "strawberry" by the sum of 3 and 4 is 14.
 
 While ChatGPT did not make mistakes with the basic arithmetic operations, it counted the number of 'r's in the word 'strawberry' wrong. In contrast, the DQA workflow gets it right with the following answer, as of September 6, 2024, surprisingly using the `gpt-4o-mini` model.
 
-<div style="background-color: #707070; padding: 0.25rem; margin: 0.75rem">
-Final Answer: The result of multiplying the number of 'r's in the word 'strawberry' (which is 3) with the sum of 3 and 4 (which is 7) is 21.<br/><br/>
-
-Detailed Explanation: To arrive at the final answer, we first determined the number of 'r's in the word 'strawberry'. The analysis revealed that there are 3 'r's in the word. Next, we calculated the sum of 3 and 4, which is 7. Finally, we multiplied these two results together: 3 (the number of 'r's) multiplied by 7 (the sum of 3 and 4) equals 21. Therefore, the final result is 21.
-</div>
+> Final Answer: The result of multiplying the number of 'r's in the word 'strawberry' (which is 3) with the sum of 3 and 4 (which is 7) is 21.
+>
+> Detailed Explanation: To arrive at the final answer, we first determined the number of 'r's in the word 'strawberry'. The analysis revealed that there are 3 'r's in the word. Next, we calculated the sum of 3 and 4, which is 7. Finally, we multiplied these two results together: 3 (the number of 'r's) multiplied by 7 (the sum of 3 and 4) equals 21. Therefore, the final result is 21.
 
 The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly is because DQA lets it use a function to calculate the occurrences of a specific character or a sequence of characters in a string.
 
@@ -59,24 +57,22 @@ When all ReAct workflows have finished, the final step for answer generation col
 ### Response to the initial difficult question
 Recalling the litmus test question (i.e., _Which David Fincher film that stars Edward Norton does not star Brad Pitt?_), the response from DQA with `gpt-4o-mini` is correct, as in the answer is _none_, but the response is long-winded.
 
-<div style="background-color: #707070; padding: 0.25rem; margin: 0.75rem">
-The David Fincher film that stars Edward Norton but does not feature Brad Pitt is **none**. The only film directed by David Fincher that includes both Edward Norton and Brad Pitt is Fight Club (1999). In this film, Edward Norton plays the unnamed narrator, while Brad Pitt portrays Tyler Durden. Therefore, there are no David Fincher films starring Edward Norton that exclude Brad Pitt.<br/><br/>
-
-To summarize:
-
- - Film featuring both Edward Norton and Brad Pitt: Fight Club (1999)
- - Other films directed by David Fincher include:
-   - Alien 3 (1992)
-   - Se7en (1995)
-   - The Game (1997)
-   - Panic Room (2002)
-   - Zodiac (2007)
-   - The Curious Case of Benjamin Button (2008)
-   - The Social Network (2010)
-   - The Girl with the Dragon Tattoo (2011)
-   - Gone Girl (2014)
-   - Mank (2020)
-</div>
+> The David Fincher film that stars Edward Norton but does not feature Brad Pitt is **none**. The only film directed by David Fincher that includes both Edward Norton and Brad Pitt is Fight Club (1999). In this film, Edward Norton plays the unnamed narrator, while Brad Pitt portrays Tyler Durden. Therefore, there are no David Fincher films starring Edward Norton that exclude Brad Pitt.
+>
+> To summarize:
+>
+> - Film featuring both Edward Norton and Brad Pitt: Fight Club (1999)
+> - Other films directed by David Fincher include:
+>   - Alien 3 (1992)
+>   - Se7en (1995)
+>   - The Game (1997)
+>   - Panic Room (2002)
+>   - Zodiac (2007)
+>   - The Curious Case of Benjamin Button (2008)
+>   - The Social Network (2010)
+>   - The Girl with the Dragon Tattoo (2011)
+>   - Gone Girl (2014)
+>   - Mank (2020)
 
 ### Inconsistency and the need for improvement
 The generated responses depend heavily on the LLM making them very inconsistent. In addition, while the workflow passes on the examples shown here, there remains room for improvement, with respect to wasteful LLM calls, wasteful tool calls, consistency of the answer from the same LLM, ability to generate reliable answers from low parameter quantised models (available on Ollama, for instance), amongst others.
