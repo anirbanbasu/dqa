@@ -85,6 +85,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
+| September 20, 2024 |  active |  Workflows to be made selectable to be able to compare them.  |
 | September 17, 2024 |  active |  ReAct workflows handle questions sequentially instead of in parallel.  |
 | September 15, 2024 |  active |  Vector storage is not used as of now. Qdrant may be removed in the future.  |
 | September 13, 2024 |  active |  Low parameter LLMs perform badly in unnecessary self-discovery, query refinements and ReAct tool selections.  |

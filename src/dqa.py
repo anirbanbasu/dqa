@@ -51,7 +51,7 @@ from utils import (
 
 from llama_index.core.llms.llm import LLM
 
-from workflows.ssq_react import StructuredSubQuestionReActWorkflow
+from workflows.react_src import ReActWithStructuredReasoningInContextWorkflow
 
 
 class DQAEngine:
@@ -307,24 +307,12 @@ class DQAEngine:
             for each step of the workflow. The message is the response to the query when the workflow is done.
         """
         # Instantiating the ReAct workflow instead may not be always enough to get the desired responses to certain questions.
-        self.workflow = StructuredSubQuestionReActWorkflow(
+        self.workflow = ReActWithStructuredReasoningInContextWorkflow(
             llm=self.llm,
             tools=self.tools,
             timeout=180,
             verbose=False,
         )
-        # No need for this, see: https://github.com/run-llama/llama_index/discussions/15838#discussioncomment-10553154
-        # self.workflow.add_workflows(
-        #     react_workflow=ReActWorkflow(
-        #         llm=self.llm, tools=self.tools, timeout=60, verbose=True
-        #     )
-        # )
-        # No longer usable in this way, due to breaking changes in LlamaIndex Workflows.
-        # task = asyncio.create_task(
-        #     self.workflow.run(
-        #         query=query,
-        #     )
-        # )
         task: asyncio.Future = self.workflow.run(
             query=query,
         )
