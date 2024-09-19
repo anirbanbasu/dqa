@@ -45,8 +45,8 @@ While ChatGPT did not make mistakes with the basic arithmetic operations, it cou
 The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly is because DQA lets it use a function to calculate the occurrences of a specific character or a sequence of characters in a string.
 
 ### The agent workflow
-The approximate current workflow for DQA can be summarised as follows.
-![Workflow](./diagrams/workflow.svg)
+The approximate the _Structured Sub-Question ReAct_ (SSQReAct) workflow can be summarised as follows.
+![SSQReAct workflow](./diagrams/ssqreact.svg)
 
 The DQA workflow uses a [self-discover](https://arxiv.org/abs/2402.03620) "agent" to produce a reasoning structure but not answer the question. Similar to the tutorial [^1], the DQA workflow performs query decomposition with respect to the reasoning structure to ensure that complex queries are not directly sent to the LLM. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary, for a maximum number of allowed iterations.
 

@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 import gradio as gr
 
 
-from workflows.dqa import DQAEngine
+from dqa import DQAEngine
 from utils import (
     APP_TITLE_FULL,
     COLON_STRING,
