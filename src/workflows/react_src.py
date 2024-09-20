@@ -72,7 +72,18 @@ class ReActSRCAnswerEvent(Event):
 
 
 class ReActWithStructuredReasoningInContextWorkflow(Workflow):
-    """A workflow implementation for ReActSRC: ReAct with Strucutred Reasoning In Context."""
+    """
+    ## ReActSRC: ReAct with Structured Reasoning In Context
+
+    This workflow generates a reasoning structure for a given query and then answers the query while using the reasoning structure as contextual information.
+
+    **MHQA agents used**
+     - Planning-only self-discovery (see: https://arxiv.org/abs/2402.03620) is used to generate the reasoning structure.
+     - ReAct (see: https://arxiv.org/abs/2210.03629) is used to answer the query.
+
+    **Caveats**
+     - Degraded performance with low-parameter LLMs.
+    """
 
     KEY_ORIGINAL_QUERY = "original_query"
 

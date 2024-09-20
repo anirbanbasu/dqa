@@ -104,7 +104,21 @@ class SSQReActReviewSubQuestionEvent(Event):
 
 
 class StructuredSubQuestionReActWorkflow(Workflow):
-    """A workflow implementation for SSQReAct: Structured Sub-Question ReAct."""
+    """
+    ## SSQReAct: Structured Sub-Question ReAct
+
+    This workflow decomposes a given question into sub-questions based on a reasoning structure. It then sequentially
+    answers the sub-questions and combines the answers to generate a final response to the original question.
+
+    **MHQA agents used**
+     - Planning-only self-discovery (see: https://arxiv.org/abs/2402.03620) is used to generate the reasoning structure.
+     - ReAct (see: https://arxiv.org/abs/2210.03629) is used to answer the query.
+
+    **Caveats**
+     - Unnecessary sub-questions leading to unnecessary ReAct invocations.
+     - Ambiguities and conflicting information in the answers to the sub-questions.
+     - Degraded performance with low-parameter LLMs.
+    """
 
     KEY_ORIGINAL_QUERY = "original_query"
     KEY_REASONING_STRUCTURE = "reasoning_structure"

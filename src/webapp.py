@@ -41,6 +41,8 @@ from llama_index.llms.anthropic import Anthropic
 from llama_index.llms.cohere import Cohere
 from llama_index.llms.openai import OpenAI
 
+from workflows.react_src import ReActWithStructuredReasoningInContextWorkflow
+
 
 class GradioApp:
     """This class represents the Gradio webapp for the application."""
@@ -413,6 +415,38 @@ class GradioApp:
                     height=300,
                 )
 
+            with gr.Accordion(label="Workflow information", open=False):
+                # FIXME: Attaching the dropdown to the settings component seems ugly?
+                settings.dropdown_workflows = gr.Dropdown(
+                    label="Workflow",
+                    info="Select the workflow that you want to use.",
+                    choices=self.dqa_engine.get_workflow_names_list(),
+                    allow_custom_value=False,
+                    multiselect=False,
+                    interactive=True,
+                    value=ReActWithStructuredReasoningInContextWorkflow.__name__,
+                )
+                mkdown_workflow_description = gr.Markdown(
+                    label="Description of the workflow",
+                    show_label=True,
+                    elem_classes=[GradioApp.CSS_CLASS_DIV_PADDED],
+                    value=(
+                        self.dqa_engine.get_workflow_description(
+                            settings.dropdown_workflows.value
+                        )
+                        if settings.dropdown_workflows.value
+                        else EMPTY_STRING
+                    ),
+                )
+
+            @settings.dropdown_workflows.change(
+                api_name=False,
+                inputs=[settings.dropdown_workflows],
+                outputs=[mkdown_workflow_description],
+            )
+            def select_workflow(selected_workflow: str):
+                return self.dqa_engine.get_workflow_description(selected_workflow)
+
             @text_web_search_api_key.blur(
                 api_name=False,
                 inputs=[dropdown_web_search, text_web_search_api_key],
@@ -698,7 +732,7 @@ class GradioApp:
 
             with gr.Row(equal_height=True):
                 with gr.Column(visible=self._sidebar_state, scale=1) as sidebar:
-                    self.create_component_settings()
+                    settings_component = self.create_component_settings()
                 with gr.Column(scale=2):
                     gr.Markdown(
                         GradioApp.MD_EU_AI_ACT_TRANSPARENCY,
@@ -742,10 +776,12 @@ class GradioApp:
 
             @btn_ask_agent.click(
                 api_name="get_agent_response",
-                inputs=[text_user_input],
+                inputs=[text_user_input, settings_component.dropdown_workflows],
                 outputs=[agent_response],
             )
-            async def get_agent_response(user_input: str, agent_status=gr.Progress()):
+            async def get_agent_response(
+                user_input: str, selected_workflow: str, agent_status=gr.Progress()
+            ):
                 if self.agent_task_pending:
                     gr.Warning(
                         "DQA is busy, please wait for the current task to complete."
@@ -758,7 +794,9 @@ class GradioApp:
                 ):
                     # Stream events and results
                     self.agent_task_pending = True
-                    generator = self.dqa_engine.run(user_input)
+                    generator = self.dqa_engine.run(
+                        user_input, workflow=selected_workflow
+                    )
                     async for (
                         done,
                         finished_steps,
@@ -802,6 +840,7 @@ class GradioApp:
         allowed_static_file_paths = [
             GradioApp.PROJECT_LOGO_PATH,
         ]
+        # print("\n".join(map(str, self.dqa_engine.get_list_of_workflows())))
         if self.interface is not None:
             self.interface.queue().launch(
                 show_api=True,

@@ -34,6 +34,7 @@ from llama_index.tools.tavily_research import TavilyToolSpec
 from llama_index.tools.yahoo_finance import YahooFinanceToolSpec
 from llama_index.core.tools import FunctionTool
 
+from llama_index.core.workflow import Workflow
 
 from tools import (
     DuckDuckGoFullSearchOnlyToolSpec,
@@ -52,6 +53,7 @@ from utils import (
 from llama_index.core.llms.llm import LLM
 
 from workflows.react_src import ReActWithStructuredReasoningInContextWorkflow
+from workflows.ssq_react import StructuredSubQuestionReActWorkflow
 
 
 class DQAEngine:
@@ -73,6 +75,70 @@ class DQAEngine:
 
         # TODO: Populate the tools based on toolset names specified in the environment variables?
         self.tools.extend(DuckDuckGoFullSearchOnlyToolSpec().to_tool_list())
+
+        self.available_workflows = [
+            # ReActWorkflow,
+            # SelfDiscoverWorkflow,
+            ReActWithStructuredReasoningInContextWorkflow,
+            StructuredSubQuestionReActWorkflow,
+        ]
+
+    def get_workflows_dataframe(self) -> list[list[str, str]]:
+        """
+        Get the dataframe of available workflows.
+
+        Returns:
+            list[list[str, str]]: The list of available workflows with their names and descriptions.
+        """
+        return [
+            [f"_{workflow.__name__}_", workflow.__doc__]
+            for workflow in self.available_workflows
+        ]
+
+    def get_workflow_description(self, workflow_name: str) -> str:
+        """
+        Get the description of the workflow with the given name.
+
+        Args:
+            workflow_name (str): The name of the workflow to get the description for.
+
+        Returns:
+            str: The description of the workflow.
+
+        Raises:
+            ValueError: If the workflow with the given name is not supported.
+        """
+        for workflow in self.available_workflows:
+            if workflow.__name__ == workflow_name:
+                return workflow.__doc__
+        raise ValueError(f"Workflow with name '{workflow_name}' is not supported.")
+
+    def get_workflow_names_list(self) -> list[str]:
+        """
+        Get the list of available workflow names.
+
+        Returns:
+            list[str]: The list of available workflow names.
+        """
+        return [workflow.__name__ for workflow in self.available_workflows]
+
+    def get_workflow_by_name(self, workflow_name: str):
+        """
+        Get the workflow with the given name.
+
+        Args:
+            workflow_name (str): The name of the workflow to get.
+
+        Returns:
+            Any: The workflow with the given name.
+
+        Raises:
+            ValueError: If the workflow with the given name is not supported.
+        """
+        for workflow in self.available_workflows:
+            if workflow.__name__ == workflow_name:
+                return workflow
+        raise ValueError(f"Workflow with name '{workflow_name}' is not supported.")
 
     def _are_tools_present(self, tool_names: list[str]) -> bool:
         """
@@ -295,27 +361,45 @@ class DQAEngine:
             for tool in self.tools
         ]
 
-    async def run(self, query: str):
+    async def run(
+        self,
+        query: str,
+        workflow: str,
+    ):
         """
         Run the Difficult Questions Attempted engine with the given query.
 
         Args:
             query (str): The query to process.
+            workflow (str): The name of the workflow to use.
 
         Yields:
             tuple: A tuple containing the done status, the number of finished steps, the total number of steps, and the message
             for each step of the workflow. The message is the response to the query when the workflow is done.
         """
         # Instantiating the ReAct workflow instead may not be always enough to get the desired responses to certain questions.
-        self.workflow = ReActWithStructuredReasoningInContextWorkflow(
-            llm=self.llm,
-            tools=self.tools,
-            timeout=180,
-            verbose=False,
-        )
-        task: asyncio.Future = self.workflow.run(
-            query=query,
-        )
+        chosen_workflow = self.get_workflow_by_name(workflow)
+
+        workflow_init_kwargs = {"llm": self.llm, "timeout": 180, "verbose": False}
+        workflow_run_kwargs = {}
+
+        if chosen_workflow in [
+            StructuredSubQuestionReActWorkflow,
+            ReActWithStructuredReasoningInContextWorkflow,
+        ]:
+            workflow_init_kwargs["tools"] = self.tools
+            workflow_run_kwargs["query"] = query
+        # elif chosen_workflow == SelfDiscoverWorkflow:
+        #     workflow_run_kwargs["task"] = query
+        # elif chosen_workflow == ReActWorkflow:
+        #     workflow_init_kwargs["tools"] = self.tools
+        #     workflow_run_kwargs["input"] = query
+        else:
+            raise ValueError(f"Workflow '{workflow}' is not supported.")
+
+        self.workflow: Workflow = chosen_workflow(**workflow_init_kwargs)
+
+        task: asyncio.Future = self.workflow.run(**workflow_run_kwargs)
         done: bool = False
         total_steps: int = 0
         finished_steps: int = 0
