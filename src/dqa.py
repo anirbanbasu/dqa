@@ -52,7 +52,9 @@ from utils import (
 
 from llama_index.core.llms.llm import LLM
 
+from workflows.react import ReActWorkflow
 from workflows.react_src import ReActWithStructuredReasoningInContextWorkflow
+from workflows.self_discover import SelfDiscoverWorkflow
 from workflows.ssq_react import StructuredSubQuestionReActWorkflow
 
 
@@ -77,8 +79,8 @@ class DQAEngine:
         self.tools.extend(DuckDuckGoFullSearchOnlyToolSpec().to_tool_list())
 
         self.available_workflows = [
-            # ReActWorkflow,
-            # SelfDiscoverWorkflow,
+            ReActWorkflow,
+            SelfDiscoverWorkflow,
             ReActWithStructuredReasoningInContextWorkflow,
             StructuredSubQuestionReActWorkflow,
         ]
@@ -389,15 +391,19 @@ class DQAEngine:
         ]:
             workflow_init_kwargs["tools"] = self.tools
             workflow_run_kwargs["query"] = query
-        # elif chosen_workflow == SelfDiscoverWorkflow:
-        #     workflow_run_kwargs["task"] = query
-        # elif chosen_workflow == ReActWorkflow:
-        #     workflow_init_kwargs["tools"] = self.tools
-        #     workflow_run_kwargs["input"] = query
+        elif chosen_workflow == SelfDiscoverWorkflow:
+            workflow_run_kwargs["task"] = query
+        elif chosen_workflow == ReActWorkflow:
+            workflow_init_kwargs["tools"] = self.tools
+            workflow_run_kwargs["input"] = query
         else:
             raise ValueError(f"Workflow '{workflow}' is not supported.")
 
         self.workflow: Workflow = chosen_workflow(**workflow_init_kwargs)
+        print(
+            f"\nAttempting the question using the {workflow} workflow. This may take a while...",
+            flush=True,
+        )
 
         task: asyncio.Future = self.workflow.run(**workflow_run_kwargs)
         done: bool = False
@@ -430,7 +436,7 @@ class DQAEngine:
             result = f"\nException in running the workflow(s). Type: {type(e).__name__}. Message: '{str(e)}'"
             # Set this to done, otherwise another workflow call cannot be made.
             done = True
-            print(result, file=sys.stderr)
+            print(result, file=sys.stderr, flush=True)
         finally:
             progress_bar.close()
         yield done, finished_steps, total_steps, result

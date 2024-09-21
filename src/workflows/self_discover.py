@@ -82,7 +82,16 @@ class SelfDiscoverReasoningStructureEvent(Event):
 
 
 class SelfDiscoverWorkflow(Workflow):
-    """Self discover workflow: https://arxiv.org/abs/2402.03620 with a plan-only option and a bypass option."""
+    """
+    ## Self discover agent
+
+    An implementation of the self-discover agent based on the paper: https://arxiv.org/abs/2402.03620 with a plan-only option and a bypass option. This agent is guaranteed to finish within a maximum of 5 steps (or, 4 steps, if it is configured for generating the plan only).
+
+    **Caveats**
+      - Degraded performance with low-parameter LLMs.
+      - There are no external tools that can be invoked. Thus, this agent is a good planner but may not be a good executor.
+      - The output is formatted as Markdown text, which will not display properly on the DQA web UI.
+    """
 
     REASONING_OUTPUT_BYPASS_NONE = "None"
 
@@ -169,6 +178,9 @@ class SelfDiscoverWorkflow(Workflow):
         self.plan_only = plan_only
         self.allow_bypass = allow_bypass
 
+        self._total_steps: int = 0
+        self._finished_steps: int = 0
+
     @step
     async def get_modules(
         self, ctx: Context, ev: StartEvent
@@ -183,6 +195,16 @@ class SelfDiscoverWorkflow(Workflow):
         if self.llm is None:
             raise ValueError("LLM is required for this workflow.")
 
+        self._total_steps += 1
+
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Handling task: {task}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
+
         # format prompt and get result from LLM
         prompt = SelfDiscoverWorkflow.SELECT_PROMPT_TEMPLATE.format(
             task=task,
@@ -195,18 +217,25 @@ class SelfDiscoverWorkflow(Workflow):
             ),
         )
         result = await self.llm.acomplete(prompt)
+        self._finished_steps += 1
 
         if str(result) == SelfDiscoverWorkflow.REASONING_OUTPUT_BYPASS_NONE:
             # Too simple, bypass self-discovery
             ctx.write_event_to_stream(
                 WorkflowStatusEvent(
-                    msg="Task is too simple to require a reasoning structure, bypassing self-discovery."
+                    msg="Task is too simple to require a reasoning structure, bypassing self-discovery.",
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
                 )
             )
             return StopEvent(result=str(result))
         else:
             ctx.write_event_to_stream(
-                WorkflowStatusEvent(msg=f"Selected modules: {result}")
+                WorkflowStatusEvent(
+                    msg=f"Selected modules: {result}",
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
+                )
             )
             return SelfDiscoverGetModulesEvent(task=task, modules=str(result))
 
@@ -217,14 +246,28 @@ class SelfDiscoverWorkflow(Workflow):
         """Refine modules step."""
         task = ev.task
         modules = ev.modules
-
+        self._total_steps += 1
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg="Refining modules",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
         # format prompt and get result
         prompt = SelfDiscoverWorkflow.ADAPT_PROMPT_TEMPLATE.format(
             task=task, selected_modules=modules
         )
         result = await self.llm.acomplete(prompt)
+        self._finished_steps += 1
 
-        ctx.write_event_to_stream(WorkflowStatusEvent(msg=f"Refined modules: {result}"))
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Refined modules: {result}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
 
         return SelfDiscoverRefineModulesEvent(task=task, refined_modules=str(result))
 
@@ -236,14 +279,27 @@ class SelfDiscoverWorkflow(Workflow):
         task = ev.task
         refined_modules = ev.refined_modules
 
+        self._total_steps += 1
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg="Creating reasoning structure",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
         # format prompt, get result
         prompt = SelfDiscoverWorkflow.IMPLEMENT_PROMPT_TEMPLATE.format(
             task=task, adapted_modules=refined_modules
         )
         result = await self.llm.acomplete(prompt)
+        self._finished_steps += 1
 
         ctx.write_event_to_stream(
-            WorkflowStatusEvent(msg=f"Reasoning structure: {result}")
+            WorkflowStatusEvent(
+                msg=f"Reasoning structure: {result}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
         )
 
         if self.plan_only:
@@ -261,12 +317,27 @@ class SelfDiscoverWorkflow(Workflow):
         task = ev.task
         reasoning_structure = ev.reasoning_structure
 
+        self._total_steps += 1
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg="Generating response based on reasoning structure",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
         # format prompt, get res
         prompt = SelfDiscoverWorkflow.REASONING_PROMPT_TEMPLATE.format(
             task=task, reasoning_structure=reasoning_structure
         )
         result = await self.llm.acomplete(prompt)
+        self._finished_steps += 1
 
-        ctx.write_event_to_stream(WorkflowStatusEvent(msg=f"Final result: {result}"))
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Final result: {result}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
 
         return StopEvent(result=result)

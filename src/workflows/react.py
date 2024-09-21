@@ -101,7 +101,16 @@ class ReActFunctionOutputEvent(Event):
 
 
 class ReActWorkflow(Workflow):
-    """A workflow implementation for a ReAct agent: https://arxiv.org/abs/2210.03629."""
+    """
+    ## A simple ReAct agent
+
+    This workflow implements the ReAct agent described in the paper: https://arxiv.org/abs/2210.03629.
+
+    **Caveats**
+     - May go down the wrong route of reasoning with no self-correction.
+     - May not call tools correctly with low-parameter LLMs.
+     - Output is JSON, hence not formatted for the DQA web UI.
+    """
 
     KEY_CURRENT_REASONING = "current_reasoning"
     KEY_THOUGHT = "thought"
@@ -144,6 +153,9 @@ class ReActWorkflow(Workflow):
         self.output_parser = ReActOutputParser()
         self.sources = []
 
+        self._total_steps: int = 0
+        self._finished_steps: int = 0
+
     @step
     async def new_user_msg(self, ctx: Context, ev: StartEvent) -> ReActPrepEvent:
         """
@@ -159,14 +171,26 @@ class ReActWorkflow(Workflow):
         # clear sources
         self.sources = []
         self._current_iteration = 0
+        self._total_steps += 1
 
         # get user input
         user_input = ev.input
+
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Handling input: {user_input}",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
+
         user_msg = ChatMessage(role=MessageRole.USER, content=user_input)
         self.memory.put(user_msg)
 
         # clear current reasoning
         await ctx.set(ReActWorkflow.KEY_CURRENT_REASONING, [])
+
+        self._finished_steps += 1
 
         return ReActPrepEvent()
 
@@ -184,9 +208,18 @@ class ReActWorkflow(Workflow):
         Returns:
             ReActInputEvent: The event containing the input to be used for the LLM.
         """
+        self._total_steps += 1
         # get chat history
         self._current_iteration += 1
         if self._current_iteration > self.max_iterations:
+            self._finished_steps += 1
+            ctx.write_event_to_stream(
+                WorkflowStatusEvent(
+                    msg="Stopping because maximum number of iterations have been reached.",
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
+                )
+            )
             return StopEvent(
                 result={
                     ReActWorkflow.KEY_RESPONSE: f"I must stop because I have reached the specified maximum number of iterations ({self.max_iterations}).",
@@ -202,6 +235,14 @@ class ReActWorkflow(Workflow):
         )
         llm_input = self.formatter.format(
             self.tools, chat_history, current_reasoning=current_reasoning
+        )
+        self._finished_steps += 1
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Initialised LLM call with {len(chat_history)} messages in chat history.",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
         )
         return ReActInputEvent(input=llm_input)
 
@@ -220,8 +261,17 @@ class ReActWorkflow(Workflow):
             ReActToolCallEvent | StopEvent: The event to call the tools or the event to stop the workflow.
         """
         chat_history = ev.input
+        self._total_steps += 1
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Calling the LLM with {len(chat_history)} messages in chat history.",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
 
         response = await self.llm.achat(chat_history)
+        self._finished_steps += 1
 
         try:
             reasoning_step = self.output_parser.parse(response.message.content)
@@ -235,7 +285,13 @@ class ReActWorkflow(Workflow):
                 streaming_message += f"\n{ReActWorkflow.KEY_ACTION.capitalize()}: {reasoning_step.action} with {reasoning_step.action_input}"
             if reasoning_step.is_done:
                 streaming_message += f"\n{ReActWorkflow.KEY_RESPONSE.capitalize()}: {reasoning_step.response}"
-            ctx.write_event_to_stream(WorkflowStatusEvent(msg=streaming_message))
+            ctx.write_event_to_stream(
+                WorkflowStatusEvent(
+                    msg=streaming_message,
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
+                )
+            )
             if reasoning_step.is_done:
                 self.memory.put(
                     ChatMessage(
@@ -270,7 +326,11 @@ class ReActWorkflow(Workflow):
                 )
             )
             ctx.write_event_to_stream(
-                WorkflowStatusEvent(msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: {e}")
+                WorkflowStatusEvent(
+                    msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: {e}",
+                    total_steps=self._total_steps,
+                    finished_steps=self._finished_steps,
+                )
             )
 
         # if no tool calls or final response, iterate again
@@ -290,8 +350,18 @@ class ReActWorkflow(Workflow):
         Returns:
             ReActPrepEvent: The event to prepare for the next iteration of the ReAct paradigm.
         """
+
+        self._total_steps += 1
         tool_calls = ev.tool_calls
         tools_by_name = {tool.metadata.get_name(): tool for tool in self.tools}
+
+        ctx.write_event_to_stream(
+            WorkflowStatusEvent(
+                msg=f"Making tool calls from {len(tool_calls)} selected tools.",
+                total_steps=self._total_steps,
+                finished_steps=self._finished_steps,
+            )
+        )
 
         # call tools -- safely!
         for tool_call in tool_calls:
@@ -304,7 +374,9 @@ class ReActWorkflow(Workflow):
                 )
                 ctx.write_event_to_stream(
                     WorkflowStatusEvent(
-                        msg=f"{ReActWorkflow.KEY_WARNING.capitalize()}: Tool {tool_call.tool_name} does not exist."
+                        msg=f"{ReActWorkflow.KEY_WARNING.capitalize()}: Tool {tool_call.tool_name} does not exist.",
+                        total_steps=self._total_steps,
+                        finished_steps=self._finished_steps,
                     )
                 )
                 continue
@@ -315,9 +387,12 @@ class ReActWorkflow(Workflow):
                 (await ctx.get(ReActWorkflow.KEY_CURRENT_REASONING, default=[])).append(
                     ObservationReasoningStep(observation=tool_output.content)
                 )
+                self._finished_steps += 1
                 ctx.write_event_to_stream(
                     WorkflowStatusEvent(
                         msg=f"{ReActWorkflow.KEY_OBSERVATION.capitalize()}: {tool_output.content}",
+                        total_steps=self._total_steps,
+                        finished_steps=self._finished_steps,
                     )
                 )
             except Exception as e:
@@ -326,9 +401,12 @@ class ReActWorkflow(Workflow):
                         observation="Error calling tool {tool.metadata.get_name()}: {e}"
                     )
                 )
+                self._finished_steps += 1
                 ctx.write_event_to_stream(
                     WorkflowStatusEvent(
-                        msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: Failed calling tool {tool.metadata.get_name()}: {e}"
+                        msg=f"{ReActWorkflow.KEY_ERROR.capitalize()}: Failed calling tool {tool.metadata.get_name()}: {e}",
+                        total_steps=self._total_steps,
+                        finished_steps=self._finished_steps,
                     )
                 )
 
