@@ -19,7 +19,7 @@ The tutorial uses the question _Which David Fincher film that stars Edward Norto
 The author further states that it is impossible "to answer this complex, multi-hop, logical question in one feed-forward pass of a neural network". At the end of the tutorial, the improved response to the question using agents that perform retrieval augmented generation (RAG) is seen to be the following.
 > None, as there is only one mentioned David Fincher film starring Edward Norton, which is "Fight Club" and it stars Brad Pitt.
 
-## Query decomposition, refinement and ReAct to the rescue
+## Agents as a solution
 
 This project implements an agent-based framework akin to the one mentioned in the tutorial [^1].
 
@@ -44,15 +44,8 @@ While ChatGPT did not make mistakes with the basic arithmetic operations, it cou
 
 The reason the `gpt-4o-mini` model is able to count the number of 'r's correctly is because DQA lets it use a function to calculate the occurrences of a specific character or a sequence of characters in a string.
 
-### The agent workflow
-The approximate the _Structured Sub-Question ReAct_ (SSQReAct) workflow can be summarised as follows.
-![SSQReAct workflow](./diagrams/ssqreact.svg)
-
-The DQA workflow uses a [self-discover](https://arxiv.org/abs/2402.03620) "agent" to produce a reasoning structure but not answer the question. Similar to the tutorial [^1], the DQA workflow performs query decomposition with respect to the reasoning structure to ensure that complex queries are not directly sent to the LLM. Instead, sub-questions (i.e., decompositions of the complex query) that help answer the complex query are sent. The workflow further optimises the sub-questions through a query refinement step, which loops if necessary, for a maximum number of allowed iterations.
-
-Once the refined sub-questions are satisfactory, the sub-questions are answered sequentially by separate instances of a [ReAct](https://arxiv.org/abs/2210.03629) "agent", also implemented as a workflow. ReAct workflows have the responses from previous ReAct workflows as contextual information.
-
-When all ReAct workflows have finished, the final step for answer generation collects the responses from the ReAct workflows and asks the LLM to generate a consolidated answer citing sources where relevant, in accordance with the initially generated reasoning structure.
+### The agent workflows
+With multiple workflows now available, check the [workflows page](./workflows.md) for further details.
 
 ### Response to the initial difficult question
 Recalling the litmus test question (i.e., _Which David Fincher film that stars Edward Norton does not star Brad Pitt?_), the response from DQA with `gpt-4o-mini` is correct, as in the answer is _none_, but the response is long-winded.
@@ -85,13 +78,9 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
-| September 20, 2024 |  active |  Workflows to be made selectable to be able to compare them.  |
-| September 17, 2024 |  active |  ReAct workflows handle questions sequentially instead of in parallel.  |
-| September 15, 2024 |  active |  Vector storage is not used as of now. Qdrant may be removed in the future.  |
+| September 21, 2024 |  active |  Workflows made selectable.  |
 | September 13, 2024 |  active |  Low parameter LLMs perform badly in unnecessary self-discovery, query refinements and ReAct tool selections.  |
-| September 12, 2024 |  active |  Self-discover may need to be conditionally bypassed to reduce the number of unnecessary LLM calls.  |
 | September 10, 2024 |  active |  Query decomposition may generate unnecessary sub-workflows.  |
-| September 7, 2024 |  active |  Cohere `command-r-plus` is _very_ slow.  |
 | August 31, 2024 |  active |  Using built-in ReAct agent.  |
 | August 29, 2024 |  active |  Project started.  |
 
@@ -117,6 +106,33 @@ python -m pip freeze | cut -d "@" -f1 | xargs pip uninstall -y
 ```
 
 In addition to Python dependencies, see the installation instructions of [Ollama](https://ollama.com/download). You can install it on a separate machine. Download the [tool calling model of Ollama](https://ollama.com/search?c=tools) that you want to use, e.g., `llama3.1` or `mistral-nemo`.
+
+## Environment variables
+
+Following is a list of environment variables that can be used to configure the DQA application. All environment variables should be supplied as quoted strings. They will be interpreted as the correct type as necessary.
+
+For environment variables starting with `GRADIO_`, See [Gradio documentation for environment variables](https://www.gradio.app/guides/environment-variables).
+
+| Variable |  Default value and description   |
+|--------------|----------------|
+| ANTHROPIC_API_KEY | [None] Check the [docs](https://docs.anthropic.com/en/api/getting-started) to get an API key. |
+| LLM__ANTHROPIC_MODEL | [claude-3-opus-20240229] See the [available models](https://docs.anthropic.com/en/docs/about-claude/models). |
+| OPENAI_API_KEY | [None] Check the [docs](https://platform.openai.com/) to get an API key. |
+| LLM__OPENAI_MODEL | [gpt-4o-mini] See the [available models](https://platform.openai.com/docs/models). |
+| COHERE_API_KEY | [None] Check the [docs](https://dashboard.cohere.com/) to get an API key. |
+| LLM__COHERE_MODEL | [command-r-plus] See the [available models](https://docs.cohere.com/docs/models). |
+| GROQ_API_KEY | [None] Check the [docs](https://console.groq.com/) to get an API key. |
+| LLM__GROQ_MODEL | [llama-3.1-70b-versatile] See the [available models](https://console.groq.com/docs/models). |
+| LLM__OLLAMA_URL | [http://localhost:11434] URL of your desired Ollama host. |
+| LLM__OLLAMA_MODEL | [mistral-nemo] See the [available models](https://ollama.com/library). |
+| LLM__PROVIDER | [Ollama] Select one from the following default list. |
+| SUPPORTED_LLM_PROVIDERS | [Anthropic:Open AI:Cohere:Groq:Ollama] Separator character is ":" |
+| LLM__TEMPERATURE | [0.0] Inferred type: `float` |
+| LLM__TOP_P | [0.4] Inferred type: `float` |
+| LLM__TOP_K | [40] Inferred type: `int` |
+| LLM__REPEAT_PENALTY | [1.1] Inferred type: `float` |
+| LLM__SEED | [1] Inferred type: `int` |
+| TAVILY_API_KEY | [None] Check the [docs](https://docs.tavily.com/docs/gpt-researcher/getting-started) to get an API key. |
 
 ## Usage (local)
 
