@@ -115,24 +115,24 @@ For environment variables starting with `GRADIO_`, See [Gradio documentation for
 
 | Variable |  [Default value] and description   |
 |--------------|----------------|
-| ANTHROPIC_API_KEY | [None] Check the [docs](https://docs.anthropic.com/en/api/getting-started) to get an API key. |
-| LLM__ANTHROPIC_MODEL | [claude-3-opus-20240229] See the [available models](https://docs.anthropic.com/en/docs/about-claude/models). |
-| OPENAI_API_KEY | [None] Check the [docs](https://platform.openai.com/) to get an API key. |
-| LLM__OPENAI_MODEL | [gpt-4o-mini] See the [available models](https://platform.openai.com/docs/models). |
-| COHERE_API_KEY | [None] Check the [docs](https://dashboard.cohere.com/) to get an API key. |
-| LLM__COHERE_MODEL | [command-r-plus] See the [available models](https://docs.cohere.com/docs/models). |
-| GROQ_API_KEY | [None] Check the [docs](https://console.groq.com/) to get an API key. |
-| LLM__GROQ_MODEL | [llama-3.1-70b-versatile] See the [available models](https://console.groq.com/docs/models). |
-| LLM__OLLAMA_URL | [http://localhost:11434] URL of your desired Ollama host. |
-| LLM__OLLAMA_MODEL | [mistral-nemo] See the [available models](https://ollama.com/library). The model must be available on the selected Ollama server. The model must [support tool calling]((https://ollama.com/search?c=tools)). |
+| `ANTHROPIC_API_KEY` | [None] Check the [docs](https://docs.anthropic.com/en/api/getting-started) to get an API key. |
+| `LLM__ANTHROPIC_MODEL` | [claude-3-opus-20240229] See the [available models](https://docs.anthropic.com/en/docs/about-claude/models). |
+| `OPENAI_API_KEY` | [None] Check the [docs](https://platform.openai.com/) to get an API key. |
+| `LLM__OPENAI_MODEL` | [gpt-4o-mini] See the [available models](https://platform.openai.com/docs/models). |
+| `COHERE_API_KEY` | [None] Check the [docs](https://dashboard.cohere.com/) to get an API key. |
+| `LLM__COHERE_MODEL` | [command-r-plus] See the [available models](https://docs.cohere.com/docs/models). |
+| `GROQ_API_KEY` | [None] Check the [docs](https://console.groq.com/) to get an API key. |
+| `LLM__GROQ_MODEL` | [llama-3.1-70b-versatile] See the [available models](https://console.groq.com/docs/models). |
+| `LLM__OLLAMA_URL` | [http://localhost:11434] URL of your desired Ollama host. |
+| `LLM__OLLAMA_MODEL` | [mistral-nemo] See the [available models](https://ollama.com/library). The model must be available on the selected Ollama server. The model must [support tool calling]((https://ollama.com/search?c=tools)). |
 | LLM__PROVIDER | [Ollama] Select one from the following default list. |
-| SUPPORTED_LLM_PROVIDERS | [Anthropic:Open AI:Cohere:Groq:Ollama] Separator character is ":". A subset of the default set of LLM providers may be used to restrict access in a particular deployment. |
-| LLM__TEMPERATURE | [0.0] Inferred type: `float`. This is the temperature setting for the LLM, which is between $[0, 1]$ for all supported LLM providers except Open AI, for which it is $[0, 2]$. |
-| LLM__TOP_P | [0.4] Inferred type: `float`. This is the nucleus sampling hyperparameter that controls the randomness of the LLM output. This parameter is only available when using the Ollama LLM provider. |
-| LLM__TOP_K | [40] Inferred type: `int`. This is the top-k setting for the LLM, which controls token selection. This parameter is only available when using the Ollama LLM provider. |
-| LLM__REPEAT_PENALTY | [1.1] Inferred type: `float`. This is a parameter to control repeated sequences in the output. This parameter is only available when using the Ollama LLM provider. |
-| LLM__SEED | [1] Inferred type: `int`. This parameter is used to initialise the LLM's sampling process. Any fixed value will result in a deterministic initialisation of the sampling process. This parameter is only available when using the Ollama LLM provider. |
-| TAVILY_API_KEY | [None] Check the [docs](https://docs.tavily.com/docs/gpt-researcher/getting-started) to get an API key. |
+| `SUPPORTED_LLM_PROVIDERS` | [Anthropic:Open AI:Cohere:Groq:Ollama] Separator character is ":". A subset of the default set of LLM providers may be used to restrict access in a particular deployment. |
+| `LLM__TEMPERATURE` | [0.0] Inferred type: `float`. This is the temperature setting for the LLM, which is between $[0, 1]$ for all supported LLM providers except Open AI, for which it is $[0, 2]$. |
+| `LLM__TOP_P` | [0.4] Inferred type: `float`. This is the nucleus sampling hyperparameter that controls the randomness of the LLM output. This parameter is only available when using the Ollama LLM provider. |
+| `LLM__TOP_K` | [40] Inferred type: `int`. This is the top-k setting for the LLM, which controls token selection. This parameter is only available when using the Ollama LLM provider. |
+| `LLM__REPEAT_PENALTY` | [1.1] Inferred type: `float`. This is a parameter to control repeated sequences in the output. This parameter is only available when using the Ollama LLM provider. |
+| `LLM__SEED` | [1] Inferred type: `int`. This parameter is used to initialise the LLM's sampling process. Any fixed value will result in a deterministic initialisation of the sampling process. This parameter is only available when using the Ollama LLM provider. |
+| `TAVILY_API_KEY` | [None] Check the [docs](https://docs.tavily.com/docs/gpt-researcher/getting-started) to get an API key. |
 
 ## Usage (local)
 
