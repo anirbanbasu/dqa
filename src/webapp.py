@@ -53,6 +53,8 @@ class GradioApp:
     LABEL_SHOW_SIDEBAR = "Show sidebar"
     LABEL_HIDE_SIDEBAR = "Hide sidebar"
 
+    LABEL_AGENT_RESPONSE = "Agent response"
+
     MD_EU_AI_ACT_TRANSPARENCY = """
     **European Union AI Act Transparency notice**: By using this app, you are interacting with an artificial intelligence (AI) system.
     _You are advised not to take any of its responses as facts_. The AI system is not a substitute for professional advice.
@@ -64,6 +66,7 @@ class GradioApp:
     CSS_CLASS_BUTTON_FIT_TRANSPARENT = "button-fit-transparent"
     CSS_CLASS_DIV_OUTLINED = "div-outlined"
     CSS_CLASS_DIV_PADDED = "div-padded"
+    CSS_CLASS_DIV_AGENT_RESPONSE_CONTAINER = "div-agent-response-container"
 
     CSS_GRADIO_APP = f"""
         .{CSS_CLASS_DIV_VERTICAL_ALIGNED} {{
@@ -87,6 +90,28 @@ class GradioApp:
 
         .{CSS_CLASS_DIV_PADDED} {{
             padding: 1rem;
+        }}
+
+        #{CSS_CLASS_DIV_AGENT_RESPONSE_CONTAINER} {{
+            position: relative;
+            width: auto;
+            height: auto;
+            border: 1px solid !important;
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-sizing: border-box;
+            margin-top: 20px;
+            background-color: var(--body-background-fill);
+        }}
+
+        #{CSS_CLASS_DIV_AGENT_RESPONSE_CONTAINER}::before {{
+            content: "{LABEL_AGENT_RESPONSE}";
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            padding: 2px 10px;
+            border: none;
+            background-color: var(--body-background-fill);
         }}
     """
 
@@ -758,13 +783,10 @@ class GradioApp:
                             interactive=True,
                         )
                     agent_response = gr.HTML(
-                        label="Agent response",
+                        label=GradioApp.LABEL_AGENT_RESPONSE,
                         value="The response from the agent(s) will appear here.",
-                        show_label=True,
-                        elem_classes=[
-                            GradioApp.CSS_CLASS_DIV_PADDED,
-                            GradioApp.CSS_CLASS_DIV_OUTLINED,
-                        ],
+                        show_label=False,
+                        elem_id=GradioApp.CSS_CLASS_DIV_AGENT_RESPONSE_CONTAINER,
                     )
 
             # Component actions
