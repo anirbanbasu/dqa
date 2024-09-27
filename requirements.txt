@@ -11,6 +11,9 @@ pytest
 llama-index
 llama-index-utils-workflow
 
+# LlamaIndex packs
+llama-index-packs-agents-lats
+
 # LlamaIndex storage
 # llama-index-vector-stores-qdrant
 # qdrant_client

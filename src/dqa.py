@@ -52,6 +52,7 @@ from utils import (
 
 from llama_index.core.llms.llm import LLM
 
+from workflows.lats import LATSWorkflow
 from workflows.react import ReActWorkflow
 from workflows.react_src import ReActWithStructuredReasoningInContextWorkflow
 from workflows.self_discover import SelfDiscoverWorkflow
@@ -79,6 +80,7 @@ class DQAEngine:
         self.tools.extend(DuckDuckGoFullSearchOnlyToolSpec().to_tool_list())
 
         self.available_workflows = [
+            LATSWorkflow,
             ReActWorkflow,
             SelfDiscoverWorkflow,
             ReActWithStructuredReasoningInContextWorkflow,
@@ -394,6 +396,9 @@ class DQAEngine:
         elif chosen_workflow == SelfDiscoverWorkflow:
             workflow_run_kwargs["task"] = query
         elif chosen_workflow == ReActWorkflow:
+            workflow_init_kwargs["tools"] = self.tools
+            workflow_run_kwargs["input"] = query
+        elif chosen_workflow == LATSWorkflow:
             workflow_init_kwargs["tools"] = self.tools
             workflow_run_kwargs["input"] = query
         else:
