@@ -23,15 +23,8 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
-from typing import Any, Optional
+from typing import Any
 
-from llama_index.core.prompts import PromptTemplate
-
-from llama_index.core.agent import (
-    ReActChatFormatter,
-)
-
-from llama_index.core.memory import ChatMemoryBuffer
 
 from llama_index.core.workflow import (
     step,
@@ -41,7 +34,6 @@ from llama_index.core.workflow import (
     StopEvent,
 )
 
-from utils import EMPTY_STRING
 from workflows.common import WorkflowStatusEvent
 
 from llama_index.core.llms.llm import LLM
@@ -71,11 +63,8 @@ class LATSWorkflow(Workflow):
         *args: Any,
         llm: LLM | None = None,
         tools: list[BaseTool] | None = None,
-        extra_context: str | None = None,
-        num_expansions: int = 4,
-        max_rollouts: int = 10,
-        reflection_prompt: Optional[PromptTemplate] = None,
-        candiate_expansion_prompt: Optional[PromptTemplate] = None,
+        num_expansions: int = 3,
+        max_rollouts: int = 6,
         **kwargs: Any,
     ) -> None:
         """Initialise the LATS workflow."""
@@ -87,12 +76,6 @@ class LATSWorkflow(Workflow):
         self.tools = tools
         self.num_expansions = num_expansions
         self.max_rollouts = max_rollouts
-        self.reflection_prompt = reflection_prompt
-        self.candiate_expansion_prompt = candiate_expansion_prompt
-        self.memory = ChatMemoryBuffer.from_defaults(llm=llm)
-        self.chat_formatter = ReActChatFormatter.from_defaults(
-            context=extra_context or EMPTY_STRING,
-        )
         self._total_steps: int = 0
         self._finished_steps: int = 0
 
