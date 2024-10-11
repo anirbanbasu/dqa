@@ -105,7 +105,7 @@ class GradioApp:
         }}
 
         #{CSS_CLASS_DIV_AGENT_RESPONSE_CONTAINER}::before {{
-            content: "{LABEL_AGENT_RESPONSE}";
+            content: "{EMPTY_STRING}";
             position: absolute;
             top: -10px;
             left: 20px;
@@ -437,7 +437,7 @@ class GradioApp:
                     line_breaks=True,
                     datatype="markdown",
                     column_widths=[1, 2],
-                    height=300,
+                    # height=300,
                 )
 
             with gr.Accordion(label="Workflow information", open=False):
@@ -749,6 +749,7 @@ class GradioApp:
                     btn_theme_toggle = gr.Button(
                         GradioApp.LABEL_THEME_TOGGLE,
                         size="sm",
+                        visible=False,
                     )
                     btn_sidebar_toggle = gr.Button(
                         GradioApp.LABEL_SHOW_SIDEBAR,
