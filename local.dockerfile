@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Pull Python on Debian image
-FROM python:3.12.5-slim-bookworm AS build
+FROM python:3.14.0a3-slim-bookworm AS build
 
 # Upgrade and install basic packages
 RUN apt-get update && apt-get -y upgrade && apt-get -y install build-essential curl
@@ -46,7 +46,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 RUN ${VIRTUAL_ENV}/bin/pip install --no-cache-dir -U -r requirements.txt
 
 # [Multi-stage build](https://docs.docker.com/build/building/multi-stage/) to reduce the size of the final image to about 30% of the original size!
-FROM python:3.12.5-slim-bookworm
+FROM python:3.14.0a3-slim-bookworm
 
 # Create a non-root user. The home directory is used for caching stuff, e.g., from Hugging Face Transformers
 RUN useradd -m -u 1000 app_user
