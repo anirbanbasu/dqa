@@ -8,6 +8,8 @@
   <img width="400" height="200" src="https://raw.githubusercontent.com/anirbanbasu/dqa/master/assets/logo.svg" alt="dqa logo" style="filter: invert(0.5)">
 </p>
 
+**Jan 26, 2025: The project is undergoing major restructuring. The README below is completely out-of-date.**
+
 ## Overview
 
 The DQA aka _difficult questions attempted_ project utilises one or more agents to facilitate large language models (LLMs) perform _multi-hop question answering_ (MHQA). This project is inspired by a tutorial [^1] from [Dean Sacoransky](https://www.linkedin.com/in/dean-sacoransky-6a671119a/). Unlike the tutorial's use of the [LangGraph framework from LangChain](https://langchain-ai.github.io/langgraph/) for building agents, this project makes use of [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/module_guides/workflow/).
@@ -190,4 +192,4 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ## License
 
-[Apache License 2.0](https://choosealicense.com/licenses/apache-2.0/).
+[MIT](https://choosealicense.com/licenses/mit/).

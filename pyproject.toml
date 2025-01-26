@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "dqa"
+version = "0.1.0"
+description = "Difficult Questions Attempted - multi-hop question answering (MHQA) with language models."
+authors = ["Anirban Basu <anirbanbasu@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.scripts]
+dqa-webapp = 'dqa.webapp.app:main'
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+dspy = {git = "https://github.com/stanfordnlp/dspy.git"}
+gradio = "^5.13.1"
+python-dotenv = "^1.0.1"
+
+
+[tool.poetry.group.dev.dependencies]
+icecream = "^2.1.4"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
