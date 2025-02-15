@@ -11,4 +11,6 @@ class QASignature(dspy.Signature):
     reasoning: Optional[str] = dspy.OutputField(
         description="The optional reasoning behind the answer. This can be empty or None."
     )
-    output: str = dspy.OutputField(description="The answer to the question.")
+    output: str = dspy.OutputField(
+        description="The answer to the question, formatted as Markdown."
+    )

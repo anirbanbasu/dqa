@@ -9,6 +9,11 @@ from dotenv import load_dotenv
 import dspy
 
 from dqa.utils import parse_env
+from dqa.webapp.adapters import (
+    LM_OUTPUT_KEY_REASONING,
+    MODEL_NAME_PREFIX_DEEPSEEK,
+    DeepseekAdapter,
+)
 from dqa.webapp.modules import QASignature
 
 
@@ -32,20 +37,36 @@ class GradioApp:
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
         self.interface: gr.Blocks = None
-        self.lm = dspy.LM(f"ollama/{parse_env('LLM__OLLAMA_MODEL')}")
+        self.model_name: str = parse_env("LLM__OLLAMA_MODEL")
+        self.is_model_deepseek: bool = self.model_name.startswith(
+            MODEL_NAME_PREFIX_DEEPSEEK
+        )
+        self.lm = dspy.LM(f"ollama/{self.model_name}")
         dspy.configure(
             lm=self.lm,
             experimental=True,
             cache=True,
+            adapter=(
+                DeepseekAdapter() if self.is_model_deepseek else dspy.JSONAdapter()
+            ),
         )
 
-        self.program = dspy.streamify(dspy.ChainOfThought(QASignature))
+        self.program = dspy.streamify(
+            dspy.Predict(signature=QASignature, max_tokens=131702)
+            if self.is_model_deepseek
+            else dspy.ChainOfThought(QASignature)
+        )
 
     async def respond_to_question(self, question: str):
         intermediate_output: str = ""
+        if question is None or question.strip() == "":
+            raise gr.Error("Please enter a question to get an answer.")
         async for chunk in self.program(question=question):
-            if hasattr(chunk, "output") and hasattr(chunk, "reasoning"):
-                yield chunk.output, chunk.reasoning
+            if hasattr(chunk, "output") and hasattr(chunk, LM_OUTPUT_KEY_REASONING):
+                yield (
+                    chunk.output,
+                    (chunk.reasoning if chunk.reasoning else intermediate_output),
+                )
             else:
                 intermediate_output += str(chunk.choices[0].delta.content)
                 yield None, intermediate_output
@@ -81,23 +102,24 @@ class GradioApp:
                     )
                     gr.Examples(
                         [
-                            "What is the most culturally important city of Japan? Give reasons for your answer.",
-                            "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter. Then, she went to the market to buy 6 more oranges. On the way back, she ate one apple. How many oranges does Heidi have left?",
+                            "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
+                            "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
+                            "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
+                            "I am an odd number. Take away one letter and I become even. What number am I?",
+                            "Using only an addition, how do you add eight 8's and get the number 1000?",
+                            "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
+                            "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some multiple of her age?",
                         ],
                         text_question,
                     )
-                btn_ask = gr.Button("Ask", size="md", variant="primary")
+                btn_ask = gr.Button(
+                    f"Ask {self.model_name}", size="lg", variant="primary"
+                )
             md_answer = gr.Markdown(label="Answer", show_label=True, container=True)
             md_reasoning = gr.Markdown(
                 label="Reasoning", show_label=True, container=True
             )
 
-            text_question.submit(
-                fn=self.respond_to_question,
-                inputs=[text_question],
-                scroll_to_output=True,
-                outputs=[md_answer, md_reasoning],
-            )
             btn_ask.click(
                 fn=self.respond_to_question,
                 inputs=[text_question],
