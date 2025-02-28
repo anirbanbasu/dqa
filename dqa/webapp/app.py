@@ -12,7 +12,7 @@ from dqa.utils import parse_env
 from dqa.webapp.adapters import (
     LM_OUTPUT_KEY_REASONING,
     MODEL_NAME_PREFIX_DEEPSEEK,
-    DeepseekAdapter,
+    DeepseekJSONAdapter,
 )
 from dqa.webapp.modules import QASignature
 
@@ -47,7 +47,7 @@ class GradioApp:
             experimental=True,
             cache=True,
             adapter=(
-                DeepseekAdapter() if self.is_model_deepseek else dspy.JSONAdapter()
+                DeepseekJSONAdapter() if self.is_model_deepseek else dspy.JSONAdapter()
             ),
         )
 

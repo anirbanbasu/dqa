@@ -1,4 +1,5 @@
 import logging
+from typing import Dict, List, Tuple
 import dspy
 import litellm
 
@@ -14,9 +15,9 @@ MODEL_NAME_PREFIX_DEEPSEEK = "deepseek"
 LM_OUTPUT_KEY_REASONING = "reasoning"
 
 
-class DeepseekAdapter(dspy.JSONAdapter):
+class DeepseekJSONAdapter(dspy.JSONAdapter):
     def __call__(self, lm, lm_kwargs, signature, demos, inputs):
-        inputs = super(DeepseekAdapter, self).format(signature, demos, inputs)
+        inputs = super(DeepseekJSONAdapter, self).format(signature, demos, inputs)
         inputs = (
             dict(prompt=inputs) if isinstance(inputs, str) else dict(messages=inputs)
         )
@@ -34,7 +35,7 @@ class DeepseekAdapter(dspy.JSONAdapter):
                         **inputs,
                         **lm_kwargs,
                         response_format=response_format,
-                        strict=True,
+                        # stream=True if "stream" in params else False,
                     )
                 except Exception:
                     logger.debug(
@@ -43,7 +44,10 @@ class DeepseekAdapter(dspy.JSONAdapter):
                         " Exception: {e}"
                     )
                     outputs = lm(
-                        **inputs, **lm_kwargs, response_format={"type": "json_object"}
+                        **inputs,
+                        **lm_kwargs,
+                        response_format={"type": "json_object"},
+                        # stream=True if "stream" in params else False
                     )
             else:
                 outputs = lm(**inputs, **lm_kwargs)
@@ -56,9 +60,15 @@ class DeepseekAdapter(dspy.JSONAdapter):
         for output in outputs:
             thinking_start_splits = output.split("<think>")
             thinking_end_splits = output.split("</think>")
-            reasoning = thinking_start_splits[1].split("</think>")[0].strip()
+            reasoning = (
+                thinking_start_splits[1].split("</think>")[0].strip()
+                if len(thinking_start_splits) > 1
+                else output
+            )
             response = (
-                thinking_end_splits[1].strip() if len(thinking_end_splits) > 1 else None
+                thinking_end_splits[1].strip()
+                if len(thinking_end_splits) > 1
+                else output
             )
             if LM_OUTPUT_KEY_REASONING in signature.output_fields.keys():
                 value = self.parse(signature, response)
@@ -73,7 +83,7 @@ class DeepseekAdapter(dspy.JSONAdapter):
                         value[next(iter(set_of_fields_excluding_reasoning))] = response
                 value[LM_OUTPUT_KEY_REASONING] = reasoning
             else:
-                value = super(DeepseekAdapter, self).parse(signature, output)
+                value = super(DeepseekJSONAdapter, self).parse(signature, output)
 
             values.append(value)
 
@@ -83,6 +93,13 @@ class DeepseekAdapter(dspy.JSONAdapter):
         if not completion:
             return {}
         fields = json_repair.loads(completion)
+        if (
+            not isinstance(fields, Dict)
+            and not isinstance(fields, List)
+            and not isinstance(fields, Tuple)
+        ):
+            # If the completion not a dictionary, a list or a tuple, do not try to parse it as a JSON dictionary
+            return {}
         fields = {k: v for k, v in fields.items() if k in signature.output_fields}
 
         # attempt to cast each value to type signature.output_fields[k].annotation
