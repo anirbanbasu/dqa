@@ -31,7 +31,7 @@ class DQAAgent:
         "If you cannot answer the question, respond with 'I don't know'. "
     )
 
-    def __init__(self):
+    def __init__(self, use_mcp: bool = True):
         """Initialize the DQA Agent."""
         llm_config_file = parse_env(
             EnvironmentVariables.DQA_LLM_CONFIG,
@@ -44,20 +44,22 @@ class DQAAgent:
         self.memory = MemorySaver()
         self.model = ChatOllama(**self.llm_config)
         self.tools = [DuckDuckGoSearchResults()]
-        with open(
-            parse_env(
-                EnvironmentVariables.DQA_MCP_CLIENT_CONFIG,
-                EnvironmentVariables.DEFAULT_DQA_MCP_CLIENT_CONFIG,
-            ),
-            "r",
-        ) as f:
-            mcp_config = json.load(f)
-            f.close()
-        client = MultiServerMCPClient(connections=mcp_config)
+        ic(use_mcp)
+        if use_mcp:
+            with open(
+                parse_env(
+                    EnvironmentVariables.DQA_MCP_CLIENT_CONFIG,
+                    EnvironmentVariables.DEFAULT_DQA_MCP_CLIENT_CONFIG,
+                ),
+                "r",
+            ) as f:
+                mcp_config = json.load(f)
+                f.close()
+            client = MultiServerMCPClient(connections=mcp_config)
 
-        mcp_tools = asyncio.get_event_loop().run_until_complete(client.get_tools())
-        if mcp_tools:
-            self.tools.extend(mcp_tools)
+            mcp_tools = asyncio.get_event_loop().run_until_complete(client.get_tools())
+            if mcp_tools:
+                self.tools.extend(mcp_tools)
         self.graph = create_react_agent(
             model=self.model,
             prompt=DQAAgent.SYSTEM_INSTRUCTION,

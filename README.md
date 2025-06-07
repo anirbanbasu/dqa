@@ -53,9 +53,22 @@ When running the provided MCP server, the following environment variables can be
 
 | Variable |  [Default value] and description   |
 |--------------|----------------|
+| `DQA_MCP_CLIENT_CONFIG` | [`config/mcp-client.json`] The path to the config file for providing a set of MCP servers. |
+| `DQA_USE_MCP` | [`True`] If this is set to True, then make sure that the MCP client configuration points to available MCP server(s). You may want to run the provided MCP server. See below for instructions regarding that. |
 | `DQA_LLM_CONFIG` | [`config/chat-ollama.json`] The path to the config file for the Ollama LLM provider. |
 | `LLM__OLLAMA_MODEL` | [mistral-nemo] See the [available models](https://ollama.com/library). The model must be available on the selected Ollama server. The model must [support tool calling](https://ollama.com/search?c=tools). |
 | `DQA_MCP_SERVER_TRANSPORT` | [sse] The acceptable options are either `sse` or `streamable-http`. |
+
+The structure of the MCP configuration file is as follows. Note that while the configuration supports the `stdio` transport, the DQA agent is configured to support only `streamable_http` or `sse`, which are also the allowed modes for the DQA MCP server. For examples of the configuration, see [the LangChain MCP adapters](https://github.com/langchain-ai/langchain-mcp-adapters).
+
+```json
+{
+  "<name>": {
+    "transport": "<Either streamable_http or sse>",
+    "url": "<url-of-the-remote-server>"
+  }
+}
+```
 
 The structure of the LLM config JSON file is as follows. The full list of acceptable configuration parameters for the Ollama LLM is available in [the LangChain documentation](https://python.langchain.com/api_reference/ollama/chat_models/langchain_ollama.chat_models.ChatOllama.html).
 

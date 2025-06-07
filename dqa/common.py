@@ -16,6 +16,9 @@ class EnvironmentVariables:
     DQA_LLM_CONFIG = "DQA_LLM_CONFIG"
     DEFAULT__DQA_LLM_CONFIG = "config/chat-ollama.json"
 
+    DQA_USE_MCP = "DQA_USE_MCP"
+    DEFAULT_DQA_USE_MCP = "True"
+
     DQA_MCP_CLIENT_CONFIG = "DQA_MCP_CLIENT_CONFIG"
     DEFAULT_DQA_MCP_CLIENT_CONFIG = "config/mcp-client.json"
 

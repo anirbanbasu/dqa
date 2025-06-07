@@ -8,8 +8,10 @@ from rich import print as print
 from dotenv import load_dotenv
 
 from dqa.agent.dqa import DQAAgent
-from dqa.common import ic
+from dqa.common import EnvironmentVariables, ic
 from langchain_core.messages import AIMessage, ToolMessage
+
+from dqa.utils import parse_env
 
 
 class GradioApp:
@@ -32,7 +34,13 @@ class GradioApp:
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
         self.interface: gr.Blocks = None
-        self.program = DQAAgent()
+        self.program = DQAAgent(
+            use_mcp=parse_env(
+                EnvironmentVariables.DQA_USE_MCP,
+                EnvironmentVariables.DEFAULT_DQA_USE_MCP,
+                type_cast=bool,
+            )
+        )
 
     async def respond_to_question(
         self, question: str, chat_history: list[dict], request: gr.Request
