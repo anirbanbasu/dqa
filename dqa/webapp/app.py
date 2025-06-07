@@ -1,6 +1,7 @@
 import signal
 import sys
 import gradio as gr
+from gradio import ChatMessage
 
 from rich import print as print
 
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 
 from dqa.agent.dqa import DQAAgent
 from dqa.common import ic
+from langchain_core.messages import AIMessage, ToolMessage
 
 
 class GradioApp:
@@ -32,27 +34,35 @@ class GradioApp:
         self.interface: gr.Blocks = None
         self.program = DQAAgent()
 
-    async def respond_to_question(self, question: str):
+    async def respond_to_question(
+        self, question: str, chat_history: list[dict], request: gr.Request
+    ):
+        if request is None:
+            raise gr.Error(
+                "Request object is not available but is required to identify the session. Cannot communicate with the agent!"
+            )
         if question is None or question.strip() == "":
             raise gr.Error("Please enter a question to get an answer.")
-        async for chunk in self.program.astream(query=question, context_id="gradio"):
+        if chat_history is None:
+            chat_history = []
+        chat_history.append(ChatMessage(role="user", content=question))
+        yield None, chat_history
+        # Use request.session_hash to distiguish between different sessions when dethaling with the agent's memory
+        tools_used = set()
+        async for chunk in self.program.astream(
+            query_history=chat_history, context_id=request.session_hash
+        ):
             ic(chunk)
-            if "is_task_complete" in chunk and "require_user_input" in chunk:
-                if (
-                    chunk["is_task_complete"] is False
-                    and chunk["require_user_input"] is False
-                ):
-                    yield None, chunk["content"]
-                elif (
-                    chunk["is_task_complete"] is False
-                    and chunk["require_user_input"] is True
-                ):
-                    yield (
-                        None,
-                        f"The AI system requires additional input to proceed. {chunk['content']}",
-                    )
-                else:
-                    yield chunk["content"], None
+            if isinstance(chunk, AIMessage):
+                chat_history.append(
+                    ChatMessage(role="assistant", content=chunk.content)
+                )
+            elif isinstance(chunk, ToolMessage):
+                tools_used.add(chunk.name)
+                chat_history[-1].metadata = {
+                    "title": f"🛠️ Used tool(s) {', '.join(list(tools_used))}"
+                }
+            yield None, chat_history
 
     def create_ui(self):
         with gr.Blocks(
@@ -78,38 +88,44 @@ class GradioApp:
             gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
             with gr.Row(equal_height=True):
                 with gr.Column(scale=3):
-                    text_question = gr.Textbox(
-                        label="Question",
-                        placeholder="What is the capital of Japan?",
-                        lines=4,
+                    chatbot = gr.Chatbot(
+                        type="messages",
+                        label="Chat with the agent",
                     )
-                    gr.Examples(
-                        [
-                            "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
-                            "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
-                            "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
-                            "I am an odd number. Take away one letter and I become even. What number am I?",
-                            "Using only an addition, how do you add eight 8's and get the number 1000?",
-                            "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
-                            "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some multiple of her age?",
-                        ],
-                        text_question,
-                    )
-                btn_ask = gr.Button(
-                    f"Ask {self.program.llm_config['model']}",
-                    size="lg",
-                    variant="primary",
-                )
-            md_answer = gr.Markdown(label="Answer", show_label=True, container=True)
-            md_reasoning = gr.Markdown(
-                label="Reasoning", show_label=True, container=True
+                    with gr.Row(equal_height=True):
+                        text_question = gr.Textbox(
+                            label="Question",
+                            placeholder="What is the capital of Japan?",
+                            scale=3,
+                        )
+                        btn_ask = gr.Button(
+                            f"Ask {self.program.llm_config['model']}",
+                            size="lg",
+                            variant="primary",
+                        )
+            gr.Examples(
+                [
+                    "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
+                    "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
+                    "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
+                    "I am an odd number. Take away one letter and I become even. What number am I?",
+                    "Using only an addition, how do you add eight 8's and get the number 1000?",
+                    "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
+                    "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some multiple of her age?",
+                ],
+                text_question,
+            )
+
+            text_question.submit(
+                fn=self.respond_to_question,
+                inputs=[text_question, chatbot],
+                outputs=[text_question, chatbot],
             )
 
             btn_ask.click(
                 fn=self.respond_to_question,
-                inputs=[text_question],
-                scroll_to_output=True,
-                outputs=[md_answer, md_reasoning],
+                inputs=[text_question, chatbot],
+                outputs=[text_question, chatbot],
             )
 
         return self.interface
