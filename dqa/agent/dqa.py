@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Any, AsyncIterable, Literal
 from langchain_ollama import ChatOllama
@@ -10,6 +11,7 @@ from dqa.common import EnvironmentVariables
 from dqa.utils import parse_env
 from dqa.common import ic
 
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_community.tools import DuckDuckGoSearchResults
 
 
@@ -24,6 +26,8 @@ class DQAAgent:
     SYSTEM_INSTRUCTION = (
         "You are a specialised assistant for answering multi-hop questions. "
         "Your task is to answer the user's question by breaking it down into smaller, manageable sub-questions. "
+        "You will use the tools provided to gather information and answer the question. "
+        "If you use a tool, you must summarise the tool response in your final answer. "
         "Do not attempt to answer unrelated questions or use tools for other purposes. "
         "Set response status to input_required if the user needs to provide more information."
         "Set response status to error if there is an error while processing the request."
@@ -33,8 +37,8 @@ class DQAAgent:
     def __init__(self):
         """Initialize the DQA Agent."""
         llm_config_file = parse_env(
-            EnvironmentVariables.ENVVAR__DQA_LLM_CONFIG,
-            EnvironmentVariables.ENVVAR_DEFAULT__DQA_LLM_CONFIG,
+            EnvironmentVariables.DQA_LLM_CONFIG,
+            EnvironmentVariables.DEFAULT__DQA_LLM_CONFIG,
         )
         with open(llm_config_file, "r") as f:
             self.llm_config = json.load(f)
@@ -42,20 +46,36 @@ class DQAAgent:
         ic(self.llm_config, type(self.llm_config))
         self.memory = MemorySaver()
         self.model = ChatOllama(**self.llm_config)
+        self.tools = [DuckDuckGoSearchResults()]
+        with open(
+            parse_env(
+                EnvironmentVariables.DQA_MCP_CLIENT_CONFIG,
+                EnvironmentVariables.DEFAULT_DQA_MCP_CLIENT_CONFIG,
+            ),
+            "r",
+        ) as f:
+            mcp_config = json.load(f)
+            f.close()
+        client = MultiServerMCPClient(connections=mcp_config)
+
+        mcp_tools = asyncio.get_event_loop().run_until_complete(client.get_tools())
+        if mcp_tools:
+            ic(mcp_tools, mcp_config)
+            self.tools.extend(mcp_tools)
         self.graph = create_react_agent(
             model=self.model,
             prompt=DQAAgent.SYSTEM_INSTRUCTION,
             checkpointer=self.memory,
-            tools=[DuckDuckGoSearchResults()],
+            tools=self.tools,
             response_format=ResponseFormat,
         )
 
-    def invoke(self, query, context_id) -> str:
+    async def ainvoke(self, query, context_id) -> str:
         config = {"configurable": {"thread_id": context_id}}
-        self.graph.invoke({"messages": [("user", query)]}, config)
+        await self.graph.ainvoke({"messages": [("user", query)]}, config)
         return self.get_agent_response(config)
 
-    async def stream(self, query, context_id) -> AsyncIterable[dict[str, Any]]:
+    async def astream(self, query, context_id) -> AsyncIterable[dict[str, Any]]:
         inputs = {"messages": [("user", query)]}
         config = {"configurable": {"thread_id": context_id}}
 
@@ -84,6 +104,7 @@ class DQAAgent:
         current_state = self.graph.get_state(config)
         structured_response = current_state.values.get("structured_response")
         if structured_response and isinstance(structured_response, ResponseFormat):
+            ic(structured_response)
             if structured_response.status == "input_required":
                 return {
                     "is_task_complete": False,

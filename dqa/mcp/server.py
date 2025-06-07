@@ -6,8 +6,10 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from rich import print as print
-from dqa.common import EnvironmentVariables, ic
+from dqa.common import EnvironmentVariables, MCPParameters, ic
 from dqa.utils import parse_env
+
+from dqa.mcp.arithmetic import app as arithmetic_mcp
 
 app = FastMCP(
     name="dqa-mcp",
@@ -57,11 +59,18 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     print("[green]Starting DQA MCP server, press CTRL+C to exit...[/green]")
-    app.run_(
+    app.mount(
+        prefix="arithmetic",
+        server=arithmetic_mcp,
+        tool_separator=MCPParameters.TOOL_SEPARATOR,
+        resource_separator=MCPParameters.RESOURCE_SEPARATOR,
+        prompt_separator=MCPParameters.PROMPT_SEPARATOR,
+    )
+    app.run(
         transport=parse_env(
-            EnvironmentVariables.ENVVAR_DQA__MCP_SERVER_TRANSPORT,
-            default_value=EnvironmentVariables.ENVVAR_DEFAULT_DQA__MCP_SERVER_TRANSPORT,
-            allowed_values=EnvironmentVariables.ENVVAR_ALLOWED__DQA_MCP_SERVER_TRANSPORT,
+            EnvironmentVariables.DQA__MCP_SERVER_TRANSPORT,
+            default_value=EnvironmentVariables.DEFAULT_DQA__MCP_SERVER_TRANSPORT,
+            allowed_values=EnvironmentVariables.ALLOWED__DQA_MCP_SERVER_TRANSPORT,
         )
     )
 

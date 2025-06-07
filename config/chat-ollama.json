@@ -1,4 +1,4 @@
 {
   "baseUrl": "http://localhost:11434",
-  "model": "mistral-nemo"
+  "model": "llama3.1"
 }

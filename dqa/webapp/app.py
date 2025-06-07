@@ -35,7 +35,7 @@ class GradioApp:
     async def respond_to_question(self, question: str):
         if question is None or question.strip() == "":
             raise gr.Error("Please enter a question to get an answer.")
-        async for chunk in self.program.stream(query=question, context_id="gradio"):
+        async for chunk in self.program.astream(query=question, context_id="gradio"):
             ic(chunk)
             if "is_task_complete" in chunk and "require_user_input" in chunk:
                 if (
