@@ -26,11 +26,10 @@ class DQAAgent:
     SYSTEM_INSTRUCTION = (
         "You are a specialised assistant for answering multi-hop questions. "
         "Your task is to answer the user's question by breaking it down into smaller, manageable sub-questions. "
-        "You will use the tools provided to gather information and answer the question. "
+        "You should use the tools provided to gather information and answer each sub-question. "
         "If you use a tool, you must summarise the tool response in your final answer. "
-        "Do not attempt to answer unrelated questions or use tools for other purposes. "
-        "Set response status to input_required if the user needs to provide more information."
-        "Set response status to error if there is an error while processing the request."
+        "Set response status to input_required if the user needs to provide more information to continue answering the given question. "
+        "Set response status to error if there is an error while processing the request. "
         "Set response status to completed if the request is complete."
     )
 
@@ -79,8 +78,9 @@ class DQAAgent:
         inputs = {"messages": [("user", query)]}
         config = {"configurable": {"thread_id": context_id}}
 
-        for item in self.graph.stream(inputs, config, stream_mode="values"):
+        async for item in self.graph.astream(inputs, config, stream_mode="values"):
             message = item["messages"][-1]
+            ic(message, type(message))
             if (
                 isinstance(message, AIMessage)
                 and message.tool_calls
@@ -104,7 +104,6 @@ class DQAAgent:
         current_state = self.graph.get_state(config)
         structured_response = current_state.values.get("structured_response")
         if structured_response and isinstance(structured_response, ResponseFormat):
-            ic(structured_response)
             if structured_response.status == "input_required":
                 return {
                     "is_task_complete": False,
