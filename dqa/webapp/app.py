@@ -6,15 +6,8 @@ from rich import print as print
 
 from dotenv import load_dotenv
 
-import dspy
-
-from dqa.utils import parse_env
-from dqa.webapp.adapters import (
-    LM_OUTPUT_KEY_REASONING,
-    MODEL_NAME_PREFIX_DEEPSEEK,
-    DeepseekJSONAdapter,
-)
-from dqa.webapp.modules import QASignature
+from dqa.agent.dqa import DQAAgent
+from dqa.common import ic
 
 
 class GradioApp:
@@ -37,39 +30,29 @@ class GradioApp:
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
         self.interface: gr.Blocks = None
-        self.model_name: str = parse_env("LLM__OLLAMA_MODEL")
-        self.is_model_deepseek: bool = self.model_name.startswith(
-            MODEL_NAME_PREFIX_DEEPSEEK
-        )
-        self.lm = dspy.LM(f"ollama/{self.model_name}")
-        dspy.configure(
-            lm=self.lm,
-            experimental=True,
-            cache=True,
-            adapter=(
-                DeepseekJSONAdapter() if self.is_model_deepseek else dspy.JSONAdapter()
-            ),
-        )
-
-        self.program = dspy.streamify(
-            dspy.Predict(signature=QASignature, max_tokens=131702)
-            if self.is_model_deepseek
-            else dspy.ChainOfThought(QASignature)
-        )
+        self.program = DQAAgent()
 
     async def respond_to_question(self, question: str):
-        intermediate_output: str = ""
         if question is None or question.strip() == "":
             raise gr.Error("Please enter a question to get an answer.")
-        async for chunk in self.program(question=question):
-            if hasattr(chunk, "output") and hasattr(chunk, LM_OUTPUT_KEY_REASONING):
-                yield (
-                    chunk.output,
-                    (chunk.reasoning if chunk.reasoning else intermediate_output),
-                )
-            else:
-                intermediate_output += str(chunk.choices[0].delta.content)
-                yield None, intermediate_output
+        async for chunk in self.program.stream(query=question, context_id="gradio"):
+            ic(chunk)
+            if "is_task_complete" in chunk and "require_user_input" in chunk:
+                if (
+                    chunk["is_task_complete"] is False
+                    and chunk["require_user_input"] is False
+                ):
+                    yield None, chunk["content"]
+                elif (
+                    chunk["is_task_complete"] is False
+                    and chunk["require_user_input"] is True
+                ):
+                    yield (
+                        None,
+                        f"The AI system requires additional input to proceed. {chunk['content']}",
+                    )
+                else:
+                    yield chunk["content"], None
 
     def create_ui(self):
         with gr.Blocks(
@@ -113,7 +96,9 @@ class GradioApp:
                         text_question,
                     )
                 btn_ask = gr.Button(
-                    f"Ask {self.model_name}", size="lg", variant="primary"
+                    f"Ask {self.program.llm_config['model']}",
+                    size="lg",
+                    variant="primary",
                 )
             md_answer = gr.Markdown(label="Answer", show_label=True, container=True)
             md_reasoning = gr.Markdown(

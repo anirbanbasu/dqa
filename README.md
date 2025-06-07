@@ -21,6 +21,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
+| June 7, 2025 |  active |  Changed package and project manager to `uv` from `poetry`. Changed LLM orchestration to LangChain/LangGraph from DSPy. Added supporting MCP server. |
 | February 15, 2025 |  active |  Custom adapter added for Deepseek models.  |
 | January 26, 2025 |  active |  LlamaIndex Workflows replaced by DSPy.  |
 | September 21, 2024 |  active |  Workflows made selectable.  |
@@ -32,13 +33,15 @@ Following is a table of some updates regarding the project status. Note that the
 
 ## Installation
 
-Install and activate a Python virtual environment in the directory where you have cloned this repository. Let us refer to this directory as the _working directory_ or _WD_ (interchangeably) hereonafter. Install [poetry](https://python-poetry.org/docs/). Make sure you use Python 3.12.0 or later. To install the project with its dependencies in a virtual environment, run the following in the _WD_.
+The directory where you clone this repository will be referred to as the _working directory_ or _WD_ hereinafter.
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/). To install the project with its essential dependencies in a virtual environment, run the following in the _WD_. To install all non-essential dependencies, add the `--all-extras` flag to the following command.
 
 ```bash
-poetry install
+uv sync
 ```
 
-In addition to Python dependencies, see the installation instructions of [Ollama](https://ollama.com/download). You can install it on a separate machine. Download the [tool calling model of Ollama](https://ollama.com/search?c=tools) that you want to use, e.g., `llama3.1` or `mistral-nemo`. Reinforcement learning based models such as `deepseek-r1:7b` will also work.
+In addition to project dependencies, see the installation instructions of [Ollama](https://ollama.com/download). You can also install it on a separate machine. Download a [tool calling model of Ollama](https://ollama.com/search?c=tools) that you want to use, e.g., `llama3.1` or `mistral-nemo`.
 
 ## Environment variables
 
@@ -46,17 +49,41 @@ Following is a list of environment variables that can be used to configure the D
 
 For environment variables starting with `GRADIO_`, See [Gradio documentation for environment variables](https://www.gradio.app/guides/environment-variables).
 
+When running the provided MCP server, the following environment variables can be specified, prefixed with `FASTMCP_SERVER_`: `HOST`, `PORT`, `DEBUG` and `LOG_LEVEL`. See [key configuration options](https://gofastmcp.com/servers/fastmcp#key-configuration-options) for FastMCP. Note that `on_duplicate_` prefixed options specified as environment variables _will be ignored_.
+
 | Variable |  [Default value] and description   |
 |--------------|----------------|
-| `OLLAMA_URL` | [http://localhost:11434] URL of your intended Ollama host. |
-| `LLM__OLLAMA_MODEL` | [mistral-nemo] See the [available models](https://ollama.com/library). The model must be available on the selected Ollama server. The model must [support tool calling]((https://ollama.com/search?c=tools)). |
+| `DQA_LLM_CONFIG` | [`config/chat-ollama.json`] The path to the config file for the Ollama LLM provider. |
+| `LLM__OLLAMA_MODEL` | [mistral-nemo] See the [available models](https://ollama.com/library). The model must be available on the selected Ollama server. The model must [support tool calling](https://ollama.com/search?c=tools). |
+| `DQA_MCP_SERVER_TRANSPORT` | [sse] The acceptable options are either `sse` or `streamable-http`. |
 
-## Usage (local)
+The structure of the LLM config JSON file is as follows. The full list of acceptable configuration parameters for the Ollama LLM is available in [the LangChain documentation](https://python.langchain.com/api_reference/ollama/chat_models/langchain_ollama.chat_models.ChatOllama.html).
 
-Create a `.env` file in the _working directory_, to set the environment variables as above. Then, run the following in the _WD_ to start the web server.
+```json
+{
+    "baseUrl": "<model-provider-url>",
+    "model": "<model-name>"
+}
+```
+
+## Usage
+
+Create a `.env` file in the _WD_, to set the environment variables as above, if you want to use anything other than the default settings.
+
+### Optional DQA MCP server
+
+Run the following in the _WD_ to start the MCP server.
 
 ```bash
-poetry run dqa-webapp
+uv run dqa-mcp
+```
+
+### DQA webapp
+
+Run the following in the _WD_ to start the web server.
+
+```bash
+uv run dqa-webapp
 ```
 
 The web UI will be available at [http://localhost:7860](http://localhost:7860). To exit the server, use the Ctrl+C key combination.

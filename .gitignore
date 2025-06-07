@@ -154,7 +154,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Visual Studio Code
+# Visual Studio Code workspace settings
 .vscode/
 
 # PyCharm
