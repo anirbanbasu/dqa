@@ -6,10 +6,11 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from rich import print as print
-from dqa.common import EnvironmentVariables, MCPParameters, ic
+from dqa.common import EnvironmentVariables, ic
 from dqa.utils import parse_env
 
 from dqa.mcp.arithmetic import app as arithmetic_mcp
+from frankfurtermcp.server import app as currency_app
 
 app = FastMCP(
     name="dqa-mcp",
@@ -51,6 +52,8 @@ def main():
         Signal handler to shut down the server gracefully.
         """
         print("[green]Attempting graceful shutdown, please wait...[/green]")
+        app.unmount("arithmetic")
+        app.unmount("currency")
         # This is absolutely necessary to exit the program
         sys.exit(0)
 
@@ -59,18 +62,37 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     print("[green]Starting DQA MCP server, press CTRL+C to exit...[/green]")
+
     app.mount(
         prefix="arithmetic",
         server=arithmetic_mcp,
-        tool_separator=MCPParameters.TOOL_SEPARATOR,
-        resource_separator=MCPParameters.RESOURCE_SEPARATOR,
-        prompt_separator=MCPParameters.PROMPT_SEPARATOR,
     )
-    app.run(
-        transport=parse_env(
-            EnvironmentVariables.DQA__MCP_SERVER_TRANSPORT,
-            default_value=EnvironmentVariables.DEFAULT_DQA__MCP_SERVER_TRANSPORT,
-            allowed_values=EnvironmentVariables.ALLOWED__DQA_MCP_SERVER_TRANSPORT,
+
+    app.mount(
+        prefix="currency",
+        server=currency_app,
+    )
+
+    transport_type = parse_env(
+        EnvironmentVariables.MCP_SERVER_TRANSPORT,
+        default_value=EnvironmentVariables.DEFAULT__MCP_SERVER_TRANSPORT,
+        allowed_values=EnvironmentVariables.ALLOWED__MCP_SERVER_TRANSPORT,
+    )
+    (
+        app.run(
+            transport=transport_type,
+            host=parse_env(
+                EnvironmentVariables.MCP_SERVER_HOST,
+                default_value=EnvironmentVariables.DEFAULT__MCP_SERVER_HOST,
+            ),
+            port=parse_env(
+                EnvironmentVariables.MCP_SERVER_PORT,
+                default_value=EnvironmentVariables.DEFAULT__MCP_SERVER_PORT,
+                type_cast=int,
+            ),
+            uvicorn_config={
+                "timeout_graceful_shutdown": 5,  # seconds
+            },
         )
     )
 

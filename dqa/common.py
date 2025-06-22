@@ -9,12 +9,12 @@ class EnvironmentVariables:
     List of environment variables used in the DQA project.
     """
 
-    DQA__MCP_SERVER_TRANSPORT = "DQA_MCP_SERVER_TRANSPORT"
-    DEFAULT_DQA__MCP_SERVER_TRANSPORT = "sse"
-    ALLOWED__DQA_MCP_SERVER_TRANSPORT = ["sse", "streamable-http"]
+    MCP_SERVER_TRANSPORT = "DQA_MCP_SERVER_TRANSPORT"
+    DEFAULT__MCP_SERVER_TRANSPORT = "streamable-http"
+    ALLOWED__MCP_SERVER_TRANSPORT = ["stdio", "sse", "streamable-http"]
 
     DQA_LLM_CONFIG = "DQA_LLM_CONFIG"
-    DEFAULT__DQA_LLM_CONFIG = "config/chat-ollama.json"
+    DEFAULT__DQA_LLM_CONFIG = "config/llms.json"
 
     DQA_USE_MCP = "DQA_USE_MCP"
     DEFAULT_DQA_USE_MCP = "True"
@@ -22,12 +22,19 @@ class EnvironmentVariables:
     DQA_MCP_CLIENT_CONFIG = "DQA_MCP_CLIENT_CONFIG"
     DEFAULT_DQA_MCP_CLIENT_CONFIG = "config/mcp-client.json"
 
+    MCP_SERVER_HOST = "FASTMCP_HOST"
+    DEFAULT__MCP_SERVER_HOST = "localhost"
+
+    MCP_SERVER_PORT = "FASTMCP_PORT"
+    DEFAULT__MCP_SERVER_PORT = 8000
+
 
 class MCPParameters:
     """
     List of parameters used in the DQA MCP server.
     """
 
+    # Deprecated parameters
     TOOL_SEPARATOR = "__"
     RESOURCE_SEPARATOR = "."
     PROMPT_SEPARATOR = "-"

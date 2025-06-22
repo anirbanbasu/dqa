@@ -1,5 +1,6 @@
 import signal
 import sys
+import uuid
 import gradio as gr
 from gradio import ChatMessage
 
@@ -7,11 +8,19 @@ from rich import print as print
 
 from dotenv import load_dotenv
 
-from dqa.agent.dqa import DQAAgent
-from dqa.common import EnvironmentVariables, ic
-from langchain_core.messages import AIMessage, ToolMessage
+from llama_index.core.agent.workflow import (
+    AgentOutput,
+    ToolCallResult,
+    AgentStream,
+)
 
-from dqa.utils import parse_env
+# from dqa.agent.langchain_agent import DQAAgent
+from dqa.agent.orchestrator import DQAOrchestrator
+from dqa.common import ic
+
+# from langchain_core.messages import AIMessage, ToolMessage
+
+# from dqa.utils import parse_env
 
 
 class GradioApp:
@@ -34,45 +43,72 @@ class GradioApp:
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
         self.interface: gr.Blocks = None
-        self.program = DQAAgent(
-            use_mcp=parse_env(
-                EnvironmentVariables.DQA_USE_MCP,
-                EnvironmentVariables.DEFAULT_DQA_USE_MCP,
-                type_cast=bool,
-            )
-        )
+        self.sessions = {}
 
-    async def respond_to_question(
-        self, question: str, chat_history: list[dict], request: gr.Request
-    ):
-        if request is None:
-            raise gr.Error(
-                "Request object is not available but is required to identify the session. Cannot communicate with the agent!"
-            )
-        if question is None or question.strip() == "":
-            raise gr.Error("Please enter a question to get an answer.")
-        if chat_history is None:
-            chat_history = []
-        chat_history.append(ChatMessage(role="user", content=question))
-        yield None, chat_history
-        # Use request.session_hash to distiguish between different sessions when dethaling with the agent's memory
-        tools_used = set()
-        async for chunk in self.program.astream(
-            query_history=chat_history, context_id=request.session_hash
-        ):
-            ic(chunk)
-            if isinstance(chunk, AIMessage):
-                chat_history.append(
-                    ChatMessage(role="assistant", content=chunk.content)
-                )
-            elif isinstance(chunk, ToolMessage):
-                tools_used.add(chunk.name)
-                chat_history[-1].metadata = {
-                    "title": f"🛠️ Used tool(s) {', '.join(list(tools_used))}"
-                }
-            yield None, chat_history
+    def get_session_id(self, session_id: str) -> str:
+        """
+        Get the session ID from the request.
+        If the session ID is not provided, create a new one.
+        """
+        if not session_id or session_id.strip() == "":
+            session_id = uuid.uuid4().hex
+        return session_id
+
+    def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
+        """
+        Retrieve the session data for the given session_id.
+        Create and return a new session if the session by the given session_id does not exist.
+        """
+        if not session_id or session_id.strip() == "":
+            raise ValueError("Session ID cannot be empty or whitespace.")
+        if session_id not in self.sessions:
+            self.sessions[session_id] = DQAOrchestrator(session_id, use_mcp=False)
+            print(f"Created new session orchestrator with ID: {session_id}")
+        return self.sessions.get(session_id)
+
+    def delete_session_orchestrator(self, session_id):
+        """
+        Delete the session with the given session_id, if it exists.
+        """
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+            print(f"Deleted session orchestrator with ID: {session_id}")
 
     def create_ui(self):
+        def log_question_to_chat(question: str, chat_history: list):
+            """
+            Log the question to the chat history.
+            """
+            if question is None or question.strip() == "":
+                raise gr.Error("Please enter a question to get an answer.")
+            chat_history.append(ChatMessage(role="user", content=question))
+            return None, chat_history
+
+        async def respond_to_question(
+            chat_history,
+            session_id,
+        ):
+            orchestrator = self.get_session_orchestrator(session_id)
+            # yield None, chat_history
+            tools_used = set()
+            question = chat_history[-1]["content"]
+            ic(question)
+            workflow_handler = orchestrator.run(query=question)
+            chat_history.append(ChatMessage(role="assistant", content=""))
+            async for event in workflow_handler.stream_events():
+                if isinstance(event, AgentStream):
+                    chat_history[-1].content += event.delta
+                elif isinstance(event, ToolCallResult):
+                    tools_used.add(event.tool_name)
+                    chat_history[-1].metadata = {
+                        "title": f"🛠️ Used tool(s) {', '.join(list(tools_used))}"
+                    }
+                elif isinstance(event, AgentOutput):
+                    chat_history[-1].content = "".join(event.response.blocks)
+                else:
+                    ic(event)
+            return chat_history
+
         with gr.Blocks(
             title=GradioApp._APP_NAME_SHORT,
             # See theming guide at https://www.gradio.app/guides/theming-guide
@@ -85,6 +121,10 @@ class GradioApp:
             delete_cache=(86400, 86400),
         ) as self.interface:
             gr.set_static_paths(paths=[GradioApp._APP_LOGO_PATH])
+            session_id = gr.State(
+                value="", delete_callback=self.delete_session_orchestrator
+            )
+
             gr.Image(
                 GradioApp._APP_LOGO_PATH,
                 width=300,
@@ -107,7 +147,7 @@ class GradioApp:
                             scale=3,
                         )
                         btn_ask = gr.Button(
-                            f"Ask {self.program.llm_config['model']}",
+                            "Ask",
                             size="lg",
                             variant="primary",
                         )
@@ -125,18 +165,43 @@ class GradioApp:
             )
 
             text_question.submit(
-                fn=self.respond_to_question,
+                fn=log_question_to_chat,
                 inputs=[text_question, chatbot],
                 outputs=[text_question, chatbot],
+                queue=True,
+            ).then(
+                fn=respond_to_question,
+                inputs=[chatbot, session_id],
+                outputs=[chatbot],
             )
 
             btn_ask.click(
-                fn=self.respond_to_question,
+                fn=log_question_to_chat,
                 inputs=[text_question, chatbot],
                 outputs=[text_question, chatbot],
+                queue=True,
+            ).then(
+                fn=respond_to_question,
+                inputs=[chatbot, session_id],
+                outputs=[chatbot],
             )
 
-        return self.interface
+            # @gr.render(
+            #     inputs=[session_id],
+            #     # triggers=[self.interface.load]
+            # )
+            # def dynamic_ui(session_id: str):
+            #     """
+            #     Dynamically part of the UI that depends on session ID.
+            #     """
+            #     pass
+
+            self.interface.load(
+                queue=True,
+                fn=self.get_session_id,
+                inputs=[session_id],
+                outputs=[session_id],
+            )
 
     def run(self):
         """Run the Gradio app by launching a server."""
@@ -146,7 +211,7 @@ class GradioApp:
         ]
         if self.interface is not None:
             self.interface.queue().launch(
-                show_api=True,
+                show_api=False,
                 show_error=True,
                 allowed_paths=allowed_static_file_paths,
                 # Enable monitoring only for debugging purposes?
@@ -178,6 +243,7 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     app = GradioApp()
+
     app.run()
 
 
