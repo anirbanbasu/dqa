@@ -2,7 +2,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 
 app = FastMCP(
-    description="A collection of arithmetic tools.",
+    instructions="A collection of arithmetic tools.",
     on_duplicate_prompts="error",
     on_duplicate_resources="error",
     on_duplicate_tools="error",

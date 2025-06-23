@@ -14,7 +14,7 @@ from frankfurtermcp.server import app as currency_app
 
 app = FastMCP(
     name="dqa-mcp",
-    description="A FastMCP server for the DQA project.",
+    instructions="A FastMCP server for the DQA project.",
     on_duplicate_prompts="error",
     on_duplicate_resources="error",
     on_duplicate_tools="error",
