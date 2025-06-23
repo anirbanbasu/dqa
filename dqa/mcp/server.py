@@ -52,8 +52,6 @@ def main():
         Signal handler to shut down the server gracefully.
         """
         print("[green]Attempting graceful shutdown, please wait...[/green]")
-        app.unmount("arithmetic")
-        app.unmount("currency")
         # This is absolutely necessary to exit the program
         sys.exit(0)
 
