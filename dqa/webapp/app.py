@@ -1,3 +1,4 @@
+import asyncio
 import signal
 import sys
 import uuid
@@ -52,6 +53,8 @@ class GradioApp:
         """
         if not session_id or session_id.strip() == "":
             session_id = uuid.uuid4().hex
+        # initialise the session orchestrator here once.
+        self.get_session_orchestrator(session_id=session_id)
         return session_id
 
     def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
@@ -62,7 +65,7 @@ class GradioApp:
         if not session_id or session_id.strip() == "":
             raise ValueError("Session ID cannot be empty or whitespace.")
         if session_id not in self.sessions:
-            self.sessions[session_id] = DQAOrchestrator(session_id, use_mcp=False)
+            self.sessions[session_id] = DQAOrchestrator(session_id)
             print(f"Created new session orchestrator with ID: {session_id}")
         return self.sessions.get(session_id)
 
@@ -88,7 +91,10 @@ class GradioApp:
             chat_history,
             session_id,
         ):
-            orchestrator = self.get_session_orchestrator(session_id)
+            loop = asyncio.get_event_loop()
+            orchestrator = await loop.run_in_executor(
+                None, self.get_session_orchestrator, session_id
+            )
             # yield None, chat_history
             tools_used = set()
             question = chat_history[-1]["content"]
@@ -104,7 +110,9 @@ class GradioApp:
                         "title": f"🛠️ Used tool(s) {', '.join(list(tools_used))}"
                     }
                 elif isinstance(event, AgentOutput):
-                    chat_history[-1].content = "".join(event.response.blocks)
+                    chat_history[-1].content = "".join(
+                        [block.text for block in event.response.blocks]
+                    )
                 else:
                     ic(event)
             return chat_history
