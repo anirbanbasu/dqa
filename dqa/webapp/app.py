@@ -100,22 +100,39 @@ class GradioApp:
             question = chat_history[-1]["content"]
             ic(question)
             workflow_handler = orchestrator.run(query=question)
-            chat_history.append(ChatMessage(role="assistant", content=""))
+            ai_message_id = uuid.uuid4().hex
+            chat_history.append(
+                ChatMessage(
+                    role="assistant", content="", metadata={"id": ai_message_id}
+                )
+            )
             async for event in workflow_handler.stream_events():
+                if not isinstance(event, AgentStream):
+                    ic(event)
                 if isinstance(event, AgentStream):
                     chat_history[-1].content += event.delta
+                    yield chat_history
                 elif isinstance(event, ToolCallResult):
                     tools_used.add(event.tool_name)
-                    chat_history[-1].metadata = {
-                        "title": f"🛠️ Used tool(s) {', '.join(list(tools_used))}"
-                    }
                 elif isinstance(event, AgentOutput):
                     chat_history[-1].content = "".join(
                         [block.text for block in event.response.blocks]
                     )
                 else:
-                    ic(event)
-            return chat_history
+                    pass
+            if tools_used:
+                chat_history.append(
+                    ChatMessage(
+                        role="assistant",
+                        content="",
+                        metadata={
+                            "title": "🛠️ Used tool(s)",
+                            "log": f"{', '.join(list(tools_used))}",
+                            "parent_id": ai_message_id,
+                        },
+                    )
+                )
+            yield chat_history
 
         with gr.Blocks(
             title=GradioApp._APP_NAME_SHORT,

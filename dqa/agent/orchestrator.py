@@ -53,7 +53,8 @@ class DQAOrchestrator:
             description="The main agent that handles user chat.",
             system_prompt="You are a specialised assistant for answering multi-hop questions. "
             "Your task is to answer the user's question by breaking it down into smaller, manageable sub-questions. "
-            "You should use the tools provided to gather information and answer each sub-question. "
+            "You should use the tools at your disposal to answer each sub-question. "
+            "If you need to use a tool, do so without needing user confirmation. "
             "Do not hallucinate or make up tool calls or answers. "
             "If you cannot answer the question, respond with 'I don't know'. ",
             tools=self.tools,

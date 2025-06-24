@@ -10,6 +10,7 @@ from dqa.common import EnvironmentVariables, ic
 from dqa.utils import parse_env
 
 from dqa.mcp.arithmetic import app as arithmetic_mcp
+from dqa.mcp.time import app as time_app
 from frankfurtermcp.server import app as currency_app
 
 app = FastMCP(
@@ -64,6 +65,11 @@ def main():
     app.mount(
         prefix="arithmetic",
         server=arithmetic_mcp,
+    )
+
+    app.mount(
+        prefix="time",
+        server=time_app,
     )
 
     app.mount(
