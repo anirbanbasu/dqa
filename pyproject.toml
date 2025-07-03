@@ -7,8 +7,16 @@ authors = [
     { name = "Anirban Basu", email = "anirbanbasu@users.noreply.github.com" }
 ]
 license = "MIT"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
 requires-python = ">=3.12"
 dependencies = [
+    "acp-sdk>=1.0.0",
     "duckduckgo-search>=8.0.2",
     "fastmcp>=2.7.0",
     "frankfurtermcp>=0.2.4",
@@ -16,11 +24,14 @@ dependencies = [
     "llama-index-llms-ollama>=0.6.2",
     "llama-index-tools-mcp>=0.2.5",
     "python-dotenv>=1.1.0",
+    "typer>=0.16.0",
 ]
 
 [project.scripts]
 dqa-webapp = "dqa.webapp.app:main"
 dqa-mcp = "dqa.mcp.server:main"
+dqa-acp = "dqa.acp.server:main"
+dqa-acp-client = "dqa.acp.client:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -29,6 +40,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "icecream>=2.1.4",
+    "pre-commit>=4.2.0",
 ]
 test = [
     "pytest>=8.4.0",
