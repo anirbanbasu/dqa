@@ -27,26 +27,35 @@ def launch(native: bool = False):
                 icon="brightness_4",
                 on_click=dark.toggle,
             ).props("round flat").classes("self-center text-white")
-        with ui.row(align_items="center"):
-            ui.icon("").props("outline round").classes("shadow-lg")
-            with ui.timeline(side="right"):
-                ui.timeline_entry(
-                    "NiceGUI discovered.",
-                    title="Discovery",
-                    subtitle="June 09, 2025",
-                    icon="search",
+        with ui.row(align_items="stretch", wrap=False).style("width: 100%;"):
+            # with ui.timeline(side="right"):
+            #     ui.timeline_entry(
+            #         "NiceGUI discovered.",
+            #         title="Discovery",
+            #         subtitle="June 09, 2025",
+            #         icon="search",
+            #     )
+            #     ui.timeline_entry(
+            #         "Started making a nice-ish UI.",
+            #         title="Hands-on",
+            #         subtitle="June 10, 2025",
+            #         icon="build",
+            #     )
+            #     ui.timeline_entry(
+            #         "Exploring the possibilities of NiceGUI.",
+            #         title="Exploration",
+            #         subtitle="Present",
+            #         icon="tips_and_updates",
+            #     )
+            with ui.scroll_area().style("width: 100%;"):
+                ui.chat_message(
+                    "Hello! This is a simple chat message to demonstrate the NiceGUI capabilities.",
+                    avatar="https://avatars2.githubusercontent.com/u/625357",
+                    sent=True,
                 )
-                ui.timeline_entry(
-                    "Started making a nice-ish UI.",
-                    title="Hands-on",
-                    subtitle="June 10, 2025",
-                    icon="build",
-                )
-                ui.timeline_entry(
-                    "Exploring the possibilities of NiceGUI.",
-                    title="Exploration",
-                    subtitle="Present",
-                    icon="tips_and_updates",
+                ui.chat_message(
+                    "Welcome to the DQA NiceGUI application! This is a simple UI built with NiceGUI to demonstrate its capabilities. Feel free to explore and interact with the components.",
+                    avatar="https://robohash.org/test",
                 )
 
     def sigint_handler(signal, frame):
