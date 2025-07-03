@@ -1,7 +1,7 @@
 import signal
 import sys
 from acp_sdk.server import Server
-from acp_sdk.models import Message, Metadata, Capability
+from acp_sdk.models import Message, Metadata
 
 from datetime import datetime, timezone
 
@@ -36,6 +36,7 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     server.run(
+        # Let's make these configurable
         port=8192,
     )
 
