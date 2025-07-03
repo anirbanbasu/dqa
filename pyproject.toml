@@ -23,12 +23,15 @@ dependencies = [
     "gradio>=5.33.0",
     "llama-index-llms-ollama>=0.6.2",
     "llama-index-tools-mcp>=0.2.5",
+    "nicegui>=2.20.0",
     "python-dotenv>=1.1.0",
+    "pywebview>=5.4",
     "typer>=0.16.0",
 ]
 
 [project.scripts]
 dqa-webapp = "dqa.webapp.app:main"
+dqa-nicegui = "dqa.nicegui.app:typer_app"
 dqa-mcp = "dqa.mcp.server:main"
 dqa-acp = "dqa.acp.server:main"
 dqa-acp-client = "dqa.acp.client:main"
