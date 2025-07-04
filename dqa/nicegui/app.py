@@ -1,8 +1,11 @@
+import asyncio
+import random
 import signal
 import sys
 from nicegui import ui
 from rich import print as print
 from dqa.common import package_metadata
+from datetime import datetime, timezone
 
 from typer import Typer
 
@@ -17,8 +20,45 @@ typer_app = Typer(
 @typer_app.command()
 def launch(native: bool = False):
     def build_ui():
+        async def send():
+            if message.value.strip() != "":
+                with chat_container:
+                    ui.chat_message(
+                        text=message.value,
+                        name="You",
+                        avatar="https://avatars2.githubusercontent.com/u/625357",
+                        stamp=datetime.now(timezone.utc).isoformat(),
+                        sent=True,
+                    ).classes("w-3/4 ml-auto")
+                    message.value = ""
+
+                    for j in range(random.randint(1, 3)):
+                        response = ""
+                        agent_msg = ui.chat_message(
+                            text=response,
+                            name="Agent",
+                            avatar="https://avatars2.githubusercontent.com/u/157382655",
+                            text_html=True,
+                            stamp=str(
+                                {
+                                    "model": "model_name",
+                                    "timestamp:": datetime.now(
+                                        timezone.utc
+                                    ).isoformat(),
+                                }
+                            ),
+                        ).classes("w-3/4 mr-auto")
+                        spinner = ui.spinner(type="hourglass")
+                        for c in f"This is an <i>auto-generated</i> streaming response from <b>the agent</b>, message number {j + 1}.":
+                            response += c
+                            await asyncio.sleep(0.05)
+                            agent_msg.clear()
+                            with agent_msg:
+                                ui.html(response)
+                        chat_container.remove(spinner)
+
         dark = ui.dark_mode()
-        with ui.header(add_scroll_padding=False).classes(
+        with ui.header(add_scroll_padding=False, wrap=False).classes(
             "bg-stone-300 dark:bg-stone-900"
         ):
             ui.image("assets/logo.svg").classes("self-center").style("width: 250px;")
@@ -27,35 +67,23 @@ def launch(native: bool = False):
                 icon="brightness_4",
                 on_click=dark.toggle,
             ).props("round flat").classes("self-center text-white")
-        with ui.row(align_items="stretch", wrap=False).style("width: 100%;"):
-            # with ui.timeline(side="right"):
-            #     ui.timeline_entry(
-            #         "NiceGUI discovered.",
-            #         title="Discovery",
-            #         subtitle="June 09, 2025",
-            #         icon="search",
-            #     )
-            #     ui.timeline_entry(
-            #         "Started making a nice-ish UI.",
-            #         title="Hands-on",
-            #         subtitle="June 10, 2025",
-            #         icon="build",
-            #     )
-            #     ui.timeline_entry(
-            #         "Exploring the possibilities of NiceGUI.",
-            #         title="Exploration",
-            #         subtitle="Present",
-            #         icon="tips_and_updates",
-            #     )
-            with ui.scroll_area().style("width: 100%;"):
-                ui.chat_message(
-                    "Hello! This is a simple chat message to demonstrate the NiceGUI capabilities.",
-                    avatar="https://avatars2.githubusercontent.com/u/625357",
-                    sent=True,
+
+        # chat_container = ui.column().classes("w-full h-dvh")
+        chat_container = ui.scroll_area().classes("w-full h-svh pt-2 mt-2")
+        # chat_container = ui.tab_panel(name="chat").classes("w-full h-svh pt-2 mt-2")
+
+        with ui.footer().classes("resize-none"):
+            with ui.row(wrap=False, align_items="stretch").classes("w-full mb-2 pb-2"):
+                message = (
+                    ui.textarea(
+                        label="Your message",
+                        placeholder="Type a message here and send it...",
+                    )
+                    .classes("w-3/4")
+                    .on(type="keydown.enter", handler=send)
                 )
-                ui.chat_message(
-                    "Welcome to the DQA NiceGUI application! This is a simple UI built with NiceGUI to demonstrate its capabilities. Feel free to explore and interact with the components.",
-                    avatar="https://robohash.org/test",
+                ui.button(text="Ask", icon="send").classes("w-1/4").on(
+                    type="click", handler=send
                 )
 
     def sigint_handler(signal, frame):
@@ -74,7 +102,13 @@ def launch(native: bool = False):
         f"[green]Initiating startup[/green] of [bold]{package_metadata['Name']} {package_metadata['Version']}[/bold], [red]press CTRL+C to exit...[/red]"
     )
     build_ui()
-    ui.run(reload=False, native=native, title=package_metadata["Name"])
+
+    ui.run(
+        reload=False,
+        native=native,
+        title=package_metadata["Name"],
+        window_size=(1200, 800) if native else None,
+    )
 
 
 if __name__ in {"__main__", "__mp_main__"}:
