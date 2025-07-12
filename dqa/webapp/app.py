@@ -56,13 +56,37 @@ class GradioApp:
         # initialise the session orchestrator here once.
         orchestrator = self.get_session_orchestrator(session_id=session_id)
         gradio_chat_history = []
+        tools_used = set()
         for chat_message in orchestrator.get_chat_history():
-            ic(chat_message)
             if chat_message.role == "user" or chat_message.role == "assistant":
-                # TODO: ignore other messages for now but retrieve tool calls and format them correctly
-                gradio_chat_history.append(
-                    ChatMessage(role=chat_message.role, content=chat_message.content)
-                )
+                if chat_message.content != "":
+                    if chat_message.role == "assistant":
+                        ai_message_id = uuid.uuid4().hex
+                    else:
+                        ai_message_id = None
+                    gradio_chat_history.append(
+                        ChatMessage(
+                            role=chat_message.role,
+                            content=chat_message.content,
+                            metadata=({"id": ai_message_id} if ai_message_id else {}),
+                        )
+                    )
+                if len(tools_used) > 0:
+                    gradio_chat_history.append(
+                        ChatMessage(
+                            role="assistant",
+                            content="",
+                            metadata={
+                                "title": "🛠️ Used tool(s)",
+                                "log": f"{', '.join(list(tools_used))}",
+                                "parent_id": ai_message_id,
+                            },
+                        )
+                    )
+                    tools_used.clear()
+            elif chat_message.role == "tool":
+                if "tool_call_id" in chat_message.additional_kwargs:
+                    tools_used.add(chat_message.additional_kwargs["tool_call_id"])
         return session_id, gradio_chat_history
 
     def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
@@ -219,7 +243,7 @@ class GradioApp:
                     "Using only an addition, how do you add eight 8's and get the number 1000?",
                     "Watson borrowed EUR 100 from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in GBP?",
                     "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
-                    "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some multiple of her age?",
+                    "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
                 ],
                 examples_per_page=4,
                 inputs=text_question,
