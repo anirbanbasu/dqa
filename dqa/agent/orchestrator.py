@@ -1,11 +1,10 @@
+import time
 import json
 from dqa.common import EnvironmentVariables
 from dqa.utils import parse_env
 from dqa.common import ic
 
-from llama_index.tools.mcp import (
-    get_tools_from_mcp_url,
-)
+from llama_index.tools.mcp import get_tools_from_mcp_url
 
 from llama_index.core.memory import Memory
 from llama_index.llms.ollama import Ollama
@@ -15,7 +14,10 @@ from llama_index.core.agent.workflow import AgentWorkflow, FunctionAgent
 
 
 class DQAOrchestrator:
-    def __init__(self, session_id: str, use_mcp: bool = True):
+    def __init__(
+        self, session_id: str, use_mcp: bool = True, session_purge_timeout: int = 3600
+    ):
+        self.session_purge_timeout = session_purge_timeout
         self.tools = []
         llm_config_file = parse_env(
             EnvironmentVariables.DQA_LLM_CONFIG,
@@ -71,8 +73,24 @@ class DQAOrchestrator:
         )
 
     def run(self, query: str) -> WorkflowHandler:
-        return self.workflow.run(
+        result = self.workflow.run(
             user_msg=query,
             memory=self.workflow_memory,
             context=self.workflow_context,
         )
+        self.last_run_timestamp = time.time()
+        return result
+
+    def get_chat_history(self):
+        """
+        Retrieve the chat history from the workflow memory.
+        """
+        return self.workflow_memory.get_all()
+
+    def is_purgeable(self) -> bool:
+        """
+        Check if the session is purgeable based on the last run timestamp and the session purge timeout.
+        """
+        if not hasattr(self, "last_run_timestamp"):
+            return True
+        return (time.time() - self.last_run_timestamp) > self.session_purge_timeout

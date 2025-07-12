@@ -44,9 +44,9 @@ class GradioApp:
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
         self.interface: gr.Blocks = None
-        self.sessions = {}
+        self.sessions: dict[str, DQAOrchestrator] = {}
 
-    def get_session_id(self, session_id: str) -> str:
+    def get_session_id(self, session_id: str, request: gr.Request) -> str:
         """
         Get the session ID from the request.
         If the session ID is not provided, create a new one.
@@ -54,8 +54,16 @@ class GradioApp:
         if not session_id or session_id.strip() == "":
             session_id = uuid.uuid4().hex
         # initialise the session orchestrator here once.
-        self.get_session_orchestrator(session_id=session_id)
-        return session_id
+        orchestrator = self.get_session_orchestrator(session_id=session_id)
+        gradio_chat_history = []
+        for chat_message in orchestrator.get_chat_history():
+            ic(chat_message)
+            if chat_message.role == "user" or chat_message.role == "assistant":
+                # TODO: ignore other messages for now but retrieve tool calls and format them correctly
+                gradio_chat_history.append(
+                    ChatMessage(role=chat_message.role, content=chat_message.content)
+                )
+        return session_id, gradio_chat_history
 
     def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
         """
@@ -64,9 +72,12 @@ class GradioApp:
         """
         if not session_id or session_id.strip() == "":
             raise ValueError("Session ID cannot be empty or whitespace.")
+        self.purge_stale_session_orchestrators()
         if session_id not in self.sessions:
             self.sessions[session_id] = DQAOrchestrator(session_id)
             print(f"Created new session orchestrator with ID: {session_id}")
+        else:
+            print(f"Retrieved existing session orchestrator with ID: {session_id}")
         return self.sessions.get(session_id)
 
     def delete_session_orchestrator(self, session_id):
@@ -76,6 +87,21 @@ class GradioApp:
         if session_id in self.sessions:
             del self.sessions[session_id]
             print(f"Deleted session orchestrator with ID: {session_id}")
+
+    def purge_stale_session_orchestrators(self):
+        """
+        Purge stale session orchestrators that are older than a certain threshold.
+        """
+        purgeable_sessions_orchestrators = []
+        for session_id, orchestrator in self.sessions.items():
+            if orchestrator.is_purgeable():
+                purgeable_sessions_orchestrators.append(session_id)
+        for session_id in purgeable_sessions_orchestrators:
+            del self.sessions[session_id]
+        if len(purgeable_sessions_orchestrators) > 0:
+            print(
+                f"Purged stale session orchestrators with IDs: {', '.join(purgeable_sessions_orchestrators)}"
+            )
 
     def create_ui(self):
         def log_question_to_chat(question: str, chat_history: list):
@@ -114,6 +140,10 @@ class GradioApp:
                     yield chat_history
                 elif isinstance(event, ToolCallResult):
                     tools_used.add(event.tool_name)
+                    chat_history[
+                        -1
+                    ].content += f"🛠️ Evaluating: **{event.tool_name}**.\n"
+                    yield chat_history
                 elif isinstance(event, AgentOutput):
                     chat_history[-1].content = "".join(
                         [block.text for block in event.response.blocks]
@@ -146,8 +176,12 @@ class GradioApp:
             delete_cache=(86400, 86400),
         ) as self.interface:
             gr.set_static_paths(paths=[GradioApp._APP_LOGO_PATH])
-            session_id = gr.State(
-                value="", delete_callback=self.delete_session_orchestrator
+            # Keep the session ID in the browser state, i.e., as a cookie. If the active session is found
+            # in the sessions dictionary, it will be used to retrieve the session orchestrator. Otherwise,
+            # a new session orchestrator will be created.
+            session_id = gr.BrowserState(
+                default_value="",
+                storage_key="dqa_orchestrator_session_id",
             )
 
             gr.Image(
@@ -177,16 +211,18 @@ class GradioApp:
                             variant="primary",
                         )
             gr.Examples(
-                [
+                examples=[
                     "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
                     "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
                     "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
                     "I am an odd number. Take away one letter and I become even. What number am I?",
                     "Using only an addition, how do you add eight 8's and get the number 1000?",
+                    "Watson borrowed EUR 100 from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in GBP?",
                     "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
                     "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some multiple of her age?",
                 ],
-                text_question,
+                examples_per_page=4,
+                inputs=text_question,
             )
 
             text_question.submit(
@@ -225,7 +261,7 @@ class GradioApp:
                 queue=True,
                 fn=self.get_session_id,
                 inputs=[session_id],
-                outputs=[session_id],
+                outputs=[session_id, chatbot],
             )
 
     def run(self):
