@@ -51,14 +51,17 @@ class DQAOrchestrator:
                     self.tools.extend(mcp_tools)
 
         chat_agent = FunctionAgent(
-            name="DQA Chat Agent",
+            name="user-chat-agent",
             description="The main agent that handles user chat.",
             system_prompt="You are a specialised assistant for answering multi-hop questions. "
             "Your task is to answer the user's question by breaking it down into smaller, manageable sub-questions. "
-            "You should use the tools at your disposal to answer each sub-question. "
+            "If the question is not clear, ask for clarification. "
+            "If the user did not ask a question but made a statement, respond with an acknowledgment only."
+            "You should always use the tools at your disposal to answer each sub-question. "
             "If you need to use a tool, do so without needing user confirmation. "
             "Do not hallucinate or make up tool calls or answers. "
-            "If you cannot answer the question, respond with 'I don't know'. ",
+            "If you cannot answer the question, respond stating that you do not know the answer. "
+            "Make sure that you format your final response using valid Markdown syntax. ",
             tools=self.tools,
             llm=Ollama(**self.llm_config["ollama"]),
         )

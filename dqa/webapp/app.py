@@ -55,6 +55,14 @@ class GradioApp:
             session_id = uuid.uuid4().hex
         # initialise the session orchestrator here once.
         orchestrator = self.get_session_orchestrator(session_id=session_id)
+        model_info = {**orchestrator.llm_config["ollama"]}
+        tools_info = [
+            {
+                "name": tool.__dict__["_metadata"].name,
+                "description": tool.__dict__["_metadata"].description,
+            }
+            for tool in orchestrator.tools
+        ]
         gradio_chat_history = []
         tools_used = set()
         for chat_message in orchestrator.get_chat_history():
@@ -71,7 +79,8 @@ class GradioApp:
                             metadata=({"id": ai_message_id} if ai_message_id else {}),
                         )
                     )
-                if len(tools_used) > 0:
+                if len(tools_used) > 0 and ai_message_id:
+                    ic(ai_message_id)
                     gradio_chat_history.append(
                         ChatMessage(
                             role="assistant",
@@ -87,7 +96,8 @@ class GradioApp:
             elif chat_message.role == "tool":
                 if "tool_call_id" in chat_message.additional_kwargs:
                     tools_used.add(chat_message.additional_kwargs["tool_call_id"])
-        return session_id, gradio_chat_history
+                ic(chat_message, tools_used)
+        return session_id, gradio_chat_history, model_info, tools_info
 
     def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
         """
@@ -148,7 +158,6 @@ class GradioApp:
             # yield None, chat_history
             tools_used = set()
             question = chat_history[-1]["content"]
-            ic(question)
             workflow_handler = orchestrator.run(query=question)
             ai_message_id = uuid.uuid4().hex
             chat_history.append(
@@ -167,6 +176,7 @@ class GradioApp:
                     chat_history[
                         -1
                     ].content += f"🛠️ Evaluating: **{event.tool_name}**.\n"
+                    ic(event.tool_kwargs)
                     yield chat_history
                 elif isinstance(event, AgentOutput):
                     chat_history[-1].content = "".join(
@@ -208,6 +218,9 @@ class GradioApp:
                 storage_key="dqa_orchestrator_session_id",
             )
 
+            orchestrator_model_info = gr.State()
+            orchestrator_tools_info = gr.State()
+
             gr.Image(
                 GradioApp._APP_LOGO_PATH,
                 width=300,
@@ -218,15 +231,22 @@ class GradioApp:
             )
             gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
             with gr.Row(equal_height=True):
-                with gr.Column(scale=3):
-                    chatbot = gr.Chatbot(
-                        type="messages",
-                        label="Chat with the agent",
-                    )
+                with gr.Column():
+                    with gr.Row(equal_height=True):
+                        chatbot = gr.Chatbot(
+                            type="messages",
+                            scale=3,
+                            height=500,
+                        )
+                        ui_tools_list = gr.JSON(
+                            show_indices=True,
+                            open=True,
+                        )
+
                     with gr.Row(equal_height=True):
                         text_question = gr.Textbox(
                             label="Question",
-                            placeholder="What is the capital of Japan?",
+                            placeholder="e.g., What is the capital of Japan?",
                             scale=3,
                         )
                         btn_ask = gr.Button(
@@ -271,22 +291,47 @@ class GradioApp:
                 outputs=[chatbot],
             )
 
-            # @gr.render(
-            #     inputs=[session_id],
-            #     # triggers=[self.interface.load]
-            # )
-            # def dynamic_ui(session_id: str):
-            #     """
-            #     Dynamically part of the UI that depends on session ID.
-            #     """
-            #     pass
-
             self.interface.load(
                 queue=True,
                 fn=self.get_session_id,
                 inputs=[session_id],
-                outputs=[session_id, chatbot],
+                outputs=[
+                    session_id,
+                    chatbot,
+                    orchestrator_model_info,
+                    orchestrator_tools_info,
+                ],
             )
+
+            @orchestrator_model_info.change(
+                inputs=[session_id, orchestrator_model_info], outputs=[chatbot]
+            )
+            def orchestrator_model_info_changed(session_id, model_info):
+                """
+                Update the chatbot with the model information from the orchestrator.
+                """
+                if model_info and session_id:
+                    return gr.update(
+                        label=f"Chat using {model_info['model']}. Session ID: {session_id}"
+                    )
+                else:
+                    return gr.update(label="Chat")
+
+            @orchestrator_tools_info.change(
+                inputs=[orchestrator_tools_info], outputs=[ui_tools_list]
+            )
+            def orchestrator_tools_info_changed(tools_info):
+                """
+                Update the UI tools list with the tools information from the orchestrator.
+                """
+                if tools_info:
+                    return gr.update(
+                        label=f"{len(tools_info)} MCP tools available to the agent",
+                        value=tools_info,
+                        visible=True,
+                    )
+                else:
+                    return gr.update(label=None, value={}, visible=False)
 
     def run(self):
         """Run the Gradio app by launching a server."""
