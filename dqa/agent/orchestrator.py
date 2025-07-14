@@ -12,13 +12,23 @@ from llama_index.core.workflow import Context
 from llama_index.core.workflow.handler import WorkflowHandler
 from llama_index.core.agent.workflow import AgentWorkflow, FunctionAgent
 
+from enum import StrEnum
+
+
+class OrchestratorAgent(StrEnum):
+    USER_CHAT_AGENT = "user-chat-agent"
+
+
+class OrchestratorLLM(StrEnum):
+    OLLAMA = "ollama"
+
 
 class DQAOrchestrator:
     def __init__(
         self, session_id: str, use_mcp: bool = True, session_purge_timeout: int = 3600
     ):
         self.session_purge_timeout = session_purge_timeout
-        self.tools = []
+        self.mcp_features = []
         llm_config_file = parse_env(
             EnvironmentVariables.DQA_LLM_CONFIG,
             EnvironmentVariables.DEFAULT__DQA_LLM_CONFIG,
@@ -56,18 +66,18 @@ class DQAOrchestrator:
                         args=config.get("args", []),
                         env=config.get("env", {}),
                     )
-                    mcp_tools = get_tools_from_mcp_url(
+                    mcp_features = get_tools_from_mcp_url(
                         command_or_url=None,
                         client=mcp_client,
                     )
-                    self.tools.extend(mcp_tools)
+                    self.mcp_features.extend(mcp_features)
                 except Exception as e:
                     if type(e) is ExceptionGroup:
                         print(
-                            f"Error loading MCP tools: {' '.join([str(ex) for ex in e.exceptions])}"
+                            f"Error loading MCP features: {' '.join([str(ex) for ex in e.exceptions])}"
                         )
                     else:
-                        print(f"Error loading MCP tools: {str(e)}")
+                        print(f"Error loading MCP features: {str(e)}")
 
         chat_agent = FunctionAgent(
             name="user-chat-agent",
@@ -76,13 +86,13 @@ class DQAOrchestrator:
             "Your task is to answer the user's question by breaking it down into smaller, manageable sub-questions. "
             "If the question is not clear, ask for clarification. "
             "If the user did not ask a question but made a statement, respond with an acknowledgment only."
-            "You should always use the tools at your disposal to answer each sub-question. "
+            "You should always use the tools, which have been provided to you, to answer each sub-question. "
             "If you need to use a tool, do so without needing user confirmation. "
-            "Do not hallucinate or make up tool calls or answers. "
+            "Do not hallucinate or make up tool calls or their responses. "
             "If you cannot answer the question, respond stating that you do not know the answer. "
             "Make sure that you format your final response using valid Markdown syntax. ",
-            tools=self.tools,
-            llm=Ollama(**self.llm_config["ollama"]),
+            tools=self.mcp_features,
+            llm=Ollama(**self.llm_config[OrchestratorLLM.OLLAMA]),
         )
 
         self.workflow_memory = Memory.from_defaults(

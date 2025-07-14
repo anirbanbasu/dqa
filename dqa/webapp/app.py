@@ -16,7 +16,7 @@ from llama_index.core.agent.workflow import (
 )
 
 # from dqa.agent.langchain_agent import DQAAgent
-from dqa.agent.orchestrator import DQAOrchestrator
+from dqa.agent.orchestrator import DQAOrchestrator, OrchestratorLLM
 from dqa.common import ic
 
 # from langchain_core.messages import AIMessage, ToolMessage
@@ -43,7 +43,7 @@ class GradioApp:
 
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
-        self.interface: gr.Blocks = None
+        self.ui: gr.Blocks = None
         self.sessions: dict[str, DQAOrchestrator] = {}
 
     def get_session_id(self, session_id: str, request: gr.Request) -> str:
@@ -55,13 +55,13 @@ class GradioApp:
             session_id = uuid.uuid4().hex
         # initialise the session orchestrator here once.
         orchestrator = self.get_session_orchestrator(session_id=session_id)
-        model_info = {**orchestrator.llm_config["ollama"]}
+        model_info = {**orchestrator.llm_config}
         tools_info = [
             {
                 "name": tool.__dict__["_metadata"].name,
                 "description": tool.__dict__["_metadata"].description,
             }
-            for tool in orchestrator.tools
+            for tool in orchestrator.mcp_features
         ]
         gradio_chat_history = []
         tools_used = set()
@@ -208,18 +208,18 @@ class GradioApp:
             analytics_enabled=False,
             # Delete the cache content every day that is older than a day
             delete_cache=(86400, 86400),
-        ) as self.interface:
+        ) as self.ui:
             gr.set_static_paths(paths=[GradioApp._APP_LOGO_PATH])
             # Keep the session ID in the browser state, i.e., as a cookie. If the active session is found
             # in the sessions dictionary, it will be used to retrieve the session orchestrator. Otherwise,
             # a new session orchestrator will be created.
-            session_id = gr.BrowserState(
+            bstate_session_id = gr.BrowserState(
                 default_value="",
                 storage_key="dqa_orchestrator_session_id",
             )
 
-            orchestrator_model_info = gr.State()
-            orchestrator_tools_info = gr.State()
+            state_orchestrator_model_info = gr.State()
+            state_orchestrator_mcp_features_info = gr.State()
 
             gr.Image(
                 GradioApp._APP_LOGO_PATH,
@@ -231,81 +231,80 @@ class GradioApp:
             )
             gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
             with gr.Row(equal_height=True):
-                with gr.Column():
-                    with gr.Row(equal_height=True):
-                        chatbot = gr.Chatbot(
-                            type="messages",
-                            scale=3,
-                            height=500,
-                        )
-                        ui_tools_list = gr.JSON(
-                            show_indices=True,
-                            open=True,
-                            visible=False,
-                        )
+                ui_chatbot = gr.Chatbot(
+                    type="messages",
+                    scale=3,
+                    height=500,
+                )
+                ui_json_mcp_features = gr.JSON(
+                    show_indices=True,
+                    open=True,
+                    visible=False,
+                )
 
-                    with gr.Row(equal_height=True):
-                        text_question = gr.Textbox(
-                            label="Question",
-                            placeholder="e.g., What is the capital of Japan?",
-                            scale=3,
-                        )
-                        btn_ask = gr.Button(
-                            "Ask",
-                            size="lg",
-                            variant="primary",
-                        )
-            gr.Examples(
-                examples=[
-                    "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
-                    "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
-                    "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
-                    "I am an odd number. Take away one letter and I become even. What number am I?",
-                    "Using only an addition, how do you add eight 8's and get the number 1000?",
-                    "Watson borrowed EUR 100 from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in GBP?",
-                    "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
-                    "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
-                ],
-                examples_per_page=4,
-                inputs=text_question,
-            )
+            with gr.Row(equal_height=True):
+                with gr.Column(scale=3):
+                    ui_text_question = gr.Textbox(
+                        label="Question",
+                        lines=4,
+                        placeholder="e.g., What is the capital of Japan?",
+                    )
+                    gr.Examples(
+                        label="Example questions",
+                        examples=[
+                            "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
+                            "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
+                            "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
+                            "I am an odd number. Take away one letter and I become even. What number am I?",
+                            "Using only an addition, how do you add eight 8's and get the number 1000?",
+                            "Watson borrowed 100 Euros from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds?",
+                            "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
+                            "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
+                        ],
+                        examples_per_page=5,
+                        inputs=ui_text_question,
+                    )
+                ui_btn_ask = gr.Button(
+                    "Ask", size="lg", variant="primary", min_width=160
+                )
 
-            text_question.submit(
+            ui_text_question.submit(
                 fn=log_question_to_chat,
-                inputs=[text_question, chatbot],
-                outputs=[text_question, chatbot],
+                inputs=[ui_text_question, ui_chatbot],
+                outputs=[ui_text_question, ui_chatbot],
                 queue=True,
             ).then(
                 fn=respond_to_question,
-                inputs=[chatbot, session_id],
-                outputs=[chatbot],
+                inputs=[ui_chatbot, bstate_session_id],
+                outputs=[ui_chatbot],
             )
 
-            btn_ask.click(
+            ui_btn_ask.click(
                 fn=log_question_to_chat,
-                inputs=[text_question, chatbot],
-                outputs=[text_question, chatbot],
+                inputs=[ui_text_question, ui_chatbot],
+                outputs=[ui_text_question, ui_chatbot],
                 queue=True,
             ).then(
                 fn=respond_to_question,
-                inputs=[chatbot, session_id],
-                outputs=[chatbot],
+                inputs=[ui_chatbot, bstate_session_id],
+                outputs=[ui_chatbot],
             )
 
-            self.interface.load(
+            self.ui.load(
                 queue=True,
                 fn=self.get_session_id,
-                inputs=[session_id],
+                inputs=[bstate_session_id],
                 outputs=[
-                    session_id,
-                    chatbot,
-                    orchestrator_model_info,
-                    orchestrator_tools_info,
+                    bstate_session_id,
+                    ui_chatbot,
+                    state_orchestrator_model_info,
+                    state_orchestrator_mcp_features_info,
                 ],
             )
 
-            @orchestrator_model_info.change(
-                inputs=[session_id, orchestrator_model_info], outputs=[chatbot]
+            @state_orchestrator_model_info.change(
+                inputs=[bstate_session_id, state_orchestrator_model_info],
+                outputs=[ui_chatbot],
             )
             def orchestrator_model_info_changed(session_id, model_info):
                 """
@@ -313,13 +312,14 @@ class GradioApp:
                 """
                 if model_info and session_id:
                     return gr.update(
-                        label=f"Chat using {model_info['model']}. Session ID: {session_id}"
+                        label=f"Chat using {model_info[OrchestratorLLM.OLLAMA]['model']}. Session ID: {session_id}"
                     )
                 else:
                     return gr.update(label="Chat")
 
-            @orchestrator_tools_info.change(
-                inputs=[orchestrator_tools_info], outputs=[ui_tools_list]
+            @state_orchestrator_mcp_features_info.change(
+                inputs=[state_orchestrator_mcp_features_info],
+                outputs=[ui_json_mcp_features],
             )
             def orchestrator_tools_info_changed(tools_info):
                 """
@@ -327,7 +327,7 @@ class GradioApp:
                 """
                 if tools_info:
                     return gr.update(
-                        label=f"{len(tools_info)} MCP tools available to the agent",
+                        label=f"{len(tools_info)} MCP features available to the agent",
                         value=tools_info,
                         visible=True,
                     )
@@ -340,8 +340,8 @@ class GradioApp:
         allowed_static_file_paths = [
             GradioApp._APP_LOGO_PATH,
         ]
-        if self.interface is not None:
-            self.interface.queue().launch(
+        if self.ui is not None:
+            self.ui.queue().launch(
                 show_api=False,
                 show_error=True,
                 allowed_paths=allowed_static_file_paths,
@@ -354,8 +354,8 @@ class GradioApp:
     def shutdown(self):
         """Shutdown the Gradio app."""
         # Do some cleanup as needed
-        if self.interface is not None and self.interface.is_running:
-            self.interface.close()
+        if self.ui is not None and self.ui.is_running:
+            self.ui.close()
 
 
 def main():
