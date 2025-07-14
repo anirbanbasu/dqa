@@ -4,7 +4,7 @@ from dqa.common import EnvironmentVariables
 from dqa.utils import parse_env
 from dqa.common import ic
 
-from llama_index.tools.mcp import get_tools_from_mcp_url
+from llama_index.tools.mcp import get_tools_from_mcp_url, BasicMCPClient
 
 from llama_index.core.memory import Memory
 from llama_index.llms.ollama import Ollama
@@ -29,26 +29,45 @@ class DQAOrchestrator:
         ic(self.llm_config)
 
         if use_mcp:
-            with open(
-                parse_env(
-                    EnvironmentVariables.DQA_MCP_CLIENT_CONFIG,
-                    EnvironmentVariables.DEFAULT_DQA_MCP_CLIENT_CONFIG,
-                ),
-                "r",
-            ) as f:
-                mcp_configurations = json.load(f)
-                f.close()
-                ic(mcp_configurations)
+            mcp_configurations = {}
+            # Try to read the MCP client configuration, fail almost silently
+            try:
+                with open(
+                    parse_env(
+                        EnvironmentVariables.DQA_MCP_CLIENT_CONFIG,
+                        EnvironmentVariables.DEFAULT_DQA_MCP_CLIENT_CONFIG,
+                    ),
+                    "r",
+                ) as f:
+                    mcp_configurations = json.load(f)
+                    f.close()
+                    ic(mcp_configurations)
+            except Exception as e:
+                print(f"Error reading MCP configuration: {str(e)}")
 
-                for config_name, config in mcp_configurations.items():
-                    mcp_tools = get_tools_from_mcp_url(
+            for config_name, config in mcp_configurations.items():
+                try:
+                    mcp_client = BasicMCPClient(
                         command_or_url=(
-                            config["url"]
-                            if config["transport"] != "stdio"
-                            else config["command"]
+                            config.get("url", "")
+                            if config.get("transport", "") != "stdio"
+                            else config.get("command", "")
                         ),
+                        args=config.get("args", []),
+                        env=config.get("env", {}),
+                    )
+                    mcp_tools = get_tools_from_mcp_url(
+                        command_or_url=None,
+                        client=mcp_client,
                     )
                     self.tools.extend(mcp_tools)
+                except Exception as e:
+                    if type(e) is ExceptionGroup:
+                        print(
+                            f"Error loading MCP tools: {' '.join([str(ex) for ex in e.exceptions])}"
+                        )
+                    else:
+                        print(f"Error loading MCP tools: {str(e)}")
 
         chat_agent = FunctionAgent(
             name="user-chat-agent",
@@ -76,6 +95,10 @@ class DQAOrchestrator:
         )
 
     def run(self, query: str) -> WorkflowHandler:
+        """
+        Run the orchestrator with the given query.
+        This method executes the workflow with the provided query and returns the result.
+        """
         result = self.workflow.run(
             user_msg=query,
             memory=self.workflow_memory,

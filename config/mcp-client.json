@@ -1,6 +1,21 @@
 {
-  "local": {
-    "transport": "streamable-http",
-    "url": "http://localhost:8000/mcp"
+  "builtin": {
+    "transport": "stdio",
+    "command": "uv",
+    "args": [
+      "run",
+      "dqa-mcp"
+    ],
+    "env": {
+      "DQA_MCP_SERVER_TRANSPORT": "stdio"
+    }
+  },
+  "frankfurter": {
+    "transport": "stdio",
+    "command": "uv",
+    "args": [
+      "run",
+      "frankfurtermcp"
+    ]
   }
 }

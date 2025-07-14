@@ -86,7 +86,7 @@ class GradioApp:
                             role="assistant",
                             content="",
                             metadata={
-                                "title": "🛠️ Used tool(s)",
+                                "title": "🛠️ Tool(s) used",
                                 "log": f"{', '.join(list(tools_used))}",
                                 "parent_id": ai_message_id,
                             },
@@ -190,7 +190,7 @@ class GradioApp:
                         role="assistant",
                         content="",
                         metadata={
-                            "title": "🛠️ Used tool(s)",
+                            "title": "🛠️ Tool(s) used",
                             "log": f"{', '.join(list(tools_used))}",
                             "parent_id": ai_message_id,
                         },
@@ -241,6 +241,7 @@ class GradioApp:
                         ui_tools_list = gr.JSON(
                             show_indices=True,
                             open=True,
+                            visible=False,
                         )
 
                     with gr.Row(equal_height=True):

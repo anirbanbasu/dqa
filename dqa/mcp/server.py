@@ -11,7 +11,6 @@ from dqa.utils import parse_env
 
 from dqa.mcp.arithmetic import app as arithmetic_mcp
 from dqa.mcp.time import app as time_app
-from frankfurtermcp.server import app as currency_app
 
 app = FastMCP(
     name="dqa-mcp",
@@ -60,8 +59,6 @@ def main():
     # TODO: Should we also catch SIGTERM, SIGKILL, etc.? What about Windows?
     signal.signal(signal.SIGINT, sigint_handler)
 
-    print("[green]Starting DQA MCP server, press CTRL+C to exit...[/green]")
-
     app.mount(
         prefix="arithmetic",
         server=arithmetic_mcp,
@@ -72,17 +69,19 @@ def main():
         server=time_app,
     )
 
-    app.mount(
-        prefix="currency",
-        server=currency_app,
-    )
-
     transport_type = parse_env(
         EnvironmentVariables.MCP_SERVER_TRANSPORT,
         default_value=EnvironmentVariables.DEFAULT__MCP_SERVER_TRANSPORT,
         allowed_values=EnvironmentVariables.ALLOWED__MCP_SERVER_TRANSPORT,
     )
-    (
+
+    print(
+        f"[green]Starting DQA MCP server with {transport_type} transport, press CTRL+C to exit...[/green]"
+    )
+
+    if transport_type == "stdio":
+        app.run()
+    else:
         app.run(
             transport=transport_type,
             host=parse_env(
@@ -98,7 +97,6 @@ def main():
                 "timeout_graceful_shutdown": 5,  # seconds
             },
         )
-    )
 
 
 if __name__ == "__main__":
