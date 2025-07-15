@@ -1,4 +1,3 @@
-import asyncio
 import signal
 import sys
 import uuid
@@ -54,6 +53,7 @@ class GradioApp:
         if not session_id or session_id.strip() == "":
             session_id = uuid.uuid4().hex
         # initialise the session orchestrator here once.
+        gr.Info(f"Initialising the session orchestrator {session_id}")
         orchestrator = self.get_session_orchestrator(session_id=session_id)
         model_info = {**orchestrator.llm_config}
         tools_info = [
@@ -65,6 +65,7 @@ class GradioApp:
         ]
         gradio_chat_history = []
         tools_used = set()
+        gr.Info(f"Retrieving chat history for session orchestrator {session_id}")
         for chat_message in orchestrator.get_chat_history():
             if chat_message.role == "user" or chat_message.role == "assistant":
                 if chat_message.content != "":
@@ -97,6 +98,9 @@ class GradioApp:
                 if "tool_call_id" in chat_message.additional_kwargs:
                     tools_used.add(chat_message.additional_kwargs["tool_call_id"])
                 ic(chat_message, tools_used)
+        gr.Info(
+            f"Successfully loaded chat history and MCP features for session orchestrator {session_id}"
+        )
         return session_id, gradio_chat_history, model_info, tools_info
 
     def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
@@ -109,9 +113,6 @@ class GradioApp:
         self.purge_stale_session_orchestrators()
         if session_id not in self.sessions:
             self.sessions[session_id] = DQAOrchestrator(session_id)
-            print(f"Created new session orchestrator with ID: {session_id}")
-        else:
-            print(f"Retrieved existing session orchestrator with ID: {session_id}")
         return self.sessions.get(session_id)
 
     def delete_session_orchestrator(self, session_id):
@@ -120,7 +121,7 @@ class GradioApp:
         """
         if session_id in self.sessions:
             del self.sessions[session_id]
-            print(f"Deleted session orchestrator with ID: {session_id}")
+            gr.Warning(f"Deleted session orchestrator with ID: {session_id}")
 
     def purge_stale_session_orchestrators(self):
         """
@@ -133,11 +134,46 @@ class GradioApp:
         for session_id in purgeable_sessions_orchestrators:
             del self.sessions[session_id]
         if len(purgeable_sessions_orchestrators) > 0:
-            print(
+            gr.Warning(
                 f"Purged stale session orchestrators with IDs: {', '.join(purgeable_sessions_orchestrators)}"
             )
 
     def create_ui(self):
+        def orchestrator_model_info_changed(session_id, model_info):
+            """
+            Update the chatbot with the model information from the orchestrator.
+            """
+            if model_info and session_id:
+                return gr.update(
+                    label=f"Chat using {model_info[OrchestratorLLM.OLLAMA]['model']}. Session ID: {session_id}"
+                )
+            else:
+                return gr.update(label="Chat")
+
+        def orchestrator_tools_info_changed(tools_info):
+            """
+            Update the UI tools list with the tools information from the orchestrator.
+            """
+            if tools_info:
+                return gr.update(
+                    label=f"{len(tools_info)} MCP features available to the agent",
+                    value=tools_info,
+                    visible=True,
+                )
+            else:
+                return gr.update(label=None, value={}, visible=False)
+
+        def clear_chat_history(session_id: str):
+            """
+            Clear the chat history for the given session ID.
+            """
+            orchestrator = self.get_session_orchestrator(session_id)
+            orchestrator.reset_chat_history()
+            gr.Warning(
+                f"Chat history for {session_id} cleared successfully. There is no memory of your previous conversations."
+            )
+            return []
+
         def log_question_to_chat(question: str, chat_history: list):
             """
             Log the question to the chat history.
@@ -151,11 +187,7 @@ class GradioApp:
             chat_history,
             session_id,
         ):
-            loop = asyncio.get_event_loop()
-            orchestrator = await loop.run_in_executor(
-                None, self.get_session_orchestrator, session_id
-            )
-            # yield None, chat_history
+            orchestrator = self.get_session_orchestrator(session_id)
             tools_used = set()
             question = chat_history[-1]["content"]
             workflow_handler = orchestrator.run(query=question)
@@ -268,26 +300,23 @@ class GradioApp:
                     "Ask", size="lg", variant="primary", min_width=160
                 )
 
-            ui_text_question.submit(
+            gr.on(
                 fn=log_question_to_chat,
+                triggers=[ui_text_question.submit, ui_btn_ask.click],
                 inputs=[ui_text_question, ui_chatbot],
                 outputs=[ui_text_question, ui_chatbot],
                 queue=True,
-            ).then(
+            ).success(
                 fn=respond_to_question,
                 inputs=[ui_chatbot, bstate_session_id],
                 outputs=[ui_chatbot],
             )
 
-            ui_btn_ask.click(
-                fn=log_question_to_chat,
-                inputs=[ui_text_question, ui_chatbot],
-                outputs=[ui_text_question, ui_chatbot],
-                queue=True,
-            ).then(
-                fn=respond_to_question,
-                inputs=[ui_chatbot, bstate_session_id],
+            ui_chatbot.clear(
+                fn=clear_chat_history,
+                inputs=[bstate_session_id],
                 outputs=[ui_chatbot],
+                queue=True,
             )
 
             self.ui.load(
@@ -302,37 +331,17 @@ class GradioApp:
                 ],
             )
 
-            @state_orchestrator_model_info.change(
+            state_orchestrator_model_info.change(
+                fn=orchestrator_model_info_changed,
                 inputs=[bstate_session_id, state_orchestrator_model_info],
                 outputs=[ui_chatbot],
             )
-            def orchestrator_model_info_changed(session_id, model_info):
-                """
-                Update the chatbot with the model information from the orchestrator.
-                """
-                if model_info and session_id:
-                    return gr.update(
-                        label=f"Chat using {model_info[OrchestratorLLM.OLLAMA]['model']}. Session ID: {session_id}"
-                    )
-                else:
-                    return gr.update(label="Chat")
 
-            @state_orchestrator_mcp_features_info.change(
+            state_orchestrator_mcp_features_info.change(
+                fn=orchestrator_tools_info_changed,
                 inputs=[state_orchestrator_mcp_features_info],
                 outputs=[ui_json_mcp_features],
             )
-            def orchestrator_tools_info_changed(tools_info):
-                """
-                Update the UI tools list with the tools information from the orchestrator.
-                """
-                if tools_info:
-                    return gr.update(
-                        label=f"{len(tools_info)} MCP features available to the agent",
-                        value=tools_info,
-                        visible=True,
-                    )
-                else:
-                    return gr.update(label=None, value={}, visible=False)
 
     def run(self):
         """Run the Gradio app by launching a server."""
