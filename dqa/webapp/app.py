@@ -214,7 +214,7 @@ class GradioApp:
             # in the sessions dictionary, it will be used to retrieve the session orchestrator. Otherwise,
             # a new session orchestrator will be created.
             bstate_session_id = gr.BrowserState(
-                default_value="",
+                default_value=None,
                 storage_key="dqa_orchestrator_session_id",
             )
 
