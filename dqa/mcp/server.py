@@ -23,8 +23,6 @@ app = FastMCP(
 
 @app.resource(
     uri="data://logo",
-    name="logo",
-    description="The logo of the DQA project.",
     mime_type="application/json",
     tags=["logo", "dqa", "metadata"],
 )
@@ -36,7 +34,7 @@ def logo():
         logo_data = f.read()
         f.close()
     # Encode the logo data in base64
-    logo_data_base64 = base64.b64encode(logo_data.encode("utf-8")).decode("utf-8")
+    logo_data_base64 = base64.b64encode(logo_data.encode()).decode()
     return {
         "name": "DQA logo",
         "description": "The logo of the DQA project.",
