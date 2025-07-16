@@ -10,7 +10,8 @@ from llama_index.core.memory import Memory
 from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import Context
 from llama_index.core.workflow.handler import WorkflowHandler
-from llama_index.core.agent.workflow import AgentWorkflow, FunctionAgent
+from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent
+
 
 from enum import StrEnum
 
@@ -25,7 +26,10 @@ class OrchestratorLLM(StrEnum):
 
 class DQAOrchestrator:
     def __init__(
-        self, session_id: str, use_mcp: bool = True, session_purge_timeout: int = 3600
+        self,
+        session_id: str,
+        use_mcp: bool = True,
+        session_purge_timeout: int = 3600,
     ):
         self.session_purge_timeout = session_purge_timeout
         self.mcp_features = []
@@ -79,7 +83,7 @@ class DQAOrchestrator:
                     else:
                         print(f"Error loading MCP features: {str(e)}")
 
-        chat_agent = FunctionAgent(
+        user_chat_agent = ReActAgent(
             name="user-chat-agent",
             description="The main agent that handles user chat.",
             system_prompt="You are a specialised assistant for answering multi-hop questions. "
@@ -100,7 +104,7 @@ class DQAOrchestrator:
             session_id=session_id,
         )
 
-        self.workflow = AgentWorkflow(agents=[chat_agent])
+        self.workflow = AgentWorkflow(agents=[user_chat_agent])
         self.workflow_context = Context(
             workflow=self.workflow,
         )
@@ -114,6 +118,7 @@ class DQAOrchestrator:
             user_msg=query,
             memory=self.workflow_memory,
             context=self.workflow_context,
+            max_iterations=5,
         )
         self.last_run_timestamp = time.time()
         return result
