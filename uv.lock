@@ -244,6 +244,19 @@ wheels = [
 ]
 
 [[package]]
+name = "beautifulsoup4"
+version = "4.13.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "soupsieve" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d8/e4/0c4c39e18fd76d6a628d4dd8da40543d136ce2d1752bd6eeeab0791f4d6b/beautifulsoup4-4.13.4.tar.gz", hash = "sha256:dbb3c4e1ceae6aefebdaf2423247260cd062430a410e38c66f2baa50a8437195", size = 621067, upload-time = "2025-04-15T17:05:13.836Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/cd/30110dc0ffcf3b131156077b90e9f60ed75711223f306da4db08eff8403b/beautifulsoup4-4.13.4-py3-none-any.whl", hash = "sha256:9bbbb14bfde9d79f38b8cd5f8c7c85f4b8f2523190ebed90e950a8dea4cb1c4b", size = 187285, upload-time = "2025-04-15T17:05:12.221Z" },
+]
+
+[[package]]
 name = "bidict"
 version = "0.23.1"
 source = { registry = "https://pypi.org/simple" }
@@ -396,14 +409,14 @@ wheels = [
 
 [[package]]
 name = "click"
-version = "8.1.8"
+version = "8.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/2e/0090cbf739cee7d23781ad4b89a9894a41538e4fcf4c31dcdd705b78eb8b/click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a", size = 226593, upload-time = "2024-12-21T18:38:44.339Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/6c/8ca2efa64cf75a977a0d7fac081354553ebe483345c734fb6b6515d96bbc/click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202", size = 286342, upload-time = "2025-05-20T23:19:49.832Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7e/d4/7ebdbd03970677812aac39c869717059dbb71a4cfc033ca6e5221787892c/click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2", size = 98188, upload-time = "2024-12-21T18:38:41.666Z" },
+    { url = "https://files.pythonhosted.org/packages/85/32/10bb5764d90a8eee674e9dc6f4db6a0ab47c8c4d0d83c27f7c39ac415a4d/click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b", size = 102215, upload-time = "2025-05-20T23:19:47.796Z" },
 ]
 
 [[package]]
@@ -553,6 +566,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "acp-sdk" },
+    { name = "duckduckgo-mcp-server" },
     { name = "fastmcp" },
     { name = "frankfurtermcp" },
     { name = "gradio" },
@@ -576,6 +590,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "acp-sdk", specifier = ">=1.0.0" },
+    { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "fastmcp", specifier = ">=2.7.0" },
     { name = "frankfurtermcp", specifier = ">=0.3.2" },
     { name = "gradio", specifier = ">=5.33.0" },
@@ -593,6 +608,20 @@ dev = [
     { name = "pre-commit", specifier = ">=4.2.0" },
 ]
 test = [{ name = "pytest", specifier = ">=8.4.0" }]
+
+[[package]]
+name = "duckduckgo-mcp-server"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "httpx" },
+    { name = "mcp", extra = ["cli"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/82/ad813d88199de0a88aa50536e569f6191da572a6d5bf2e7fcccb7e28b522/duckduckgo_mcp_server-0.1.1.tar.gz", hash = "sha256:d6f48f4cb4234de9e716e87f7d49aa54637ebc4a3700ecfd05f260696463c0ec", size = 19920, upload-time = "2025-02-22T21:39:37.222Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/42/e7d7fc70744d3ebf7b309a19176bb745c5e7d5babf77fcf903068cb08bbd/duckduckgo_mcp_server-0.1.1-py3-none-any.whl", hash = "sha256:ca56c67bcfcef259ce083d1700700f5b66f75a48b4c1e13f556289cf3351b50b", size = 6520, upload-time = "2025-02-22T21:39:35.527Z" },
+]
 
 [[package]]
 name = "email-validator"
@@ -835,7 +864,7 @@ wheels = [
 
 [[package]]
 name = "gradio"
-version = "5.37.0"
+version = "5.38.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -869,14 +898,14 @@ dependencies = [
     { name = "urllib3", marker = "sys_platform == 'emscripten'" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/6b/ba0db0812f3d6e087ac1d877d2241b2f56adae8362396be49beb96475010/gradio-5.37.0.tar.gz", hash = "sha256:ce534ac4e501a4c7286f683acc39c4ec47a08a00cd99d5d7beb7c7e8e30be3b2", size = 71585052, upload-time = "2025-07-14T15:47:31.475Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/6c/3d31548f336b2efc3938dea4a714de173d5f1194876658674cc759bd1176/gradio-5.38.0.tar.gz", hash = "sha256:448f395bce46ae103da237647c5a44b2581570b5876957f8d2544b3b1351e495", size = 71626784, upload-time = "2025-07-17T02:02:36.8Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/3f/a18593c1e86fe8b628e4086a3211d583791e62688390f53cf9dccfca7492/gradio-5.37.0-py3-none-any.whl", hash = "sha256:7ffbf39cb93eacce008a27d3c65d96062018af83b3b08a8b2fd405044eaffd89", size = 59623225, upload-time = "2025-07-14T15:47:26.289Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/d6/1bc8f980f586cd56d6191da3eb93256225ef752e148d832fe450adabb442/gradio-5.38.0-py3-none-any.whl", hash = "sha256:d0ddd19986f66c91c07ba5706aeb74c83764c58e6892a363b249da1047cf4d9a", size = 59645499, upload-time = "2025-07-17T02:02:31.352Z" },
 ]
 
 [[package]]
 name = "gradio-client"
-version = "1.10.4"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fsspec" },
@@ -886,9 +915,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/18/c4/2ab8efba7137ef85c66e5833258ba50089515d78324aec42e65aff446c24/gradio_client-1.10.4.tar.gz", hash = "sha256:5dd0ff615f859b8d9fd3ce88555278e3d48bb6ffef79eb956a01e132edbcc1b0", size = 321871, upload-time = "2025-06-27T22:49:54.114Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6b/98/60c699708bad11b5f28bfb1deaf979c4a8fcc31ec292c6a71dfd1eb14cdb/gradio_client-1.11.0.tar.gz", hash = "sha256:377c31d8082173663b230dad341614b127b2460fe24d5fd72ed456fb3f0b3a9e", size = 322444, upload-time = "2025-07-17T02:02:45.968Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/b5/bbf3a8649f3b496e4054c970e517b508c581de24c1ccc06fe5960bf7554e/gradio_client-1.10.4-py3-none-any.whl", hash = "sha256:271018368f4f0a2d2dfb943bbd495277518172be50e44f54d99c62fa5533ae09", size = 323872, upload-time = "2025-06-27T22:49:52.775Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/38/7f50ae95de8fa419276742230f57a34e8c0f47231da0ad54479dd0088972/gradio_client-1.11.0-py3-none-any.whl", hash = "sha256:afb714aea50224f6f04679fe2ce79c1be75011012d0dc3b3ee575610a0dc8eb2", size = 324452, upload-time = "2025-07-17T02:02:44.542Z" },
 ]
 
 [[package]]
@@ -926,14 +955,14 @@ wheels = [
 
 [[package]]
 name = "griffe"
-version = "0.36.9"
+version = "1.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/a6/81075cf25c36427433d345be0e57ea6a6bc151c23d34b4c748fcfa459de0/griffe-0.36.9.tar.gz", hash = "sha256:b4e510bf0ed1fc91c58453c68018a2247c561adec8f5dadc40275afc01f51eac", size = 126804, upload-time = "2023-10-26T22:38:37.957Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/3e/5aa9a61f7c3c47b0b52a1d930302992229d191bf4bc76447b324b731510a/griffe-1.7.3.tar.gz", hash = "sha256:52ee893c6a3a968b639ace8015bec9d36594961e156e23315c8e8e51401fa50b", size = 395137, upload-time = "2025-04-23T11:29:09.147Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/11/99/b8ab0cdd202af44b45fcec04d53ef1a1c5d4964b035b5fb4df2761e3c815/griffe-0.36.9-py3-none-any.whl", hash = "sha256:7874febe7cd81e8e47eb7b8130ff9d38c8f3656233c01d2d217d2e898a0925f5", size = 111716, upload-time = "2023-10-26T22:38:35.497Z" },
+    { url = "https://files.pythonhosted.org/packages/58/c6/5c20af38c2a57c15d87f7f38bee77d63c1d2a3689f74fefaf35915dd12b2/griffe-1.7.3-py3-none-any.whl", hash = "sha256:c6b3ee30c2f0f17f30bcdef5068d6ab7a2a4f1b8bf1a3e74b56fffd21e1c5f75", size = 129303, upload-time = "2025-04-23T11:29:07.145Z" },
 ]
 
 [[package]]
@@ -1357,6 +1386,12 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3a/f5/9506eb5578d5bbe9819ee8ba3198d0ad0e2fbe3bab8b257e4131ceb7dfb6/mcp-1.11.0.tar.gz", hash = "sha256:49a213df56bb9472ff83b3132a4825f5c8f5b120a90246f08b0dac6bedac44c8", size = 406907, upload-time = "2025-07-10T16:41:09.388Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/92/9c/c9ca79f9c512e4113a5d07043013110bb3369fc7770040c61378c7fbcf70/mcp-1.11.0-py3-none-any.whl", hash = "sha256:58deac37f7483e4b338524b98bc949b7c2b7c33d978f5fafab5bde041c5e2595", size = 155880, upload-time = "2025-07-10T16:41:07.935Z" },
+]
+
+[package.optional-dependencies]
+cli = [
+    { name = "python-dotenv" },
+    { name = "typer" },
 ]
 
 [[package]]
@@ -2523,15 +2558,15 @@ wheels = [
 
 [[package]]
 name = "rich"
-version = "13.9.4"
+version = "14.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ab/3a/0316b28d0761c6734d6bc14e770d85506c986c85ffb239e688eeaab2c2bc/rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098", size = 223149, upload-time = "2024-11-01T16:43:57.873Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/53/830aa4c3066a8ab0ae9a9955976fb770fe9c6102117c8ec4ab3ea62d89e8/rich-14.0.0.tar.gz", hash = "sha256:82f1bc23a6a21ebca4ae0c45af9bdbc492ed20231dcb63f297d6d1021a9d5725", size = 224078, upload-time = "2025-03-30T14:15:14.23Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/71/39c7c0d87f8d4e6c020a393182060eaefeeae6c01dab6a84ec346f2567df/rich-13.9.4-py3-none-any.whl", hash = "sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90", size = 242424, upload-time = "2024-11-01T16:43:55.817Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/9b/63f4c7ebc259242c89b3acafdb37b41d1185c07ff0011164674e9076b491/rich-14.0.0-py3-none-any.whl", hash = "sha256:1c9491e1951aac09caffd42f448ee3d04e58923ffe14993f6e83068dc395d7e0", size = 243229, upload-time = "2025-03-30T14:15:12.283Z" },
 ]
 
 [[package]]
@@ -2791,6 +2826,15 @@ wheels = [
 ]
 
 [[package]]
+name = "soupsieve"
+version = "2.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/f4/4a80cd6ef364b2e8b65b15816a843c0980f7a5a2b4dc701fc574952aa19f/soupsieve-2.7.tar.gz", hash = "sha256:ad282f9b6926286d2ead4750552c8a6142bc4c783fd66b0293547c8fe6ae126a", size = 103418, upload-time = "2025-04-20T18:50:08.518Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/9c/0e6afc12c269578be5c0c1c9f4b49a8d32770a080260c333ac04cc1c832d/soupsieve-2.7-py3-none-any.whl", hash = "sha256:6e60cc5c1ffaf1cebcc12e8188320b72071e922c2e897f737cadce79ad5d30c4", size = 36677, upload-time = "2025-04-20T18:50:07.196Z" },
+]
+
+[[package]]
 name = "sqlalchemy"
 version = "2.0.41"
 source = { registry = "https://pypi.org/simple" }
@@ -2963,11 +3007,11 @@ wheels = [
 
 [[package]]
 name = "urllib3"
-version = "2.0.7"
+version = "2.5.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/af/47/b215df9f71b4fdba1025fc05a77db2ad243fa0926755a52c5e71659f4e3c/urllib3-2.0.7.tar.gz", hash = "sha256:c97dfde1f7bd43a71c8d2a58e369e9b2bf692d1334ea9f9cae55add7d0dd0f84", size = 282546, upload-time = "2023-10-17T17:46:50.542Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/22/9ee70a2574a4f4599c47dd506532914ce044817c7752a79b6a51286319bc/urllib3-2.5.0.tar.gz", hash = "sha256:3fc47733c7e419d4bc3f6b3dc2b4f890bb743906a30d56ba4a5bfa4bbff92760", size = 393185, upload-time = "2025-06-18T14:07:41.644Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/b2/b157855192a68541a91ba7b2bbcb91f1b4faa51f8bae38d8005c034be524/urllib3-2.0.7-py3-none-any.whl", hash = "sha256:fdb6d215c776278489906c2f8916e6e7d4f5a9b602ccbcfdf7f016fc8da0596e", size = 124213, upload-time = "2023-10-17T17:46:48.538Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/c2/fe1e52489ae3122415c51f387e221dd0773709bad6c6cdaa599e8a2c5185/urllib3-2.5.0-py3-none-any.whl", hash = "sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc", size = 129795, upload-time = "2025-06-18T14:07:40.39Z" },
 ]
 
 [[package]]

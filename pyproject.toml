@@ -17,6 +17,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "acp-sdk>=1.0.0",
+    "duckduckgo-mcp-server>=0.1.1",
     "fastmcp>=2.7.0",
     "frankfurtermcp>=0.3.2",
     "gradio>=5.33.0",
