@@ -1,5 +1,7 @@
 import signal
 import sys
+import time
+import random
 from acp_sdk.server import Server
 from acp_sdk.models import Message, Metadata
 
@@ -15,13 +17,17 @@ server = Server()
         license="MIT",
         programming_language="python",
         natural_languages=["english"],
-        recommended_models=["ollama/mistral-nemo"],
+        framework="ACP SDK",
+        tags=["echo", "example"],
+        recommended_models=["nothing as we do not use any model here"],
     )
 )
 async def echo(input: list[Message]):
-    """Echoes every message in the list with a UTC timestamp"""
+    """Echoes every message in the list with a UTC timestamp, and a final message after a little delay."""
     for message in input:
-        yield f"{message} @{datetime.now(timezone.utc).isoformat()}"
+        yield f"{message} @{datetime.now(timezone.utc).isoformat()}\n"
+    time.sleep(random.randint(1, 4))  # Simulate some processing delay
+    yield "I wasn't done but now I am! This is a final message after a little delay."
 
 
 def main():
