@@ -26,6 +26,8 @@ dependencies = [
     "nicegui>=2.20.0",
     "python-dotenv>=1.1.0",
     "pywebview>=5.4",
+    "textual>=5.0.0",
+    "textual-dev>=1.7.0",
     "typer>=0.16.0",
 ]
 

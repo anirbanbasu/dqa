@@ -5,14 +5,31 @@ from collections.abc import AsyncGenerator
 from acp_sdk.server import Server, Context, RunYield, RunYieldResume
 from acp_sdk.models import Message, Metadata
 
-from datetime import datetime, timezone
+
+from llama_index.core.agent.workflow import (
+    AgentOutput,
+    ToolCall,
+    ToolCallResult,
+    AgentStream,
+)
 
 from rich import print as print
 
 from dqa.agent.orchestrator import DQAOrchestrator
-from dqa.common import ic
 
 server = Server()
+
+
+dqa_orchestrators = {}
+
+
+def get_orchestrator(session_id: str) -> DQAOrchestrator:
+    """
+    Create a DQAOrchestrator instance for the given session ID.
+    """
+    if dqa_orchestrators.get(session_id) is None:
+        dqa_orchestrators[session_id] = DQAOrchestrator(session_id=session_id)
+    return dqa_orchestrators[session_id]
 
 
 @server.agent(
@@ -20,32 +37,33 @@ server = Server()
         license="MIT",
         programming_language="python",
         natural_languages=["english"],
-        framework="ACP SDK",
-        tags=["echo", "example"],
-        recommended_models=["nothing as we do not use any model here"],
+        framework="ACP SDK, LlamaIndex Workflows",
+        tags=["dqa_chat"],
+        recommended_models=["ollama/mistral-nemo:12b", "ollama/qwen3:8b"],
     )
 )
-async def echo(
+async def dqa_chat(
     input: list[Message], context: Context
 ) -> AsyncGenerator[RunYield, RunYieldResume]:
-    """Echoes every message in the list with a UTC timestamp, and a final message after a little delay."""
-    ic(context.__dict__)
-    async for message in context.session.load_history():
-        yield message
-    state = await context.session.load_state()
-    ic(state)
-    for message in input:
-        await asyncio.sleep(0.5)
-        yield f"{message} @{datetime.now(timezone.utc).isoformat()}\n"
-
-
-async def dqa_chat(input: list[Message]):
     """Responds to non-trivial questions from the user."""
-    # TODO: This is a placeholder for the DQA orchestrator.
-    orchestrator = DQAOrchestrator()
-    for message in input:
-        # Need to convert LlamaIndex events to ACP compatible ones.
-        orchestrator.run(query=message)
+    session_id = str(context.session.id)
+    query = str(input[-1])
+    orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
+        None, get_orchestrator, session_id
+    )
+    workflow_handler = orchestrator.run(query=query)
+    async for ev in workflow_handler.stream_events():
+        if isinstance(ev, AgentStream):
+            yield ev.delta
+        elif isinstance(ev, ToolCallResult):
+            pass
+        elif isinstance(ev, ToolCall):
+            pass
+        elif isinstance(ev, AgentOutput):
+            yield "\n"
+            yield "".join([block.text for block in ev.response.blocks])
+    # response = await workflow_handler
+    # yield str(response)
 
 
 def main():
