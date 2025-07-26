@@ -1,9 +1,11 @@
 import asyncio
 import signal
 import sys
+import json
+import uvicorn
 from collections.abc import AsyncGenerator
-from acp_sdk.server import Server, Context, RunYield, RunYieldResume
-from acp_sdk.models import Message, Metadata
+from acp_sdk.server import agent, create_app, Context, RunYield, RunYieldResume
+from acp_sdk.models import Artifact, Message, Metadata
 
 
 from llama_index.core.agent.workflow import (
@@ -16,9 +18,9 @@ from llama_index.core.agent.workflow import (
 from rich import print as print
 
 from dqa.agent.orchestrator import DQAOrchestrator
-
-server = Server()
-
+from dqa.common import EnvironmentVariables, ic
+from dqa.utils import parse_env
+from dotenv import load_dotenv
 
 dqa_orchestrators = {}
 
@@ -32,17 +34,19 @@ def get_orchestrator(session_id: str) -> DQAOrchestrator:
     return dqa_orchestrators[session_id]
 
 
-@server.agent(
+@agent(
+    input_content_types=["text/plain"],
+    output_content_types=["text/plain"],
     metadata=Metadata(
         license="MIT",
         programming_language="python",
         natural_languages=["english"],
         framework="ACP SDK, LlamaIndex Workflows",
-        tags=["dqa_chat"],
+        tags=["chat", "multi-hop question-answering", "llamaindex"],
         recommended_models=["ollama/mistral-nemo:12b", "ollama/qwen3:8b"],
-    )
+    ),
 )
-async def dqa_chat(
+async def chat(
     input: list[Message], context: Context
 ) -> AsyncGenerator[RunYield, RunYieldResume]:
     """Responds to non-trivial questions from the user."""
@@ -62,11 +66,51 @@ async def dqa_chat(
         elif isinstance(ev, AgentOutput):
             yield "\n"
             yield "".join([block.text for block in ev.response.blocks])
-    # response = await workflow_handler
-    # yield str(response)
 
 
-def main():
+@agent(
+    input_content_types=["text/plain"],
+    output_content_types=["application/json"],
+    metadata=Metadata(
+        license="MIT",
+        programming_language="python",
+        natural_languages=["english"],
+        framework="ACP SDK, LlamaIndex Workflows",
+        tags=["mcp", "resources", "tools"],
+    ),
+)
+async def list_mcp_features(
+    input: list[Message], context: Context
+) -> AsyncGenerator[RunYield, RunYieldResume]:
+    """
+    List all available MCP features.
+    """
+    session_id = str(context.session.id)
+    orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
+        None, get_orchestrator, session_id
+    )
+    yield Artifact(
+        name=f"mcp_features_{session_id}",
+        content_type="application/json",
+        content=json.dumps(
+            [
+                {
+                    "name": feature.__dict__["_metadata"].name,
+                    "description": feature.__dict__["_metadata"].description,
+                }
+                for feature in orchestrator.mcp_features
+            ],
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+
+
+dqa_acp_app = create_app(chat, list_mcp_features)
+
+
+async def uvicorn_serve():
     def sigint_handler(signal, frame):
         """
         Signal handler to shut down the server gracefully.
@@ -77,11 +121,29 @@ def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    server.run(
-        # Let's make these configurable
-        port=8192,
-        # store=MemoryStore(limit=10000, ttl=60),
+    config = uvicorn.Config(
+        dqa_acp_app,
+        host=parse_env(
+            var_name=EnvironmentVariables.DQA_ACP_HOST,
+            default_value=EnvironmentVariables.DEFAULT__DQA_ACP_HOST,
+        ),
+        port=parse_env(
+            var_name=EnvironmentVariables.DQA_ACP_PORT,
+            default_value=EnvironmentVariables.DEFAULT__DQA_ACP_PORT,
+            type_cast=int,
+        ),
+        log_level="info",
     )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+def main():
+    """
+    Main function to run the ACP server.
+    """
+    ic(load_dotenv())
+    asyncio.run(uvicorn_serve())
 
 
 if __name__ == "__main__":

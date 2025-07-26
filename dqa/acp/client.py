@@ -1,6 +1,7 @@
 import asyncio
 import sys
-from acp_sdk import GenericEvent, MessageCompletedEvent, MessagePartEvent
+import uuid
+from acp_sdk import GenericEvent, MessageCompletedEvent, MessagePartEvent, Session
 from acp_sdk.client import Client
 from acp_sdk.models import Message, MessagePart
 
@@ -8,12 +9,32 @@ from acp_sdk.models import Message, MessagePart
 from rich import print_json
 from rich import print as print
 
+from textual.app import App, ComposeResult
+from textual.widgets import Header
 
-async def try_client():
-    async with (
-        Client(base_url="http://localhost:8192") as client,
-        client.session() as client_session,
-    ):
+from dqa.common import EnvironmentVariables
+from dqa.utils import parse_env
+
+
+def get_client_session(existing_session_id: str | None = None) -> Client:
+    existing_session = None
+    if existing_session_id and len(existing_session_id.strip()) > 0:
+        print(
+            f"[bold yellow]Attempting to connect to existing session ID: {existing_session_id}[/bold yellow]"
+        )
+        existing_session = Session(id=uuid.UUID(existing_session_id))
+    client = Client(
+        base_url=parse_env(
+            var_name=EnvironmentVariables.DQA_ACP_CLIENT_ACCESS_URL,
+            default_value=EnvironmentVariables.DEFAULT__DQA_ACP_CLIENT_ACCESS_URL,
+        )
+    )
+    client_session = client.session(session=existing_session)
+    return client_session
+
+
+async def acp_client(existing_session_id: str | None = None):
+    async with get_client_session(existing_session_id) as client_session:
         async for agent in client_session.agents():
             print_json(agent.model_dump_json())
         while True:
@@ -70,8 +91,16 @@ async def try_client():
                         )
 
 
+class ACPClient(App):
+    def compose(self) -> ComposeResult:
+        yield Header(name="DQA ACP Client", show_clock=True, time_format="%H:%M:%S")
+
+
 def main():
-    asyncio.run(try_client())
+    session_id_from_env = parse_env(var_name="DQA_SESSION_ID", default_value="")
+    asyncio.run(acp_client(session_id_from_env))
+    # app = ACPClient()
+    # app.run()
 
 
 if __name__ == "__main__":

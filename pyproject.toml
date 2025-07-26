@@ -27,7 +27,6 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "pywebview>=5.4",
     "textual>=5.0.0",
-    "textual-dev>=1.7.0",
     "typer>=0.16.0",
 ]
 
@@ -36,6 +35,7 @@ dqa-webapp = "dqa.webapp.app:main"
 dqa-nicegui = "dqa.nicegui.app:typer_app"
 dqa-mcp = "dqa.mcp.server:main"
 dqa-acp = "dqa.acp.server:main"
+dqa-acp-api = "dqa.acp.api:main"
 dqa-acp-client = "dqa.acp.client:main"
 
 [build-system]
