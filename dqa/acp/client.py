@@ -52,9 +52,10 @@ async def acp_client(existing_session_id: str | None = None):
             # )
             # print_json(run.output[-1].parts[-1].model_dump_json())
 
+            agent_name = input("Name the agent to invoke [chat]: ").strip() or "chat"
             log_type = None
             async for event in client_session.run_stream(
-                agent="dqa_chat",
+                agent=agent_name,
                 input=[user_message_input],
             ):
                 match event:
@@ -79,16 +80,27 @@ async def acp_client(existing_session_id: str | None = None):
                         if log_type:
                             print()
                             log_type = None
-                        status_message = f"[bold green]ⓘ {event.type}[/bold green]"
-                        if hasattr(event, "run"):
-                            if hasattr(event.run, "run_id"):
-                                status_message += f" run_id: {event.run.run_id}"
-                            if hasattr(event.run, "session_id"):
-                                status_message += f" session_id: {event.run.session_id}"
-                        print(
-                            status_message,
-                            file=sys.stdout,
-                        )
+                        match event.type:
+                            case "message.part":
+                                print(
+                                    f"[bold green]ⓘ {event.type}[/bold green]\n{event.part.content}",
+                                    file=sys.stdout,
+                                )
+                            case _:
+                                status_message = (
+                                    f"[bold green]ⓘ {event.type}[/bold green]"
+                                )
+                                if hasattr(event, "run"):
+                                    if hasattr(event.run, "run_id"):
+                                        status_message += f" run_id: {event.run.run_id}"
+                                    if hasattr(event.run, "session_id"):
+                                        status_message += (
+                                            f" session_id: {event.run.session_id}"
+                                        )
+                                print(
+                                    status_message,
+                                    file=sys.stdout,
+                                )
 
 
 class ACPClient(App):
