@@ -1,6 +1,8 @@
+import json
 import signal
 import sys
 import uuid
+from acp_sdk import GenericEvent, MessageCompletedEvent, MessagePart, MessagePartEvent
 import gradio as gr
 from gradio import ChatMessage
 
@@ -8,17 +10,11 @@ from rich import print as print
 
 from dotenv import load_dotenv
 
-from llama_index.core.agent.workflow import (
-    AgentOutput,
-    ToolCallResult,
-    AgentStream,
-)
-
-# from dqa.agent.langchain_agent import DQAAgent
-from dqa.agent.orchestrator import DQAOrchestrator, OrchestratorLLM
+from dqa.agent.orchestrator import OrchestratorLLM
 from dqa.common import ic
 
-# from langchain_core.messages import AIMessage, ToolMessage
+from dqa.acp.client import get_acp_client_session
+
 
 # from dqa.utils import parse_env
 
@@ -43,40 +39,50 @@ class GradioApp:
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
         self.ui: gr.Blocks = None
-        self.sessions: dict[str, DQAOrchestrator] = {}
 
-    def get_session_id(self, session_id: str, request: gr.Request) -> str:
+    async def get_session_data(self, session_id: str) -> str:
         """
-        Get the session ID from the request.
-        If the session ID is not provided, create a new one.
+        If the session ID is not provided, a new one will be created by the ACP client.
         """
-        if not session_id or session_id.strip() == "":
-            session_id = uuid.uuid4().hex
-        # initialise the session orchestrator here once.
-        gr.Info(f"Initialising the session orchestrator {session_id}")
-        orchestrator = self.get_session_orchestrator(session_id=session_id)
-        model_info = {**orchestrator.llm_config}
-        tools_info = [
-            {
-                "name": tool.__dict__["_metadata"].name,
-                "description": tool.__dict__["_metadata"].description,
-            }
-            for tool in orchestrator.mcp_features
-        ]
+        async with get_acp_client_session(
+            existing_session_id=session_id
+        ) as client_session:
+            session_id = client_session._session.id
+            gr.Info(f"Connected to ACP client session with ID: {session_id}")
+            run = await client_session.run_sync(
+                agent="get_session_llm_config",
+                input=[],
+            )
+            model_info = json.loads(run.output[-1].parts[-1].content)
+            gr.Info(f"Retrieving MCP features for session {session_id}")
+            run = await client_session.run_sync(
+                agent="list_session_mcp_features",
+                input=[],
+            )
+            tools_info = json.loads(run.output[-1].parts[-1].content)
+            gr.Info(f"Retrieving chat history for session {session_id}")
+            run = await client_session.run_sync(
+                agent="get_session_chat_history",
+                input=[],
+            )
+            session_chat_history = json.loads(run.output[-1].parts[-1].content)
+
         gradio_chat_history = []
         tools_used = set()
-        gr.Info(f"Retrieving chat history for session orchestrator {session_id}")
-        for chat_message in orchestrator.get_chat_history():
-            if chat_message.role == "user" or chat_message.role == "assistant":
-                if chat_message.content != "":
-                    if chat_message.role == "assistant":
+        for chat_message in session_chat_history:
+            ic(chat_message)
+            if chat_message["role"] == "user" or chat_message["role"] == "assistant":
+                if len(chat_message["blocks"]) > 0:
+                    if chat_message["role"] == "assistant":
                         ai_message_id = uuid.uuid4().hex
                     else:
                         ai_message_id = None
                     gradio_chat_history.append(
                         ChatMessage(
-                            role=chat_message.role,
-                            content=chat_message.content,
+                            role=chat_message["role"],
+                            content="".join(
+                                [block["text"] for block in chat_message["blocks"]]
+                            ),
                             metadata=({"id": ai_message_id} if ai_message_id else {}),
                         )
                     )
@@ -94,49 +100,34 @@ class GradioApp:
                         )
                     )
                     tools_used.clear()
-            elif chat_message.role == "tool":
-                if "tool_call_id" in chat_message.additional_kwargs:
-                    tools_used.add(chat_message.additional_kwargs["tool_call_id"])
+            elif chat_message["role"] == "tool":
+                if "tool_call_id" in chat_message["additional_kwargs"]:
+                    tools_used.add(chat_message["additional_kwargs"]["tool_call_id"])
                 ic(chat_message, tools_used)
-        gr.Info(
-            f"Successfully loaded chat history and MCP features for session orchestrator {session_id}"
-        )
         return session_id, gradio_chat_history, model_info, tools_info
 
-    def get_session_orchestrator(self, session_id: str) -> DQAOrchestrator:
-        """
-        Retrieve the session data for the given session_id.
-        Create and return a new session if the session by the given session_id does not exist.
-        """
-        if not session_id or session_id.strip() == "":
-            raise ValueError("Session ID cannot be empty or whitespace.")
-        self.purge_stale_session_orchestrators()
-        if session_id not in self.sessions:
-            self.sessions[session_id] = DQAOrchestrator(session_id)
-        return self.sessions.get(session_id)
+    # def delete_session_orchestrator(self, session_id):
+    #     """
+    #     Delete the session with the given session_id, if it exists.
+    #     """
+    #     if session_id in self.sessions:
+    #         del self.sessions[session_id]
+    #         gr.Warning(f"Deleted session orchestrator with ID: {session_id}")
 
-    def delete_session_orchestrator(self, session_id):
-        """
-        Delete the session with the given session_id, if it exists.
-        """
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            gr.Warning(f"Deleted session orchestrator with ID: {session_id}")
-
-    def purge_stale_session_orchestrators(self):
-        """
-        Purge stale session orchestrators that are older than a certain threshold.
-        """
-        purgeable_sessions_orchestrators = []
-        for session_id, orchestrator in self.sessions.items():
-            if orchestrator.is_purgeable():
-                purgeable_sessions_orchestrators.append(session_id)
-        for session_id in purgeable_sessions_orchestrators:
-            del self.sessions[session_id]
-        if len(purgeable_sessions_orchestrators) > 0:
-            gr.Warning(
-                f"Purged stale session orchestrators with IDs: {', '.join(purgeable_sessions_orchestrators)}"
-            )
+    # def purge_stale_session_orchestrators(self):
+    #     """
+    #     Purge stale session orchestrators that are older than a certain threshold.
+    #     """
+    #     purgeable_sessions_orchestrators = []
+    #     for session_id, orchestrator in self.sessions.items():
+    #         if orchestrator.is_purgeable():
+    #             purgeable_sessions_orchestrators.append(session_id)
+    #     for session_id in purgeable_sessions_orchestrators:
+    #         del self.sessions[session_id]
+    #     if len(purgeable_sessions_orchestrators) > 0:
+    #         gr.Warning(
+    #             f"Purged stale session orchestrators with IDs: {', '.join(purgeable_sessions_orchestrators)}"
+    #         )
 
     def create_ui(self):
         def orchestrator_model_info_changed(session_id, model_info):
@@ -163,16 +154,21 @@ class GradioApp:
             else:
                 return gr.update(label=None, value={}, visible=False)
 
-        def clear_chat_history(session_id: str):
+        async def clear_chat_history(session_id: str):
             """
             Clear the chat history for the given session ID.
             """
-            orchestrator = self.get_session_orchestrator(session_id)
-            orchestrator.reset_chat_history()
-            gr.Warning(
-                f"Chat history for {session_id} cleared successfully. There is no memory of your previous conversations."
-            )
-            return []
+            async with get_acp_client_session(
+                existing_session_id=session_id
+            ) as client_session:
+                run = await client_session.run_sync(
+                    agent="reset_session_chat_history",
+                    input=[],
+                )
+                gr.Warning(
+                    f"Chat history for {session_id} cleared successfully. There is no memory of your previous conversations."
+                )
+                return json.loads(run.output[-1].parts[-1].content)
 
         def log_question_to_chat(question: str, chat_history: list):
             """
@@ -187,48 +183,66 @@ class GradioApp:
             chat_history,
             session_id,
         ):
-            orchestrator = self.get_session_orchestrator(session_id)
-            tools_used = set()
-            question = chat_history[-1]["content"]
-            workflow_handler = orchestrator.run(query=question)
-            ai_message_id = uuid.uuid4().hex
-            chat_history.append(
-                ChatMessage(
-                    role="assistant", content="", metadata={"id": ai_message_id}
-                )
-            )
-            async for event in workflow_handler.stream_events():
-                if not isinstance(event, AgentStream):
-                    ic(event)
-                if isinstance(event, AgentStream):
-                    chat_history[-1].content += event.delta
-                    yield chat_history
-                elif isinstance(event, ToolCallResult):
-                    tools_used.add(event.tool_name)
-                    chat_history[
-                        -1
-                    ].content += f"🛠️ Evaluating: **{event.tool_name}**.\n"
-                    ic(event.tool_kwargs)
-                    yield chat_history
-                elif isinstance(event, AgentOutput):
-                    chat_history[-1].content = "".join(
-                        [block.text for block in event.response.blocks]
-                    )
-                else:
-                    pass
-            if tools_used:
+            async with get_acp_client_session(
+                existing_session_id=session_id
+            ) as client_session:
+                tools_used = set()
+                question = chat_history[-1]["content"]
+                ai_message_id = uuid.uuid4().hex
                 chat_history.append(
                     ChatMessage(
-                        role="assistant",
-                        content="",
-                        metadata={
-                            "title": "🛠️ Tool(s) used",
-                            "log": f"{', '.join(list(tools_used))}",
-                            "parent_id": ai_message_id,
-                        },
+                        role="assistant", content="", metadata={"id": ai_message_id}
                     )
                 )
-            yield chat_history
+                async for event in client_session.run_stream(
+                    agent="chat",
+                    input=[question],
+                ):
+                    match event:
+                        case MessagePartEvent(part=MessagePart(content=content)):
+                            chat_history[-1].content += content
+                            yield chat_history
+                        case MessageCompletedEvent():
+                            pass
+                        case GenericEvent():
+                            pass
+                        case _:
+                            match event.type:
+                                case "message.part":
+                                    chat_history[-1].content += event.part.content
+                                    yield chat_history
+                    # async for event in workflow_handler.stream_events():
+                    # if not isinstance(event, AgentStream):
+                    #     ic(event)
+                    # if isinstance(event, AgentStream):
+                    #     chat_history[-1].content += event.delta
+                    #     yield chat_history
+                    # elif isinstance(event, ToolCallResult):
+                    #     tools_used.add(event.tool_name)
+                    #     chat_history[
+                    #         -1
+                    #     ].content += f"🛠️ Evaluating: **{event.tool_name}**.\n"
+                    #     ic(event.tool_kwargs)
+                    #     yield chat_history
+                    # elif isinstance(event, AgentOutput):
+                    #     chat_history[-1].content = "".join(
+                    #         [block.text for block in event.response.blocks]
+                    #     )
+                    # else:
+                    #     pass
+                if tools_used:
+                    chat_history.append(
+                        ChatMessage(
+                            role="assistant",
+                            content="",
+                            metadata={
+                                "title": "🛠️ Tool(s) used",
+                                "log": f"{', '.join(list(tools_used))}",
+                                "parent_id": ai_message_id,
+                            },
+                        )
+                    )
+                yield chat_history
 
         with gr.Blocks(
             title=GradioApp._APP_NAME_SHORT,
@@ -321,7 +335,7 @@ class GradioApp:
 
             self.ui.load(
                 queue=True,
-                fn=self.get_session_id,
+                fn=self.get_session_data,
                 inputs=[bstate_session_id],
                 outputs=[
                     bstate_session_id,

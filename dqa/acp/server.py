@@ -60,7 +60,16 @@ async def chat(
         if isinstance(ev, AgentStream):
             yield ev.delta
         elif isinstance(ev, ToolCallResult):
-            pass
+            yield Artifact(
+                name=f"tool_call_{ev.tool_id}",
+                content_type="application/json",
+                content=json.dumps(
+                    ev.model_dump(),
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ),
+            )
         elif isinstance(ev, ToolCall):
             pass
         elif isinstance(ev, AgentOutput):
@@ -76,14 +85,14 @@ async def chat(
         programming_language="python",
         natural_languages=["english"],
         framework="ACP SDK, LlamaIndex Workflows",
-        tags=["mcp", "resources", "tools"],
+        tags=["mcp", "features", "tools", "prompts", "resources"],
     ),
 )
-async def list_mcp_features(
+async def list_session_mcp_features(
     input: list[Message], context: Context
 ) -> AsyncGenerator[RunYield, RunYieldResume]:
     """
-    List all available MCP features.
+    List all available MCP features for the session.
     """
     session_id = str(context.session.id)
     orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
@@ -107,7 +116,113 @@ async def list_mcp_features(
     )
 
 
-dqa_acp_app = create_app(chat, list_mcp_features)
+@agent(
+    input_content_types=["text/plain"],
+    output_content_types=["application/json"],
+    metadata=Metadata(
+        license="MIT",
+        programming_language="python",
+        natural_languages=["english"],
+        framework="ACP SDK, LlamaIndex Workflows",
+        tags=["llm", "config"],
+    ),
+)
+async def get_session_llm_config(
+    input: list[Message], context: Context
+) -> AsyncGenerator[RunYield, RunYieldResume]:
+    """
+    Get LLM configuration for the session.
+    """
+    session_id = str(context.session.id)
+    orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
+        None, get_orchestrator, session_id
+    )
+    yield Artifact(
+        name=f"llm_config_{session_id}",
+        content_type="application/json",
+        content=json.dumps(
+            orchestrator.llm_config,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+
+
+@agent(
+    input_content_types=["text/plain"],
+    output_content_types=["application/json"],
+    metadata=Metadata(
+        license="MIT",
+        programming_language="python",
+        natural_languages=["english"],
+        framework="ACP SDK, LlamaIndex Workflows",
+        tags=["chat", "history"],
+    ),
+)
+async def get_session_chat_history(
+    input: list[Message], context: Context
+) -> AsyncGenerator[RunYield, RunYieldResume]:
+    """
+    Get chat history for the session.
+    """
+    session_id = str(context.session.id)
+    orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
+        None, get_orchestrator, session_id
+    )
+    yield Artifact(
+        name=f"chat_history_{session_id}",
+        content_type="application/json",
+        content=json.dumps(
+            [message.model_dump() for message in orchestrator.get_chat_history()],
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+
+
+@agent(
+    input_content_types=["text/plain"],
+    output_content_types=["application/json"],
+    metadata=Metadata(
+        license="MIT",
+        programming_language="python",
+        natural_languages=["english"],
+        framework="ACP SDK, LlamaIndex Workflows",
+        tags=["chat", "history", "reset"],
+    ),
+)
+async def reset_session_chat_history(
+    input: list[Message], context: Context
+) -> AsyncGenerator[RunYield, RunYieldResume]:
+    """
+    Get chat history for the session.
+    """
+    session_id = str(context.session.id)
+    orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
+        None, get_orchestrator, session_id
+    )
+    orchestrator.reset_chat_history()
+    yield Artifact(
+        name=f"chat_history_{session_id}",
+        content_type="application/json",
+        content=json.dumps(
+            [message.model_dump() for message in orchestrator.get_chat_history()],
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+
+
+dqa_acp_app = create_app(
+    chat,
+    list_session_mcp_features,
+    get_session_llm_config,
+    get_session_chat_history,
+    reset_session_chat_history,
+)
 
 
 async def uvicorn_serve():

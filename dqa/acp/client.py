@@ -16,7 +16,7 @@ from dqa.common import EnvironmentVariables
 from dqa.utils import parse_env
 
 
-def get_client_session(existing_session_id: str | None = None) -> Client:
+def get_acp_client_session(existing_session_id: str | None = None) -> Client:
     existing_session = None
     if existing_session_id and len(existing_session_id.strip()) > 0:
         print(
@@ -34,7 +34,7 @@ def get_client_session(existing_session_id: str | None = None) -> Client:
 
 
 async def acp_client(existing_session_id: str | None = None):
-    async with get_client_session(existing_session_id) as client_session:
+    async with get_acp_client_session(existing_session_id) as client_session:
         async for agent in client_session.agents():
             print_json(agent.model_dump_json())
         while True:
@@ -42,7 +42,9 @@ async def acp_client(existing_session_id: str | None = None):
                 "(Type 'exit' or 'quit' to stop. Otherwise, enter your query) >>> "
             )
             if user_message.lower() in ("exit", "quit"):
-                print("[bold red]Exiting...[/bold red]")
+                print(
+                    f"[bold red]Exiting and closing session {client_session._session.id}[/bold red]"
+                )
                 break
             user_message_input = Message(parts=[MessagePart(content=user_message)])
 
@@ -83,7 +85,7 @@ async def acp_client(existing_session_id: str | None = None):
                         match event.type:
                             case "message.part":
                                 print(
-                                    f"[bold green]ⓘ {event.type}[/bold green]\n{event.part.content}",
+                                    f"\n[bold green]ⓘ {event.type}[/bold green]\n{event.part.content}",
                                     file=sys.stdout,
                                 )
                             case _:
@@ -101,6 +103,7 @@ async def acp_client(existing_session_id: str | None = None):
                                     status_message,
                                     file=sys.stdout,
                                 )
+                                print_json(event.model_dump_json())
 
 
 class ACPClient(App):
