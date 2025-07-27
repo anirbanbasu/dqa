@@ -15,6 +15,9 @@ class EnvironmentVariables:
     List of environment variables used in the DQA project.
     """
 
+    DQA_BROWSER_STATE_ENCRYPTION_KEY = "DQA_BROWSER_STATE_ENCRYPTION_KEY"
+    DEFAULT__DQA_BROWSER_STATE_ENCRYPTION_KEY = "your-secret-key-here"
+
     MCP_SERVER_TRANSPORT = "DQA_MCP_SERVER_TRANSPORT"
     DEFAULT__MCP_SERVER_TRANSPORT = "streamable-http"
     ALLOWED__MCP_SERVER_TRANSPORT = ["stdio", "sse", "streamable-http"]

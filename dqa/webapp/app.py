@@ -10,9 +10,10 @@ from rich import print as print
 from dotenv import load_dotenv
 
 from dqa.agent.orchestrator import OrchestratorLLM
-from dqa.common import ic
+from dqa.common import EnvironmentVariables, ic
 
 from dqa.acp.client import get_acp_client_session
+from dqa.utils import parse_env
 
 
 # from dqa.utils import parse_env
@@ -37,111 +38,101 @@ class GradioApp:
 
     def __init__(self):
         print(f"Found and parsed a .env file: [bold]{load_dotenv()}[/bold]")
-        self.ui: gr.Blocks = None
-
-    async def get_session_data(self, session_id: str) -> str:
-        """
-        If the session ID is not provided, a new one will be created by the ACP client.
-        """
-        async with get_acp_client_session(
-            existing_session_id=session_id
-        ) as client_session:
-            session_id = client_session._session.id
-            gr.Info(
-                f"Connected to ACP client session with ID: {session_id}", duration=4
-            )
-            run = await client_session.run_sync(
-                agent="get_session_llm_config",
-                input=[],
-            )
-            model_info = (
-                json.loads(run.output[-1].parts[-1].content)
-                if run.output[-1].parts[-1].name == f"llm_config_{session_id}"
-                else {}
-            )
-            gr.Info(f"Retrieving MCP features for session {session_id}", duration=4)
-            run = await client_session.run_sync(
-                agent="list_session_mcp_features",
-                input=[],
-            )
-            tools_info = (
-                json.loads(run.output[-1].parts[-1].content)
-                if run.output[-1].parts[-1].name == f"mcp_features_{session_id}"
-                else {}
-            )
-            gr.Info(f"Retrieving chat history for session {session_id}", duration=4)
-            run = await client_session.run_sync(
-                agent="get_session_chat_history",
-                input=[],
-            )
-            session_chat_history = (
-                json.loads(run.output[-1].parts[-1].content)
-                if run.output[-1].parts[-1].name == f"chat_history_{session_id}"
-                else []
-            )
-
-        gradio_chat_history = []
-        tools_used = set()
-        for chat_message in session_chat_history:
-            ic(chat_message)
-            if chat_message["role"] == "user" or chat_message["role"] == "assistant":
-                if len(chat_message["blocks"]) > 0:
-                    if chat_message["role"] == "assistant":
-                        ai_message_id = uuid.uuid4().hex
-                    else:
-                        ai_message_id = None
-                    gradio_chat_history.append(
-                        ChatMessage(
-                            role=chat_message["role"],
-                            content="".join(
-                                [block["text"] for block in chat_message["blocks"]]
-                            ),
-                            metadata=({"id": ai_message_id} if ai_message_id else {}),
-                        )
-                    )
-                if len(tools_used) > 0 and ai_message_id:
-                    gradio_chat_history.append(
-                        ChatMessage(
-                            role="assistant",
-                            content="",
-                            metadata={
-                                "title": "🛠️ Tool(s) used",
-                                "log": f"{', '.join(list(tools_used))}",
-                                "parent_id": ai_message_id,
-                            },
-                        )
-                    )
-                    tools_used.clear()
-            elif chat_message["role"] == "tool":
-                if "tool_call_id" in chat_message["additional_kwargs"]:
-                    tools_used.add(chat_message["additional_kwargs"]["tool_call_id"])
-                ic(chat_message, tools_used)
-        return session_id, gradio_chat_history, model_info, tools_info
-
-    # def delete_session_orchestrator(self, session_id):
-    #     """
-    #     Delete the session with the given session_id, if it exists.
-    #     """
-    #     if session_id in self.sessions:
-    #         del self.sessions[session_id]
-    #         gr.Warning(f"Deleted session orchestrator with ID: {session_id}")
-
-    # def purge_stale_session_orchestrators(self):
-    #     """
-    #     Purge stale session orchestrators that are older than a certain threshold.
-    #     """
-    #     purgeable_sessions_orchestrators = []
-    #     for session_id, orchestrator in self.sessions.items():
-    #         if orchestrator.is_purgeable():
-    #             purgeable_sessions_orchestrators.append(session_id)
-    #     for session_id in purgeable_sessions_orchestrators:
-    #         del self.sessions[session_id]
-    #     if len(purgeable_sessions_orchestrators) > 0:
-    #         gr.Warning(
-    #             f"Purged stale session orchestrators with IDs: {', '.join(purgeable_sessions_orchestrators)}"
-    #         )
+        self.interface: gr.Blocks = None
 
     def create_ui(self):
+        async def get_session_data(session_id: str):
+            """
+            If the session ID is not provided, a new one will be created by the ACP client.
+            """
+            ic(session_id)
+            async with get_acp_client_session(
+                existing_session_id=session_id
+            ) as client_session:
+                session_id = client_session._session.id
+                gr.Info(
+                    f"Connected to ACP client session with ID: {session_id}", duration=4
+                )
+                run = await client_session.run_sync(
+                    agent="get_session_llm_config",
+                    input=[],
+                )
+                model_info = (
+                    json.loads(run.output[-1].parts[-1].content)
+                    if run.output[-1].parts[-1].name == f"llm_config_{session_id}"
+                    else {}
+                )
+                gr.Info(f"Retrieving MCP features for session {session_id}", duration=4)
+                run = await client_session.run_sync(
+                    agent="list_session_mcp_features",
+                    input=[],
+                )
+                tools_info = (
+                    json.loads(run.output[-1].parts[-1].content)
+                    if run.output[-1].parts[-1].name == f"mcp_features_{session_id}"
+                    else {}
+                )
+                gr.Info(f"Retrieving chat history for session {session_id}", duration=4)
+                run = await client_session.run_sync(
+                    agent="get_session_chat_history",
+                    input=[],
+                )
+                session_chat_history = (
+                    json.loads(run.output[-1].parts[-1].content)
+                    if run.output[-1].parts[-1].name == f"chat_history_{session_id}"
+                    else []
+                )
+
+            gradio_chat_history = []
+            tools_used = set()
+            for chat_message in session_chat_history:
+                ic(chat_message)
+                if (
+                    chat_message["role"] == "user"
+                    or chat_message["role"] == "assistant"
+                ):
+                    if len(chat_message["blocks"]) > 0:
+                        if chat_message["role"] == "assistant":
+                            ai_message_id = uuid.uuid4().hex
+                        else:
+                            ai_message_id = None
+                        gradio_chat_history.append(
+                            ChatMessage(
+                                role=chat_message["role"],
+                                content="".join(
+                                    [block["text"] for block in chat_message["blocks"]]
+                                ),
+                                metadata=(
+                                    {"id": ai_message_id} if ai_message_id else {}
+                                ),
+                            )
+                        )
+                    if len(tools_used) > 0 and ai_message_id:
+                        gradio_chat_history.append(
+                            ChatMessage(
+                                role="assistant",
+                                content="",
+                                metadata={
+                                    "title": "🛠️ Tool(s) used",
+                                    "log": f"{', '.join(list(tools_used))}",
+                                    "parent_id": ai_message_id,
+                                },
+                            )
+                        )
+                        tools_used.clear()
+                elif chat_message["role"] == "tool":
+                    if "tool_call_id" in chat_message["additional_kwargs"]:
+                        tools_used.add(
+                            chat_message["additional_kwargs"]["tool_call_id"]
+                        )
+                    ic(chat_message, tools_used)
+            return (
+                gr.update(value=session_id),
+                gradio_chat_history,
+                model_info,
+                tools_info,
+            )
+
         def orchestrator_model_info_changed(session_id, model_info):
             """
             Update the chatbot with the model information from the orchestrator.
@@ -255,14 +246,17 @@ class GradioApp:
             analytics_enabled=False,
             # Delete the cache content every day that is older than a day
             delete_cache=(86400, 86400),
-        ) as self.ui:
+        ) as self.interface:
             gr.set_static_paths(paths=[GradioApp._APP_LOGO_PATH])
             # Keep the session ID in the browser state, i.e., as a cookie. If the active session is found
             # in the sessions dictionary, it will be used to retrieve the session orchestrator. Otherwise,
             # a new session orchestrator will be created.
             bstate_session_id = gr.BrowserState(
-                default_value=None,
                 storage_key="dqa_orchestrator_session_id",
+                secret=parse_env(
+                    var_name=EnvironmentVariables.DQA_BROWSER_STATE_ENCRYPTION_KEY,
+                    default_value=EnvironmentVariables.DEFAULT__DQA_BROWSER_STATE_ENCRYPTION_KEY,
+                ),  # Use a secure secret in production
             )
 
             state_orchestrator_model_info = gr.State()
@@ -334,18 +328,6 @@ class GradioApp:
                 queue=True,
             )
 
-            self.ui.load(
-                queue=True,
-                fn=self.get_session_data,
-                inputs=[bstate_session_id],
-                outputs=[
-                    bstate_session_id,
-                    ui_chatbot,
-                    state_orchestrator_model_info,
-                    state_orchestrator_mcp_features_info,
-                ],
-            )
-
             state_orchestrator_model_info.change(
                 fn=orchestrator_model_info_changed,
                 inputs=[bstate_session_id, state_orchestrator_model_info],
@@ -358,16 +340,30 @@ class GradioApp:
                 outputs=[ui_json_mcp_features],
             )
 
+            gr.on(
+                triggers=[self.interface.load],
+                fn=get_session_data,
+                inputs=[bstate_session_id],
+                outputs=[
+                    bstate_session_id,
+                    ui_chatbot,
+                    state_orchestrator_model_info,
+                    state_orchestrator_mcp_features_info,
+                ],
+            )
+
     def run(self):
         """Run the Gradio app by launching a server."""
         self.create_ui()
         allowed_static_file_paths = [
             GradioApp._APP_LOGO_PATH,
         ]
-        if self.ui is not None:
-            self.ui.queue().launch(
+        if self.interface is not None:
+            self.interface.queue().launch(
                 show_api=False,
                 show_error=True,
+                ssr_mode=False,
+                mcp_server=False,
                 allowed_paths=allowed_static_file_paths,
                 # Enable monitoring only for debugging purposes?
                 # enable_monitoring=True,
@@ -378,8 +374,8 @@ class GradioApp:
     def shutdown(self):
         """Shutdown the Gradio app."""
         # Do some cleanup as needed
-        if self.ui is not None and self.ui.is_running:
-            self.ui.close()
+        if self.interface is not None and self.interface.is_running:
+            self.interface.close()
 
 
 def main():

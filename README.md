@@ -61,6 +61,7 @@ When running the provided MCP server, the following environment variables can be
 | `DQA_ACP_HOST` | [127.0.0.1] The host to which the Agent Communication Protocol (ACP) standalone Asynchronous Server Gateway Interface (ASGI) server should bind to. |
 | `DQA_ACP_PORT` | [8192] The port on which the ACP AGSI server should listen on. |
 | `DQA_ACP_CLIENT_ACCESS_URL` | [http://localhost:8192] The URL to which the ACP client should try to connect. Note that a HTTPS URL can be provided if the ASGI server is configured to serve over HTTPS. |
+| `DQA_BROWSER_STATE_ENCRYPTION_KEY` | [your-secret-key-here] A secret key to encrypt information stored in browser storage. Use a secure key in production and public deployments. |
 
 ### Example LLM config
 
