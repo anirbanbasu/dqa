@@ -9,10 +9,7 @@
 
 ## Overview
 
-The DQA aka _difficult questions attempted_ project utilises large language models (LLMs) to perform _multi-hop question answering_ (MHQA). This project has been inspired by the tutorial [^1] and the article [^2], both by [Dean Sacoransky](https://www.linkedin.com/in/dean-sacoransky-6a671119a/).
-
-**Note that this README is rather out-of-date, pending a major revision.**
-
+The DQA aka _difficult questions attempted_ project utilises large language model (LLM) agent(s) to perform _multi-hop question answering_ (MHQA). This project has been inspired by the tutorial [^1] and the article [^2], both by [Dean Sacoransky](https://www.linkedin.com/in/dean-sacoransky-6a671119a/).
 
 [^1]: Sacoransky, D., 2024. Build a RAG agent to answer complex questions. IBM Developer Tutorial. [URL](https://developer.ibm.com/tutorials/awb-build-rag-llm-agents/).
 [^2]: Sacoransky, D., 2025. Reasoning & Recursive Retrieval With Deepseek-r1, Tavily, and LangGraph. Medium article. [URL](https://medium.com/@deansaco/reasoning-recursive-retrieval-with-deepseek-r1-tavily-and-langgraph-79b3336731e2).
@@ -23,6 +20,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 | Date     |  Status   |  Notes or observations   |
 |----------|:-------------:|----------------------|
+| July 27, 2025 |  active |  LlamaIndex Workflows replaced LangChain/LangGraph _again_. Using [Agent Communication Protocol](https://agentcommunicationprotocol.dev/) (ACP) to expose agentic functionalities. Gradio interface now uses ACP REST API to communicate with agents. |
 | June 7, 2025 |  active |  Changed package and project manager to `uv` from `poetry`. Changed LLM orchestration to LangChain/LangGraph from DSPy. Added supporting MCP server. |
 | February 15, 2025 |  active |  Custom adapter added for Deepseek models.  |
 | January 26, 2025 |  active |  LlamaIndex Workflows replaced by DSPy.  |
@@ -37,7 +35,7 @@ Following is a table of some updates regarding the project status. Note that the
 
 The directory where you clone this repository will be referred to as the _working directory_ or _WD_ hereinafter.
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/). To install the project with its essential dependencies in a virtual environment, run the following in the _WD_. To install all non-essential dependencies, add the `--all-extras` flag to the following command.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/). To install the project with its essential dependencies in a virtual environment, run the following in the _WD_. To install all non-essential dependencies, add the `--all-groups` flag to the following command.
 
 ```bash
 uv sync
@@ -58,40 +56,82 @@ When running the provided MCP server, the following environment variables can be
 | `DQA_MCP_CLIENT_CONFIG` | [`config/mcp-client.json`] The path to the config file for providing a set of MCP servers. |
 | `DQA_USE_MCP` | [`True`] If this is set to True, then make sure that the MCP client configuration points to available MCP server(s). You may want to run the provided MCP server. See below for instructions regarding that. |
 | `DQA_LLM_CONFIG` | [`config/chat-ollama.json`] The path to the config file for the Ollama LLM provider. |
-| `LLM__OLLAMA_MODEL` | [mistral-nemo] See the [available models](https://ollama.com/library). The model must be available on the selected Ollama server. The model must [support tool calling](https://ollama.com/search?c=tools). |
-| `DQA_MCP_SERVER_TRANSPORT` | [sse] The acceptable options are either `sse` or `streamable-http`. |
+| `DQA_MCP_SERVER_TRANSPORT` | [streamable-http] The acceptable options are `stdio`, `sse` or `streamable-http`. |
+| `DQA_LOGGING_LEVEL` | [INFO] The logging level of DQA and related servers. This option **may not be in use**. |
+| `DQA_ACP_HOST` | [127.0.0.1] The host to which the Agent Communication Protocol (ACP) standalone Asynchronous Server Gateway Interface (ASGI) server should bind to. |
+| `DQA_ACP_PORT` | [8192] The port on which the ACP AGSI server should listen on. |
+| `DQA_ACP_CLIENT_ACCESS_URL` | [http://localhost:8192] The URL to which the ACP client should try to connect. Note that a HTTPS URL can be provided if the ASGI server is configured to serve over HTTPS. |
 
-The structure of the MCP configuration file is as follows. Note that while the configuration supports the `stdio` transport, the DQA agent is configured to support only `streamable_http` or `sse`, which are also the allowed modes for the DQA MCP server. For examples of the configuration, see [the LangChain MCP adapters](https://github.com/langchain-ai/langchain-mcp-adapters).
+### Example LLM config
+
+An example configuration, for the file pointed to by `DQA_LLM_CONFIG`, using locally available Ollama is shown below.
 
 ```json
 {
-  "<name>": {
-    "transport": "<Either streamable_http or sse>",
-    "url": "<url-of-the-remote-server>"
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "llama3.1:latest",
+    "request_timeout": 180,
+    "thinking": false
   }
 }
 ```
 
-The structure of the LLM config JSON file is as follows. The full list of acceptable configuration parameters for the Ollama LLM is available in [the LangChain documentation](https://python.langchain.com/api_reference/ollama/chat_models/langchain_ollama.chat_models.ChatOllama.html).
+### Example MCP config
+
+An example configuration, for the file pointed to by `DQA_MCP_CLIENT_CONFIG`, using locally available Ollama is shown below.
 
 ```json
 {
-    "baseUrl": "<model-provider-url>",
-    "model": "<model-name>"
+  "builtin": {
+    "transport": "stdio",
+    "command": "uv",
+    "args": [
+      "run",
+      "dqa-mcp"
+    ],
+    "env": {
+      "DQA_MCP_SERVER_TRANSPORT": "stdio"
+    }
+  },
+  "frankfurter": {
+    "transport": "stdio",
+    "command": "uv",
+    "args": [
+      "run",
+      "frankfurtermcp"
+    ]
+  },
+  "ddg-search": {
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "duckduckgo-mcp-server"
+    ]
+  }
 }
 ```
 
 ## Usage
 
-Create a `.env` file in the _WD_, to set the environment variables as above, if you want to use anything other than the default settings.
+Create a `.env` file in the _WD_, to set the environment variables as above, if you want to use anything other than the default settings. There is a template `.env.template` file to get you started.
 
 ### Optional DQA MCP server
 
-Run the following in the _WD_ to start the MCP server.
+Run the following in the _WD_ to start the MCP server. This is **not needed** to run the DQA application because the underlying agent workflow will automatically start the MCP server in `stdio` mode.
 
 ```bash
 uv run dqa-mcp
 ```
+
+### DQA app as an ASGI server
+
+Run the following in the _WD_ to start the DQA app as a standalone ASGI server.
+
+```bash
+uv run dqa-app
+```
+If using the default values, the server will be available at [http://localhost:8192](http://localhost:8192) with API documentation at [http://localhost:8192/docs](http://localhost:8192/docs).
 
 ### DQA webapp
 
@@ -100,13 +140,19 @@ Run the following in the _WD_ to start the web server.
 ```bash
 uv run dqa-webapp
 ```
-
 The web UI will be available at [http://localhost:7860](http://localhost:7860). To exit the server, use the Ctrl+C key combination.
 
+### DQA ACP command-line interface (CLI) client
+
+Run the following in the _WD_ to start access the **experimental** command-line interface. In addition to the aforementioned environment variables, you can specify `DQA_SESSION_ID` to make the CLI client to attach to an existing ACP session.
+
+```bash
+uv run dqa-acp-client
+```
 
 ## Contributing
 
-Install [`pre-commit`](https://pre-commit.com/) for Git and [`ruff`](https://docs.astral.sh/ruff/installation/). Then enable `pre-commit` by running the following in the _WD_.
+Install developer tools by running `uv sync --all-groups`. Then, install the `pre-commit` hooks by running the following.
 
 ```bash
 pre-commit install

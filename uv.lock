@@ -594,7 +594,7 @@ requires-dist = [
     { name = "duckduckgo-mcp-server", specifier = ">=0.1.1" },
     { name = "fastmcp", specifier = ">=2.7.0" },
     { name = "frankfurtermcp", specifier = ">=0.3.2" },
-    { name = "gradio", specifier = ">=5.33.0" },
+    { name = "gradio", specifier = ">=5.38.0" },
     { name = "llama-index-llms-ollama", specifier = ">=0.6.2" },
     { name = "llama-index-tools-mcp", specifier = ">=0.2.5" },
     { name = "nicegui", specifier = ">=2.20.0" },
