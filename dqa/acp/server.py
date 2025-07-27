@@ -2,6 +2,7 @@ import asyncio
 import signal
 import sys
 import json
+from acp_sdk import MessagePart, TrajectoryMetadata
 import uvicorn
 from collections.abc import AsyncGenerator
 from acp_sdk.server import agent, create_app, Context, RunYield, RunYieldResume
@@ -56,25 +57,34 @@ async def chat(
         None, get_orchestrator, session_id
     )
     workflow_handler = orchestrator.run(query=query)
+    full_response = ""
     async for ev in workflow_handler.stream_events():
         if isinstance(ev, AgentStream):
+            full_response += ev.delta
             yield ev.delta
         elif isinstance(ev, ToolCallResult):
-            yield Artifact(
-                name=f"tool_call_{ev.tool_id}",
-                content_type="application/json",
-                content=json.dumps(
-                    ev.model_dump(),
-                    ensure_ascii=False,
-                    indent=2,
-                    sort_keys=True,
+            yield MessagePart(
+                content=str(ev.tool_output.raw_output.content),
+                metadata=TrajectoryMetadata(
+                    tool_name=ev.tool_name,
+                    tool_input=ev.tool_output.raw_input,
+                    tool_output=ev.tool_output.raw_output.model_dump(),
                 ),
             )
         elif isinstance(ev, ToolCall):
-            pass
+            yield MessagePart(
+                content="",
+                metadata=TrajectoryMetadata(
+                    tool_name=ev.tool_name,
+                    tool_input=ev.tool_kwargs,
+                    # But no output yet
+                ),
+            )
         elif isinstance(ev, AgentOutput):
-            yield "\n"
-            yield "".join([block.text for block in ev.response.blocks])
+            yield full_response
+        else:
+            # Ignore other types of events
+            pass
 
 
 @agent(
@@ -170,11 +180,13 @@ async def get_session_chat_history(
     orchestrator: DQAOrchestrator = await asyncio.get_event_loop().run_in_executor(
         None, get_orchestrator, session_id
     )
+    chat_history = orchestrator.get_chat_history()
+    ic(chat_history)
     yield Artifact(
         name=f"chat_history_{session_id}",
         content_type="application/json",
         content=json.dumps(
-            [message.model_dump() for message in orchestrator.get_chat_history()],
+            [message.model_dump() for message in chat_history],
             ensure_ascii=False,
             indent=2,
             sort_keys=True,

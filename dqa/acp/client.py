@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import uuid
-from acp_sdk import GenericEvent, MessageCompletedEvent, MessagePartEvent, Session
+from acp_sdk import Session
 from acp_sdk.client import Client
 from acp_sdk.models import Message, MessagePart
 
@@ -56,54 +56,63 @@ async def acp_client(existing_session_id: str | None = None):
 
             agent_name = input("Name the agent to invoke [chat]: ").strip() or "chat"
             log_type = None
+            tools_used = set()
+            final_response = ""
             async for event in client_session.run_stream(
                 agent=agent_name,
                 input=[user_message_input],
             ):
-                match event:
-                    case MessagePartEvent(part=MessagePart(content=content)):
-                        if log_type:
-                            print()
-                            log_type = None
-                        print(content, end="", flush=True)
-                    case GenericEvent():
-                        [(new_log_type, content)] = event.generic.model_dump().items()
-                        if new_log_type != log_type:
-                            if log_type is not None:
-                                print()
-                            print(
-                                f"{new_log_type}: ", end="", file=sys.stdout, flush=True
-                            )
-                            log_type = new_log_type
-                        print(content, end="", file=sys.stdout, flush=True)
-                    case MessageCompletedEvent():
-                        print()
+                if log_type:
+                    print()
+                    log_type = None
+                status_message = f"\n[bold green]ⓘ {event.type}[/bold green]"
+                if hasattr(event, "run"):
+                    if hasattr(event.run, "run_id"):
+                        status_message += f" run_id: {event.run.run_id}"
+                    if hasattr(event.run, "session_id"):
+                        status_message += f" session_id: {event.run.session_id}"
+                match event.type:
+                    case (
+                        "message.created"
+                        | "message.completed"
+                        | "run.created"
+                        | "run.failed"
+                        | "run.in-progress"
+                    ):
+                        print(
+                            status_message,
+                            file=sys.stdout,
+                        )
+                    case "message.part":
+                        if event.part.metadata and event.part.metadata.tool_name:
+                            # This was a tool call, do nothing to keep the output clean
+                            # ic(event.part.metadata)
+                            tools_used.add(event.part.metadata.tool_name)
+                        else:
+                            # Stream
+                            # ic(event)
+                            # FIXME: This is a hack to not re-print the last part
+                            # ic(final_response)
+                            if (
+                                event.part.content != final_response
+                                or final_response == ""
+                            ):
+                                final_response += event.part.content
+                                print(
+                                    event.part.content,
+                                    end="",
+                                    flush=True,
+                                    file=sys.stdout,
+                                )
+                    case "run.completed":
+                        print(
+                            f"{status_message}\n"
+                            f"[bold cyan]Final response:[/bold cyan]\n{event.run.output[-1].parts[-1].content} \n"
+                            f"[bold cyan]Tools used:[/bold cyan] [goldenrod]{', '.join(list(tools_used))}[/goldenrod]",
+                            file=sys.stdout,
+                        )
                     case _:
-                        if log_type:
-                            print()
-                            log_type = None
-                        match event.type:
-                            case "message.part":
-                                print(
-                                    f"\n[bold green]ⓘ {event.type}[/bold green]\n{event.part.content}",
-                                    file=sys.stdout,
-                                )
-                            case _:
-                                status_message = (
-                                    f"[bold green]ⓘ {event.type}[/bold green]"
-                                )
-                                if hasattr(event, "run"):
-                                    if hasattr(event.run, "run_id"):
-                                        status_message += f" run_id: {event.run.run_id}"
-                                    if hasattr(event.run, "session_id"):
-                                        status_message += (
-                                            f" session_id: {event.run.session_id}"
-                                        )
-                                print(
-                                    status_message,
-                                    file=sys.stdout,
-                                )
-                                print_json(event.model_dump_json())
+                        pass
 
 
 class ACPClient(App):

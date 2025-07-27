@@ -2,7 +2,6 @@ import json
 import signal
 import sys
 import uuid
-from acp_sdk import GenericEvent, MessageCompletedEvent, MessagePart, MessagePartEvent
 import gradio as gr
 from gradio import ChatMessage
 
@@ -48,24 +47,38 @@ class GradioApp:
             existing_session_id=session_id
         ) as client_session:
             session_id = client_session._session.id
-            gr.Info(f"Connected to ACP client session with ID: {session_id}")
+            gr.Info(
+                f"Connected to ACP client session with ID: {session_id}", duration=4
+            )
             run = await client_session.run_sync(
                 agent="get_session_llm_config",
                 input=[],
             )
-            model_info = json.loads(run.output[-1].parts[-1].content)
-            gr.Info(f"Retrieving MCP features for session {session_id}")
+            model_info = (
+                json.loads(run.output[-1].parts[-1].content)
+                if run.output[-1].parts[-1].name == f"llm_config_{session_id}"
+                else {}
+            )
+            gr.Info(f"Retrieving MCP features for session {session_id}", duration=4)
             run = await client_session.run_sync(
                 agent="list_session_mcp_features",
                 input=[],
             )
-            tools_info = json.loads(run.output[-1].parts[-1].content)
-            gr.Info(f"Retrieving chat history for session {session_id}")
+            tools_info = (
+                json.loads(run.output[-1].parts[-1].content)
+                if run.output[-1].parts[-1].name == f"mcp_features_{session_id}"
+                else {}
+            )
+            gr.Info(f"Retrieving chat history for session {session_id}", duration=4)
             run = await client_session.run_sync(
                 agent="get_session_chat_history",
                 input=[],
             )
-            session_chat_history = json.loads(run.output[-1].parts[-1].content)
+            session_chat_history = (
+                json.loads(run.output[-1].parts[-1].content)
+                if run.output[-1].parts[-1].name == f"chat_history_{session_id}"
+                else []
+            )
 
         gradio_chat_history = []
         tools_used = set()
@@ -87,7 +100,6 @@ class GradioApp:
                         )
                     )
                 if len(tools_used) > 0 and ai_message_id:
-                    ic(ai_message_id)
                     gradio_chat_history.append(
                         ChatMessage(
                             role="assistant",
@@ -198,38 +210,27 @@ class GradioApp:
                     agent="chat",
                     input=[question],
                 ):
-                    match event:
-                        case MessagePartEvent(part=MessagePart(content=content)):
-                            chat_history[-1].content += content
-                            yield chat_history
-                        case MessageCompletedEvent():
-                            pass
-                        case GenericEvent():
-                            pass
-                        case _:
-                            match event.type:
-                                case "message.part":
-                                    chat_history[-1].content += event.part.content
-                                    yield chat_history
-                    # async for event in workflow_handler.stream_events():
-                    # if not isinstance(event, AgentStream):
-                    #     ic(event)
-                    # if isinstance(event, AgentStream):
-                    #     chat_history[-1].content += event.delta
-                    #     yield chat_history
-                    # elif isinstance(event, ToolCallResult):
-                    #     tools_used.add(event.tool_name)
-                    #     chat_history[
-                    #         -1
-                    #     ].content += f"🛠️ Evaluating: **{event.tool_name}**.\n"
-                    #     ic(event.tool_kwargs)
-                    #     yield chat_history
-                    # elif isinstance(event, AgentOutput):
-                    #     chat_history[-1].content = "".join(
-                    #         [block.text for block in event.response.blocks]
-                    #     )
-                    # else:
-                    #     pass
+                    match event.type:
+                        case "message.part":
+                            if event.part.metadata and event.part.metadata.tool_name:
+                                # This is a tool call or its result
+                                # ic(event.part.metadata)
+                                if event.part.metadata.tool_output:
+                                    tools_used.add(event.part.metadata.tool_name)
+                                    chat_history[
+                                        -1
+                                    ].content += f"🛠️ Evaluated tool: **{event.part.metadata.tool_name}**.\n"
+                                else:
+                                    chat_history[
+                                        -1
+                                    ].content += f"🛠️ Calling tool: **{event.part.metadata.tool_name}**.\n"
+                            else:
+                                chat_history[-1].content += event.part.content
+                                yield chat_history
+                        case "run.completed":
+                            chat_history[-1].content = (
+                                event.run.output[-1].parts[-1].content
+                            )
                 if tools_used:
                     chat_history.append(
                         ChatMessage(
