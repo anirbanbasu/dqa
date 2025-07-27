@@ -129,7 +129,7 @@ uv run dqa-mcp
 Run the following in the _WD_ to start the DQA app as a standalone ASGI server.
 
 ```bash
-uv run dqa-app
+uv run dqa-acp
 ```
 If using the default values, the server will be available at [http://localhost:8192](http://localhost:8192) with API documentation at [http://localhost:8192/docs](http://localhost:8192/docs).
 
