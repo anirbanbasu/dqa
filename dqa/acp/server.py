@@ -63,6 +63,7 @@ async def chat(
             full_response += ev.delta
             yield ev.delta
         elif isinstance(ev, ToolCallResult):
+            ic(ev)
             yield MessagePart(
                 content=str(ev.tool_output.raw_output.content),
                 metadata=TrajectoryMetadata(
@@ -181,7 +182,6 @@ async def get_session_chat_history(
         None, get_orchestrator, session_id
     )
     chat_history = orchestrator.get_chat_history()
-    ic(chat_history)
     yield Artifact(
         name=f"chat_history_{session_id}",
         content_type="application/json",

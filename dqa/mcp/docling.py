@@ -5,6 +5,9 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
+from dqa.common import ic
+
+
 # from docling.utils.model_downloader import download_models
 # download_models()
 
@@ -31,5 +34,9 @@ def read_arxiv_preprint(
             InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
         }
     )
-    result = converter.convert(source_url)
-    return result.document.export_to_markdown()
+    try:
+        result = converter.convert(source_url)
+        return result.document.export_to_markdown()
+    except Exception as e:
+        ic(e)
+        return ""
