@@ -69,6 +69,7 @@ class DQAOrchestrator:
                         ),
                         args=config.get("args", []),
                         env=config.get("env", {}),
+                        timeout=config.get("timeout", 30),
                     )
                     mcp_features = get_tools_from_mcp_url(
                         command_or_url=None,

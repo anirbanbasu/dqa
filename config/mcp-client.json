@@ -8,7 +8,8 @@
     ],
     "env": {
       "DQA_MCP_SERVER_TRANSPORT": "stdio"
-    }
+    },
+    "timeout": 600
   },
   "frankfurter": {
     "transport": "stdio",
