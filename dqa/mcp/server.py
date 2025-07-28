@@ -11,6 +11,7 @@ from dqa.utils import parse_env
 
 from dqa.mcp.arithmetic import app as arithmetic_mcp
 from dqa.mcp.time import app as time_app
+from dqa.mcp.docling import app as docling_mcp
 
 app = FastMCP(
     name="dqa-mcp",
@@ -65,6 +66,11 @@ def main():
     app.mount(
         prefix="time",
         server=time_app,
+    )
+
+    app.mount(
+        prefix="docling",
+        server=docling_mcp,
     )
 
     transport_type = parse_env(

@@ -17,6 +17,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "acp-sdk>=1.0.0",
+    "docling>=2.42.2",
     "duckduckgo-mcp-server>=0.1.1",
     "fastmcp>=2.7.0",
     "frankfurtermcp>=0.3.2",
@@ -27,6 +28,8 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "pywebview>=5.4",
     "textual>=5.0.0",
+    "torch==2.2.2",
+    "torchvision==0.17.2",
     "typer>=0.16.0",
 ]
 
