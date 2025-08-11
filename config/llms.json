@@ -1,8 +1,8 @@
 {
   "ollama": {
     "base_url": "http://localhost:11434",
-    "model": "qwen3:14b",
-    "request_timeout": 180,
+    "model": "gpt-oss:latest",
+    "request_timeout": 300,
     "thinking": false
   }
 }
