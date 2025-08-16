@@ -78,6 +78,14 @@ An example configuration, for the file pointed to by `DQA_LLM_CONFIG`, using loc
 }
 ```
 
+#### Remote connection to locally hosted Ollama
+
+If you are hosting Ollama locally but you would like to access it remotely, then you can do so as follows.
+
+ - Run Ollama to bind to `0.0.0.0` by setting the `OLLAMA_HOST` environment variable to `0.0.0.0` for your Ollama server.
+ - Run a reverse tunnel, such as _ngrok_ to connect to the Ollama port over HTTP. For example, `ngrok http 11434`.
+ - Set as `base_url` (of your Ollama configuration shown above) the ngrok public URL that is made available when you run the command mentioned in the previous step.
+
 ### Example MCP config
 
 An example configuration, for the file pointed to by `DQA_MCP_CLIENT_CONFIG`, using locally available Ollama is shown below.
