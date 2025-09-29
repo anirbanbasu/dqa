@@ -1,0 +1,27 @@
+# Reference: https://docs.dapr.io/developing-applications/local-development/multi-app-dapr-run/multi-app-template/
+version: 1
+common:
+  configFilePath: ./.dapr/config.yaml
+  logLevel: info
+  env:
+    DEBUG: false
+apps:
+  - appID: dapr-srv # optional
+    appDirPath: . # REQUIRED
+    # resourcesPath: .dapr/resources # deprecated
+    resourcesPath: ./.dapr/components
+    appChannelAddress: 127.0.0.1 # network address where the app listens on. (optional) can be left to default value by convention.
+    appProtocol: http
+    appPort: 32768 # Should really be the same as the FastAPI port, which seems odd!
+    appHealthCheckPath: "/healthz"
+    command: ["uv", "run", "dapr-srv"]
+    readBufferSize: 32Ki
+    maxBodySize: 256Mi
+    # appLogDestination: file # (optional), can be file, console or fileAndConsole. default is fileAndConsole.
+    # daprdLogDestination: file # (optional), can be file, console or fileAndConsole. default is file.
+  - appID: a2a-srv # optional
+    appDirPath: . # REQUIRED
+    appChannelAddress: 127.0.0.1
+    command: ["uv", "run", "echo-a2a-srv"]
+    readBufferSize: 32Ki
+    maxBodySize: 256Mi

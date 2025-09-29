@@ -1,0 +1,40 @@
+[project]
+name = "py-a2a-dapr"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Anirban Basu", email = "anirbanbasu@users.noreply.github.com" }
+]
+requires-python = ">=3.12.0"
+dependencies = [
+    "a2a-sdk[http-server]>=0.3.6",
+    "asyncer>=0.0.8",
+    "dapr>=1.16.0",
+    "dapr-ext-fastapi>=1.16.0",
+    "environs>=14.3.0",
+    "gradio>=5.46.1",
+    "typer>=0.19.1",
+]
+
+[project.scripts]
+pad = "py_a2a_dapr:main"
+dapr-srv = "py_a2a_dapr.server.dapr:main"
+echo-a2a-srv = "py_a2a_dapr.server.echo_a2a:main"
+a2a-client = "py_a2a_dapr.client.a2a:main"
+web-app = "py_a2a_dapr.web.gradio:main"
+demo-client = "py_a2a_dapr.client.demo:main"
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "icecream>=2.1.8",
+    "pre-commit>=4.3.0",
+]
+test = [
+    "coverage>=7.10.6",
+    "pytest>=8.4.2",
+]
