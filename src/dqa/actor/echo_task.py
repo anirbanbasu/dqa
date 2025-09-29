@@ -2,7 +2,7 @@ from datetime import datetime
 import logging
 from abc import abstractmethod
 from dapr.actor import Actor, ActorInterface, actormethod
-from py_a2a_dapr.model.echo_task import EchoInput, EchoResponse, EchoResponseWithHistory
+from dqa.model.echo_task import EchoInput, EchoResponse, EchoResponseWithHistory
 
 
 class EchoTaskActorInterface(ActorInterface):

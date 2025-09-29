@@ -4,8 +4,8 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.utils import new_agent_text_message
 
-from py_a2a_dapr.actor.echo_task import EchoTaskActorInterface
-from py_a2a_dapr.model.echo_task import (
+from dqa.actor.echo_task import EchoTaskActorInterface
+from dqa.model.echo_task import (
     DeleteEchoHistoryInput,
     EchoHistoryInput,
     EchoInput,

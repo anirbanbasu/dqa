@@ -6,8 +6,8 @@ from uuid import uuid4
 from pydantic import TypeAdapter
 import pytest
 from typer.testing import CliRunner
-from py_a2a_dapr.client.a2a import cli_app as app
-from py_a2a_dapr.model.echo_task import EchoResponse, EchoResponseWithHistory
+from dqa.cli.a2a import cli_app as app
+from dqa.model.echo_task import EchoResponse, EchoResponseWithHistory
 import subprocess
 
 

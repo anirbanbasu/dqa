@@ -13,10 +13,10 @@ from a2a.utils import get_message_text
 
 import httpx
 from pydantic import TypeAdapter
-from py_a2a_dapr import env
+from dqa import env
 import gradio as gr
 
-from py_a2a_dapr.model.echo_task import (
+from dqa.model.echo_task import (
     DeleteEchoHistoryInput,
     EchoAgentA2AInputMessage,
     EchoAgentSkills,

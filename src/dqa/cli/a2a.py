@@ -12,7 +12,7 @@ from a2a.utils import get_message_text
 
 import httpx
 
-from py_a2a_dapr import env
+from dqa import env
 
 from a2a.client import A2ACardResolver, ClientFactory, ClientConfig
 from a2a.types import (
@@ -23,7 +23,7 @@ from a2a.utils.constants import (
     AGENT_CARD_WELL_KNOWN_PATH,
 )
 
-from py_a2a_dapr.model.echo_task import (
+from dqa.model.echo_task import (
     DeleteEchoHistoryInput,
     EchoAgentA2AInputMessage,
     EchoAgentSkills,
@@ -33,7 +33,7 @@ from py_a2a_dapr.model.echo_task import (
     EchoResponseWithHistory,
 )
 
-from py_a2a_dapr import ic  # noqa: F401
+from dqa import ic  # noqa: F401
 
 import typer
 

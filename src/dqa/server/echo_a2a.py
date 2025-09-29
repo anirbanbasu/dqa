@@ -13,9 +13,9 @@ from a2a.types import (
     AgentSkill,
 )
 
-from py_a2a_dapr import env
-from py_a2a_dapr.executor.echo_task import EchoAgentExecutor
-from py_a2a_dapr.model.echo_task import EchoAgentSkills
+from dqa import env
+from dqa.executor.echo_task import EchoAgentExecutor
+from dqa.model.echo_task import EchoAgentSkills
 
 
 async def uvicorn_serve():

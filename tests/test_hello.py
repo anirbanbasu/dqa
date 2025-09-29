@@ -1,7 +1,6 @@
 # A practically useless test to test the useless hello world example.
-
 import pytest
-from py_a2a_dapr.hello import HELLO_MESSAGE, main
+from dqa.hello import HELLO_MESSAGE, main
 
 
 class TestHello:
