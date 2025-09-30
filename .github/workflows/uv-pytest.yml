@@ -40,4 +40,6 @@ jobs:
           dapr --version
 
       - name: Run tests using pytest
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: uv run --group test pytest -v tests/
