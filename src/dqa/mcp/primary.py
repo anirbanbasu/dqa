@@ -8,6 +8,7 @@ from marshmallow.validate import OneOf
 
 from dqa.mcp.ollama import app as ollama_mcp
 from dqa.mcp.datetime import app as datetime_mcp
+from dqa.mcp.arithmetic import app as basic_arithmetic_mcp
 from frankfurtermcp.server import app as frankfurter_mcp
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ def server():
     server.mount(frankfurter_mcp(), prefix="currency")
     logger.info("Mounting DateTime MCP...")
     server.mount(datetime_mcp(), prefix="datetime")
+    logger.info("Mounting Basic Arithmetic MCP...")
+    server.mount(basic_arithmetic_mcp(), prefix="arithmetic")
 
     return server
 

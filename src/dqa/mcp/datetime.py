@@ -8,7 +8,7 @@ from importlib.metadata import version
 from fastmcp import FastMCP
 
 
-class DateTimeMCP(MCPMixin):
+class BasicArithmeticMCP(MCPMixin):
     """
     A mixin-based MCP server for date time awareness.
     """
@@ -91,6 +91,6 @@ def app() -> FastMCP:  # pragma: no cover
         on_duplicate_resources="error",
         on_duplicate_tools="error",
     )
-    mcp_obj = DateTimeMCP()
+    mcp_obj = BasicArithmeticMCP()
     app_with_features = mcp_obj.register_features(app)
     return app_with_features

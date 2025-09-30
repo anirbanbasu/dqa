@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from fastmcp import Client, FastMCP
 from fastmcp.tools.tool import TextContent
 import pytest
-from dqa.mcp.datetime import DateTimeMCP
+from dqa.mcp.datetime import BasicArithmeticMCP
 
 from tests.mcp_test_mixin import MCPTestMixin
 
@@ -16,7 +16,7 @@ class TestDateTimeMCP(MCPTestMixin):
         Fixture to register features in an MCP server.
         """
         server = FastMCP()
-        mcp_obj = DateTimeMCP()
+        mcp_obj = BasicArithmeticMCP()
         server_with_features = mcp_obj.register_features(server)
         return server_with_features
 
