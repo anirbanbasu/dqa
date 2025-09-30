@@ -24,6 +24,7 @@ dependencies = [
 pad = "dqa:main"
 dapr-srv = "dqa.server.dapr:main"
 echo-a2a-srv = "dqa.server.echo_a2a:main"
+dqa-mcp = "dqa.mcp.primary:main"
 dqa-cli = "dqa.cli.a2a:main"
 dqa-web-app = "dqa.web.gradio:main"
 demo-client = "dqa.cli.demo:main"

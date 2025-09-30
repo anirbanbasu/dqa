@@ -13,7 +13,7 @@ class OllamaMCP(MCPMixin):
     A mixin-based MCP server for Ollama web search and fetch.
 
     Environment:
-     - OLLAMA_API_KEY (required): if set, will be used as Authorization header.
+     - OLLAMA_API_KEY (required). Get it from https://ollama.com/settings/keys.
     """
 
     tools = [

@@ -6,8 +6,10 @@ from dqa.mcp.ollama import OllamaMCP
 from ollama import WebSearchResponse, WebFetchResponse
 from ollama._types import WebSearchResult
 
+from tests.mcp_test_mixin import MCPTestMixin
 
-class TestOllamaMCP:
+
+class TestOllamaMCP(MCPTestMixin):
     @pytest.fixture(scope="class", autouse=True)
     @classmethod
     def mcp_server(cls):
@@ -30,33 +32,6 @@ class TestOllamaMCP:
             timeout=60,
         )
         return mcp_client
-
-    async def call_tool(self, tool_name: str, mcp_client: Client, **kwargs):
-        """
-        Helper method to call a tool on the MCP server.
-        """
-        async with mcp_client:
-            result = await mcp_client.call_tool(tool_name, arguments=kwargs)
-            await mcp_client.close()
-        return result
-
-    async def read_resource(self, resource_name: str, mcp_client: Client):
-        """
-        Helper method to load a resource from the MCP server.
-        """
-        async with mcp_client:
-            result = await mcp_client.read_resource(resource_name)
-            await mcp_client.close()
-        return result
-
-    async def get_prompt(self, prompt_name: str, mcp_client: Client, **kwargs):
-        """
-        Helper method to get a prompt from the MCP server.
-        """
-        async with mcp_client:
-            result = await mcp_client.get_prompt(prompt_name, arguments=kwargs)
-            await mcp_client.close()
-        return result
 
     def test_web_search(self, mcp_client):
         query = "What is Ollama?"
