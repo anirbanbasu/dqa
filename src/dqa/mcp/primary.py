@@ -7,12 +7,13 @@ from dqa import env
 from marshmallow.validate import OneOf
 
 from dqa.mcp.ollama import app as ollama_mcp
+from dqa.mcp.datetime import app as datetime_mcp
 from frankfurtermcp.server import app as frankfurter_mcp
 
 logger = logging.getLogger(__name__)
 
 
-def server():  # pragma: no cover
+def server():
     server = FastMCP(
         name="dqa-mcp",
         instructions="An MCP server for DQA.",
@@ -25,11 +26,13 @@ def server():  # pragma: no cover
     server.mount(ollama_mcp(), prefix="ollama")
     logger.info("Mounting Frankfurter currency conversion MCP...")
     server.mount(frankfurter_mcp(), prefix="currency")
+    logger.info("Mounting DateTime MCP...")
+    server.mount(datetime_mcp(), prefix="datetime")
 
     return server
 
 
-def main():
+def main():  # pragma: no cover
     MCP_SERVER_TRANSPORT = "DQA_MCP_SERVER_TRANSPORT"
     DEFAULT__MCP_SERVER_TRANSPORT = "streamable-http"
     ALLOWED__MCP_SERVER_TRANSPORT = ["stdio", "sse", "streamable-http"]
@@ -80,5 +83,5 @@ def main():
         )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

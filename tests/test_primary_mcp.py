@@ -35,4 +35,4 @@ class TestPrimaryMCP(MCPTestMixin):
         Test that the primary MCP server has composed the necessary MCPs correctly.
         """
         tools = asyncio.run(self.list_tools(mcp_client))
-        assert len(tools) == 7
+        assert len(tools) == 11
