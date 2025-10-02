@@ -16,6 +16,8 @@ dependencies = [
     "fastmcp>=2.12.4",
     "frankfurtermcp>=0.3.6",
     "gradio>=5.46.1",
+    "llama-index-llms-ollama>=0.7.4",
+    "llama-index-tools-mcp>=0.4.1",
     "ollama>=0.6.0",
     "typer>=0.19.1",
 ]

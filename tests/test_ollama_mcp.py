@@ -34,7 +34,7 @@ class TestOllamaMCP(MCPTestMixin):
         return mcp_client
 
     def test_web_search(self, mcp_client):
-        query = "What is Ollama?"
+        query = "What is the official website of Ollama?"
         max_results = 3
         result = asyncio.run(
             self.call_tool(
