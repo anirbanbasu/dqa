@@ -3,19 +3,28 @@ import json
 import logging
 from typing import List
 
-from llama_index.tools.mcp import get_tools_from_mcp_url, BasicMCPClient
+from llama_index.tools.mcp import aget_tools_from_mcp_url, BasicMCPClient
 
 from llama_index.core.memory import Memory
 from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import Context
-from llama_index.core.agent.workflow import AgentWorkflow, FunctionAgent
 from llama_index.core.base.llms.types import ChatMessage
+
+from llama_index.core.agent.workflow import (
+    AgentOutput,
+    ToolCall,
+    ToolCallResult,
+    AgentStream,
+    AgentWorkflow,
+    FunctionAgent,
+)
 
 from abc import abstractmethod
 import os
 from dapr.actor import Actor, ActorInterface, actormethod
+from dapr.clients import DaprClient
 
-from dqa import env
+from dqa import env, ic
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +40,7 @@ class MHQAActorMethods(StrEnum):
 class MHQAActorInterface(ActorInterface):
     @abstractmethod
     @actormethod(name=MHQAActorMethods.Respond)
-    async def respond(self, data: dict | None = None) -> dict | None: ...
+    async def respond(self, data: dict) -> str: ...
 
     @abstractmethod
     @actormethod(name=MHQAActorMethods.GetChatHistory)
@@ -47,10 +56,15 @@ class MHQAActorInterface(ActorInterface):
 
 
 class MHQAActor(Actor, MHQAActorInterface):
+    mcp_features: List = []
+    llm_config: dict = {}
+    mcp_config: dict = {}
+
     def __init__(self, ctx, actor_id):
         super().__init__(ctx, actor_id)
         self._cancelled = False
 
+    async def _on_activate(self) -> None:
         llm_config_file = env.str("LLM_CONFIG_FILE", default="conf/llm.json")
         if os.path.exists(llm_config_file):
             with open(llm_config_file, "r") as f:
@@ -72,14 +86,16 @@ class MHQAActor(Actor, MHQAActorInterface):
                     env=config.get("env", {}),
                     timeout=config.get("timeout", 30),
                 )
-                mcp_features = get_tools_from_mcp_url(
+                mcp_features = await aget_tools_from_mcp_url(
                     command_or_url=None,
                     client=mcp_client,
                 )
                 self.mcp_features.extend(mcp_features)
         except Exception as e:
             logger.error(f"Error parsing MCP config. {e}")
-            self.mcp_config = {}
+            logger.exception(e)
+
+        ic([f.metadata.name for f in self.mcp_features])
 
         user_chat_agent = FunctionAgent(
             name="user-chat-agent",
@@ -100,22 +116,44 @@ class MHQAActor(Actor, MHQAActorInterface):
         )
 
         self.workflow_memory = Memory.from_defaults(
-            session_id=self.id,
+            session_id=str(self.id),
         )
 
         self.workflow = AgentWorkflow(agents=[user_chat_agent])
         self.workflow_context = Context(
             workflow=self.workflow,
         )
+        logger.info(f"{self.__class__.__name__} ({self.id}) activated")
 
-    async def on_activate(self) -> None:
-        logger.debug(f"{self.__class__.__name__} ({self.id}) activated")
+    async def _on_deactivate(self) -> None:
+        logger.info(f"{self.__class__.__name__} ({self.id}) deactivated")
 
-    async def on_deactivate(self) -> None:
-        logger.debug(f"{self.__class__.__name__} ({self.id}) deactivated")
-
-    async def respond(self, data: dict | None = None) -> dict | None:
-        raise NotImplementedError("Respond method is not implemented yet.")
+    async def respond(self, data: dict) -> str:
+        wf_handler = self.workflow.run(
+            user_msg=data.get("user_input", ""),
+            memory=self.workflow_memory,
+            context=self.workflow_context,
+            max_iterations=5,
+        )
+        full_response = ""
+        with DaprClient() as dc:
+            async for ev in wf_handler.stream_events():
+                if isinstance(ev, AgentStream):
+                    full_response += ev.delta
+                elif isinstance(ev, ToolCallResult):
+                    ...
+                elif isinstance(ev, ToolCall):
+                    ...
+                elif isinstance(ev, AgentOutput):
+                    ...
+                else:
+                    ...
+                dc.publish_event(
+                    pubsub_name=env.str("DAPR_PUBSUB_NAME", default="pubsub"),
+                    topic_name=f"topic-{self.__class__.__name__}-{self.id}-respond",
+                    data=full_response.encode(),
+                )
+        return full_response
 
     async def get_chat_history(self) -> list:
         if not self._cancelled:

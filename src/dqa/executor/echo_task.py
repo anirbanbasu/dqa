@@ -1,3 +1,4 @@
+import asyncio
 from dapr.actor import ActorProxy, ActorId, ActorProxyFactory
 from dapr.clients.retry import RetryPolicy
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -5,6 +6,7 @@ from a2a.server.events import EventQueue
 from a2a.utils import new_agent_text_message
 
 from dqa.actor.echo_task import EchoTaskActorInterface
+from dqa.actor.mhqa import MHQAActorInterface, MHQAActorMethods
 from dqa.model.echo_task import (
     DeleteEchoHistoryInput,
     EchoHistoryInput,
@@ -18,6 +20,20 @@ class EchoAgentExecutor(AgentExecutor):
     def __init__(self):
         self._actor_type = "EchoTaskActor"
         self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=3))
+
+    async def temp_mhqa(self, data: EchoInput):
+        proxy = ActorProxy.create(
+            actor_type="MHQAActor",
+            actor_id=ActorId(actor_id=data.thread_id),
+            actor_interface=MHQAActorInterface,
+            actor_proxy_factory=self._factory,
+        )
+        asyncio.create_task(
+            proxy.invoke_method(
+                method=MHQAActorMethods.Respond,
+                raw_body=data.model_dump_json().encode(),
+            )
+        )
 
     async def perform_echo(self, data: EchoInput) -> str:
         proxy = ActorProxy.create(
@@ -67,6 +83,7 @@ class EchoAgentExecutor(AgentExecutor):
         response = None
         match message_payload.skill:
             case EchoAgentSkills.ECHO:
+                await self.temp_mhqa(data=message_payload.data)
                 response = await self.perform_echo(data=message_payload.data)
             case EchoAgentSkills.HISTORY:
                 response = await self.perform_history(data=message_payload.data)

@@ -1,0 +1,8 @@
+{
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen3:latest",
+    "request_timeout": 300,
+    "thinking": false
+  }
+}
