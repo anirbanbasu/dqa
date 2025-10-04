@@ -19,9 +19,15 @@ apps:
     maxBodySize: 256Mi
     # appLogDestination: file # (optional), can be file, console or fileAndConsole. default is fileAndConsole.
     # daprdLogDestination: file # (optional), can be file, console or fileAndConsole. default is file.
-  - appID: a2a-srv # optional
+  - appID: echo-a2a-srv # optional
     appDirPath: . # REQUIRED
     appChannelAddress: 127.0.0.1
     command: ["uv", "run", "echo-a2a-srv"]
+    readBufferSize: 32Ki
+    maxBodySize: 256Mi
+  - appID: mhqa-a2a-srv # optional
+    appDirPath: . # REQUIRED
+    appChannelAddress: 127.0.0.1
+    command: ["uv", "run", "mhqa-a2a-srv"]
     readBufferSize: 32Ki
     maxBodySize: 256Mi

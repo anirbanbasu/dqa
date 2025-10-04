@@ -21,10 +21,10 @@ from dqa.model.echo_task import (
     EchoAgentA2AInputMessage,
     EchoAgentSkills,
     EchoHistoryInput,
-    EchoInput,
     EchoResponse,
     EchoResponseWithHistory,
 )
+from dqa.model.mhqa import MHQAAgentInputMessage, MHQAAgentSkills, MHQAInput
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +32,10 @@ logger = logging.getLogger(__name__)
 class GradioApp:
     def __init__(self):
         # self.ui = None
-        self._echo_a2a_uvicorn_host = env.str("APP_A2A_SRV_HOST", "127.0.0.1")
-        self._echo_a2a_uvicorn_port = env.int("APP_ECHO_A2A_SRV_PORT", 32769)
+        self._mhqa_a2a_uvicorn_host = env.str("APP_A2A_SRV_HOST", "127.0.0.1")
+        self._mhqa_a2a_uvicorn_port = env.int("APP_ECHO_A2A_SRV_PORT", 32770)
         self._echo_a2a_base_url = (
-            f"http://{self._echo_a2a_uvicorn_host}:{self._echo_a2a_uvicorn_port}"
+            f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
         )
 
     def convert_echo_response_to_chat_messages(self, response: EchoResponse):
@@ -106,6 +106,7 @@ class GradioApp:
                     with gr.Row(equal_height=True):
                         txt_input = gr.Textbox(
                             scale=3,
+                            lines=4,
                             placeholder="Type a message and press Enter or click Send...",
                             show_copy_button=False,
                         )
@@ -114,10 +115,14 @@ class GradioApp:
                         gr.Examples(
                             label="Example of input messages",
                             examples=[
-                                "Ahoy there, matey!",
-                                "Hello there!",
-                                "Test",
-                                "Echo this?",
+                                "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
+                                "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
+                                "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
+                                "I am an odd number. Take away one letter and I become even. What number am I?",
+                                "Using only an addition, how do you add eight 8's and get the number 1000?",
+                                "Watson borrowed 100 Euros from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds?",
+                                "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
+                                "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
                             ],
                             inputs=[txt_input],
                         )
@@ -343,9 +348,9 @@ class GradioApp:
                             )
                         ).create(card=final_agent_card_to_use)
 
-                        message_payload = EchoAgentA2AInputMessage(
-                            skill=EchoAgentSkills.ECHO,
-                            data=EchoInput(
+                        message_payload = MHQAAgentInputMessage(
+                            skill=MHQAAgentSkills.Respond,
+                            data=MHQAInput(
                                 thread_id=selected_chat_id,
                                 user_input=txt_input,
                             ),

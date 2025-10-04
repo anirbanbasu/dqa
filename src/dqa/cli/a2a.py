@@ -37,11 +37,23 @@ from dqa import ic  # noqa: F401
 
 import typer
 
+from rich.console import Console
+
+from dqa.model.mhqa import (
+    MHQAAgentInputMessage,
+    MHQAAgentSkills,
+    MHQAInput,
+    MHQAResponse,
+)
+
 logger = logging.getLogger(__name__)  # Get a logger instance
 
 a2a_asgi_host = env.str("APP_A2A_SRV_HOST", "127.0.0.1")
 echo_a2a_asgi_port = env.int("APP_ECHO_A2A_SRV_PORT", 32769)
-base_url = f"http://{a2a_asgi_host}:{echo_a2a_asgi_port}"
+echo_base_url = f"http://{a2a_asgi_host}:{echo_a2a_asgi_port}"
+
+mhqa_a2a_asgi_port = env.int("APP_ECHO_A2A_SRV_PORT", 32770)
+mhqa_base_url = f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
 
 cli_app = typer.Typer(
     name="a2a-client",
@@ -82,13 +94,13 @@ async def echo_a2a_echo(
         # initialise A2ACardResolver
         resolver = A2ACardResolver(
             httpx_client=httpx_client,
-            base_url=base_url,
+            base_url=echo_base_url,
             # agent_card_path uses default, extended_agent_card_path also uses default
         )
         final_agent_card_to_use: AgentCard | None = None
 
         logger.info(
-            f"Attempting to fetch public agent card from: {base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+            f"Attempting to fetch public agent card from: {echo_base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
         )
         _public_card = (
             await resolver.get_agent_card()
@@ -145,13 +157,13 @@ async def echo_a2a_history(
         # initialise A2ACardResolver
         resolver = A2ACardResolver(
             httpx_client=httpx_client,
-            base_url=base_url,
+            base_url=echo_base_url,
             # agent_card_path uses default, extended_agent_card_path also uses default
         )
         final_agent_card_to_use: AgentCard | None = None
 
         logger.info(
-            f"Attempting to fetch public agent card from: {base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+            f"Attempting to fetch public agent card from: {echo_base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
         )
         _public_card = (
             await resolver.get_agent_card()
@@ -208,13 +220,13 @@ async def echo_a2a_delete_history(
         # initialise A2ACardResolver
         resolver = A2ACardResolver(
             httpx_client=httpx_client,
-            base_url=base_url,
+            base_url=echo_base_url,
             # agent_card_path uses default, extended_agent_card_path also uses default
         )
         final_agent_card_to_use: AgentCard | None = None
 
         logger.info(
-            f"Attempting to fetch public agent card from: {base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+            f"Attempting to fetch public agent card from: {echo_base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
         )
         _public_card = (
             await resolver.get_agent_card()
@@ -247,6 +259,74 @@ async def echo_a2a_delete_history(
             if isinstance(response, Message):
                 full_message_content = get_message_text(response)
                 print(full_message_content)
+
+
+@cli_app.command()
+@partial(syncify, raise_sync_error=False)
+async def mhqa_chat(
+    message: str = typer.Argument(
+        default="Hello there, tell me about your capabilities!",
+        help="The message to send to the A2A endpoint.",
+    ),
+    thread_id: str = typer.Option(
+        default=str(uuid4()),
+        help="A thread ID to identify your conversation. If not specified, a random UUID will be used.",
+    ),
+) -> None:
+    """
+    Query the echo A2A endpoint with a message and print the response.
+    """
+
+    async with httpx.AsyncClient(timeout=600) as httpx_client:
+        # initialise A2ACardResolver
+        resolver = A2ACardResolver(
+            httpx_client=httpx_client,
+            base_url=mhqa_base_url,
+            # agent_card_path uses default, extended_agent_card_path also uses default
+        )
+        final_agent_card_to_use: AgentCard | None = None
+
+        logger.info(
+            f"Attempting to fetch public agent card from: {mhqa_base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+        )
+        _public_card = (
+            await resolver.get_agent_card()
+        )  # Fetches from default public path
+        logger.info("Successfully fetched public agent card:")
+        logger.info(_public_card.model_dump_json(indent=2, exclude_none=True))
+        final_agent_card_to_use = _public_card
+
+        client = ClientFactory(
+            config=ClientConfig(
+                streaming=True, polling=False, httpx_client=httpx_client
+            )
+        ).create(card=final_agent_card_to_use)
+        logger.info("A2A client initialised.")
+
+        message_payload = MHQAAgentInputMessage(
+            skill=MHQAAgentSkills.Respond,
+            data=MHQAInput(
+                thread_id=thread_id,
+                user_input=message,
+            ),
+        )
+
+        send_message = Message(
+            role="user",
+            parts=[{"kind": "text", "text": message_payload.model_dump_json()}],
+            message_id=str(uuid4()),
+        )
+        logger.info("Sending message to the A2A endpoint")
+        streaming_response = client.send_message(send_message)
+        logger.info("Parsing streaming response from the A2A endpoint")
+        console = Console()
+        async for response in streaming_response:
+            if isinstance(response, Message):
+                full_message_content = get_message_text(response)
+                validated_response = MHQAResponse.model_validate_json(
+                    full_message_content
+                )
+                console.print_json(validated_response.model_dump_json())
 
 
 def main():  # pragma: no cover
