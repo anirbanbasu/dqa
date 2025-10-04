@@ -1,13 +1,15 @@
 import json
 import logging
-from typing import List
+import re
+from typing import Any, Dict, List
 
 from llama_index.tools.mcp import aget_tools_from_mcp_url, BasicMCPClient
 
 from llama_index.core.memory import Memory
 from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import Context
-from llama_index.core.base.llms.types import ChatMessage
+from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.tools.types import ToolOutput
 
 from llama_index.core.agent.workflow import (
     AgentOutput,
@@ -26,7 +28,7 @@ from pydantic import TypeAdapter
 
 from dqa import env
 from dqa.actor import MHQAActorMethods
-from dqa.model.mhqa import MHQAResponse
+from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
 
 
 logger = logging.getLogger(__name__)
@@ -95,7 +97,9 @@ class MHQAActor(Actor, MHQAActorInterface):
                 logger.exception(e)
 
         logger.info(
-            f"Available MCP tools: {','.join([f.metadata.name for f in self.mcp_features])}"
+            f"MCP tools available to {self.__class__.__name__} ({self.id}): {
+                ','.join([f.metadata.name for f in self.mcp_features])
+            }"
         )
 
         if not hasattr(self, "workflow"):
@@ -157,14 +161,26 @@ class MHQAActor(Actor, MHQAActorInterface):
             max_iterations=5,
         )
         full_response = ""
+        tool_invocations: List[MCPToolInvocation] = []
         with DaprClient() as dc:
             async for ev in wf_handler.stream_events():
                 if isinstance(ev, AgentStream):
                     full_response += ev.delta
-                elif isinstance(ev, ToolCallResult):
-                    ...
                 elif isinstance(ev, ToolCall):
                     ...
+                elif isinstance(ev, ToolCallResult):
+                    tool_invocations.append(
+                        MCPToolInvocation(
+                            name=ev.tool_name or ev.tool_id,
+                            input=json.dumps(ev.tool_kwargs)
+                            if type(ev.tool_kwargs) is dict
+                            else str(ev.tool_kwargs),
+                            output=ev.tool_output.model_dump_json()
+                            if type(ev.tool_output) is ToolOutput
+                            else str(ev.tool_output),
+                            metadata=None,
+                        )
+                    )
                 elif isinstance(ev, AgentOutput):
                     ...
                 else:
@@ -184,21 +200,121 @@ class MHQAActor(Actor, MHQAActorInterface):
         response = MHQAResponse(
             thread_id=str(self.id),
             user_input=user_input,
-            output=full_response,
+            agent_output=full_response,
+            tool_invocations=tool_invocations,
         )
         return response.model_dump()
 
     async def get_chat_history(self) -> list:
+        def parse_tool_message_from_str(msg: str) -> Dict[str, Any]:
+            """
+            Parse a message string representing an MCP tool call, extracting:
+            - is_error (bool)
+            - tool result (parsed JSON or raw text)
+            - content-level metadata (dict or None)
+            - outer-level meta (raw text or None)
+            """
+            # 1. Extract isError part
+            m_err = re.search(r"\bisError\s*=\s*(True|False)", msg)
+            is_error = None
+            if m_err:
+                is_error = m_err.group(1) == "True"
+            else:
+                # fallback default or raise
+                is_error = False
+
+            # 2. Extract the content block, i.e. the TextContent(...) part
+            # We look for content=\[TextContent( ... )\]
+            # This is a bit fragile but should work for typical formatting
+            m_content = re.search(r"content=\[TextContent\((.*?)\)\]", msg, re.DOTALL)
+            tool_result = None
+            content_meta = None
+            if m_content:
+                inner = m_content.group(1)
+                # inner is something like
+                # "type='text', text='...json...', annotations=None, meta={...}"
+                # Extract the text='...'
+                m_text = re.search(r"text='(.*?)'", inner, re.DOTALL)
+                if m_text:
+                    tool_result = m_text.group(1)
+                # Extract the meta={...} inside
+                m_cmeta = re.search(r"meta=\{(.*)\}\s*(?:,|$)", inner, re.DOTALL)
+                if m_cmeta:
+                    meta_body = m_cmeta.group(1)
+                    # meta_body is something like "'frankfurtermcp': {'version': '0.3.6', ... }"
+                    # We can wrap braces and convert quotes to valid JSON-like string
+                    meta_text = "{" + meta_body + "}"
+                    # But Python single quotes make it invalid JSON. Replace single quotes with double quotes.
+                    # This is approximate and may break for nested cases; for more robust solution use an AST parser.
+                    content_meta = meta_text.replace("'", '"')
+
+            # 3. Extract outer-level meta=... before content=...
+            m_outer = re.search(
+                r"\bmeta\s*=\s*(None|\{.*?\})\s+content=", msg, re.DOTALL
+            )
+            outer_meta = None
+            if m_outer:
+                outer = m_outer.group(1)
+                if outer == "None":
+                    outer_meta = None
+                else:
+                    # similar parse as for content_meta
+                    outer_meta = outer.strip()
+
+            return {
+                "is_error": is_error,
+                "result": tool_result,
+                "content_meta": content_meta,
+                "outer_meta": outer_meta,
+            }
+
+        response: List[MHQAResponse] = []
         if not self._cancelled:
-            chat_messages = self.workflow_memory.get_all()
-            return [msg.model_dump() for msg in chat_messages]
-        else:
-            return []
+            chat_messages = await self.workflow_memory.aget_all()
+            for msg in chat_messages:
+                # ic(msg.role, msg.content, type(msg.content), msg.additional_kwargs)
+                # Is this list traversal in a consistent order?
+                if msg.role == MessageRole.USER:
+                    user_input: str = msg.content
+                    tool_invocations: List[MCPToolInvocation] = []
+                elif msg.role == MessageRole.ASSISTANT:
+                    if hasattr(msg, "content") and msg.content != "":
+                        agent_output: str = msg.content
+                        response.append(
+                            MHQAResponse(
+                                thread_id=str(self.id),
+                                user_input=user_input,
+                                agent_output=agent_output,
+                                tool_invocations=tool_invocations,
+                            )
+                        )
+                        tool_name = ""
+                        tool_input = ""
+                    else:
+                        # Possible tool call but there could be many of these so why do we look at only the first one?
+                        tool_calls = msg.additional_kwargs.get("tool_calls", [])
+                        if len(tool_calls) > 0:
+                            tool_function = tool_calls[0].get("function", {})
+                            tool_name = tool_function.get("name", "")
+                            tool_input = tool_calls[0].get("argument", "")
+                elif msg.role == MessageRole.TOOL:
+                    parsed_tool_output = parse_tool_message_from_str(msg.content)
+                    tool_invocations.append(
+                        MCPToolInvocation(
+                            name=tool_name,
+                            input=tool_input,
+                            output=parsed_tool_output.get("result", None),
+                            metadata=parsed_tool_output.get("content_meta", None),
+                        )
+                    )
+                else:
+                    ...
+        return [r.model_dump() for r in response]
 
     async def reset_chat_history(self) -> bool:
         if not self._cancelled:
             await self.workflow_memory.areset()
-            await self._state_manager.set_state(self._chat_memory_key, "[]")
+            await self._state_manager.remove_state(self._chat_memory_key)
             await self._state_manager.save_state()
             return True
         else:

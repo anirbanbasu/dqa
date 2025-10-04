@@ -17,7 +17,7 @@ from dqa.model.mhqa import (
 class MHQAAgentExecutor(AgentExecutor):
     def __init__(self):
         self._actor_mhqa = MHQAActor.__name__
-        self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=3))
+        self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=1))
 
     async def do_mhqa_response(self, data: MHQAInput):
         proxy = ActorProxy.create(
@@ -46,7 +46,7 @@ class MHQAAgentExecutor(AgentExecutor):
             actor_interface=MHQAActorInterface,
             actor_proxy_factory=self._factory,
         )
-        result = await proxy.invoke_method(method=MHQAActorMethods.GetHistory)
+        result = await proxy.invoke_method(method=MHQAActorMethods.GetChatHistory)
         return result.decode().strip("\"'")
 
     async def do_delete_history(self, data: MHQADeleteHistoryInput) -> str:
