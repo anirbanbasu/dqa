@@ -39,4 +39,4 @@ class A2AClientMixin:
             )
         ).create(card=final_agent_card_to_use)
         logger.info("A2A client initialised.")
-        return client
+        return client, final_agent_card_to_use

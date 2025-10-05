@@ -100,7 +100,7 @@ class DQACliApp(A2AClientMixin):
         thread_id: str,
     ) -> EchoResponseWithHistory:
         async with httpx.AsyncClient() as httpx_client:
-            client = await self.obtain_a2a_client(
+            client, _ = await self.obtain_a2a_client(
                 httpx_client=httpx_client,
                 base_url=self.echo_base_url,
             )
@@ -155,7 +155,7 @@ class DQACliApp(A2AClientMixin):
         thread_id: str,
     ) -> List[EchoResponse]:
         async with httpx.AsyncClient() as httpx_client:
-            client = await self.obtain_a2a_client(
+            client, _ = await self.obtain_a2a_client(
                 httpx_client=httpx_client,
                 base_url=self.echo_base_url,
             )
@@ -207,7 +207,7 @@ class DQACliApp(A2AClientMixin):
         thread_id: str,
     ) -> str:
         async with httpx.AsyncClient() as httpx_client:
-            client = await self.obtain_a2a_client(
+            client, _ = await self.obtain_a2a_client(
                 httpx_client=httpx_client,
                 base_url=self.echo_base_url,
             )
@@ -254,7 +254,7 @@ class DQACliApp(A2AClientMixin):
         thread_id: str,
     ) -> MHQAResponse:
         async with httpx.AsyncClient() as httpx_client:
-            client = await self.obtain_a2a_client(
+            client, _ = await self.obtain_a2a_client(
                 httpx_client=httpx_client,
                 base_url=self.mhqa_base_url,
             )
@@ -304,7 +304,7 @@ class DQACliApp(A2AClientMixin):
         thread_id: str,
     ) -> List[MHQAResponse]:
         async with httpx.AsyncClient() as httpx_client:
-            client = await self.obtain_a2a_client(
+            client, _ = await self.obtain_a2a_client(
                 httpx_client=httpx_client,
                 base_url=self.mhqa_base_url,
             )
@@ -354,7 +354,7 @@ class DQACliApp(A2AClientMixin):
         thread_id: str,
     ) -> str:
         async with httpx.AsyncClient() as httpx_client:
-            client = await self.obtain_a2a_client(
+            client, _ = await self.obtain_a2a_client(
                 httpx_client=httpx_client,
                 base_url=self.mhqa_base_url,
             )

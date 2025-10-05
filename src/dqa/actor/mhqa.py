@@ -26,7 +26,7 @@ from dapr.actor import Actor, ActorInterface, actormethod
 from dapr.clients import DaprClient
 from pydantic import TypeAdapter
 
-from dqa import env, ic
+from dqa import env
 from dqa.actor import MHQAActorMethods
 from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
 
@@ -279,7 +279,7 @@ class MHQAActor(Actor, MHQAActorInterface):
         if not self._cancelled:
             chat_messages = await self.workflow_memory.aget_all()
             for msg in chat_messages:
-                ic(msg.role, msg.content, type(msg.content), msg.additional_kwargs)
+                # ic(msg.role, msg.content, type(msg.content), msg.additional_kwargs)
                 # Is this list traversal in a consistent order?
                 if msg.role == MessageRole.USER:
                     user_input: str = msg.content
