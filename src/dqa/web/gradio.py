@@ -30,6 +30,14 @@ logger = logging.getLogger(__name__)
 
 class GradioApp(A2AClientMixin):
     _APP_LOGO_PATH = "docs/images/logo.svg"
+    # https://www.svgrepo.com/svg/529291/user-rounded
+    _ICON_USER_AVATAR = "docs/images/icon-user-avatar.svg"
+    # https://www.svgrepo.com/svg/368593/chatbot
+    _ICON_BOT_AVATAR = "docs/images/icon-bot-avatar.svg"
+    # https://www.svgrepo.com/svg/496582/send-2
+    _ICON_BTN_SEND = "docs/images/icon-btn-send.svg"
+    # https://www.svgrepo.com/svg/499905/delete
+    _ICON_BTN_DELETE = "docs/images/icon-btn-delete.svg"
 
     _MD_EU_AI_ACT_TRANSPARENCY = """
     **European Union AI Act Transparency notice**: By using this app, you are interacting with an artificial intelligence (AI) system.
@@ -45,7 +53,7 @@ class GradioApp(A2AClientMixin):
             f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
         )
 
-    def convert_echo_response_to_chat_messages(self, response: MHQAResponse):
+    def convert_mhqa_response_to_chat_messages(self, response: MHQAResponse):
         chat_messages = []
         chat_messages.append(
             gr.ChatMessage(
@@ -53,30 +61,31 @@ class GradioApp(A2AClientMixin):
                 content=response.user_input,
             )
         )
-        message_id = (
-            str(uuid4())
-            if response.tool_invocations and len(response.tool_invocations) > 0
-            else None
-        )
-        chat_messages.append(
-            gr.ChatMessage(
-                role="assistant",
-                content=response.agent_output,
-                metadata={"id": message_id} if message_id else None,
+        if response.agent_output:
+            message_id = (
+                str(uuid4())
+                if response.tool_invocations and len(response.tool_invocations) > 0
+                else None
             )
-        )
-
-        for tool_invocation in response.tool_invocations:
             chat_messages.append(
                 gr.ChatMessage(
                     role="assistant",
-                    content=f"Inputs: {tool_invocation.input}\nOutputs: {tool_invocation.output}\nMetadata: {tool_invocation.metadata}",
-                    metadata={
-                        "parent_id": message_id,
-                        "title": f"Tool used: {tool_invocation.name}",
-                    },
+                    content=response.agent_output,
+                    metadata={"id": message_id} if message_id else None,
                 )
             )
+
+            for tool_invocation in response.tool_invocations:
+                chat_messages.append(
+                    gr.ChatMessage(
+                        role="assistant",
+                        content=f"Inputs: {tool_invocation.input}\nOutputs: {tool_invocation.output}\nMetadata: {tool_invocation.metadata}",
+                        metadata={
+                            "parent_id": message_id,
+                            "title": f"Tool used: {tool_invocation.name}",
+                        },
+                    )
+                )
 
         return chat_messages
 
@@ -111,9 +120,10 @@ class GradioApp(A2AClientMixin):
                     )
                     state_selected_chat_id = gr.State(value=None)
                     btn_chat_delete = gr.Button(
-                        "Delete chat",
+                        "Delete selected chat",
                         size="sm",
                         variant="stop",
+                        icon=GradioApp._ICON_BTN_DELETE,
                         interactive=False,
                     )
                     gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
@@ -125,6 +135,10 @@ class GradioApp(A2AClientMixin):
                     chatbot = gr.Chatbot(
                         type="messages",
                         label="Chat history (a new chat will be created if none if selected)",
+                        avatar_images=[
+                            GradioApp._ICON_USER_AVATAR,
+                            GradioApp._ICON_BOT_AVATAR,
+                        ],
                     )
                     with gr.Row(equal_height=True):
                         txt_input = gr.Textbox(
@@ -132,10 +146,12 @@ class GradioApp(A2AClientMixin):
                             lines=4,
                             label="Your message",
                             info="Enter your non-trivial question to ask the AI agent.",
-                            placeholder="Type a message and press Enter, or click the Send button.",
+                            placeholder="Type a message and press Shift+Enter, or click the Send button.",
                             show_copy_button=False,
                         )
-                        btn_echo = gr.Button("Send", scale=1)
+                        btn_send = gr.Button(
+                            "Send", size="lg", icon=GradioApp._ICON_BTN_SEND, scale=1
+                        )
                     with gr.Column():
                         gr.Examples(
                             label="Example of input messages",
@@ -198,7 +214,7 @@ class GradioApp(A2AClientMixin):
                 chat_history = []
                 for past_message in validated_response:
                     chat_history.extend(
-                        self.convert_echo_response_to_chat_messages(past_message)
+                        self.convert_mhqa_response_to_chat_messages(past_message)
                     )
                 return chat_history
 
@@ -311,7 +327,7 @@ class GradioApp(A2AClientMixin):
                 yield browser_state_chat_histories, new_chat_id, None
 
             @gr.on(
-                triggers=[btn_echo.click, txt_input.submit],
+                triggers=[btn_send.click, txt_input.submit],
                 inputs=[
                     txt_input,
                     state_selected_chat_id,
@@ -354,8 +370,17 @@ class GradioApp(A2AClientMixin):
                                 ),
                             )
 
+                            chat_history.extend(
+                                self.convert_mhqa_response_to_chat_messages(
+                                    MHQAResponse(
+                                        thread_id=selected_chat_id, user_input=txt_input
+                                    )
+                                )
+                            )
+                            last_added_messages = 1
+
                             yield (
-                                gr.update(interactive=False),
+                                None,
                                 browser_state_chat_histories,
                                 selected_chat_id,
                                 chat_history,
@@ -382,11 +407,15 @@ class GradioApp(A2AClientMixin):
                                     agent_response = MHQAResponse.model_validate_json(
                                         full_message_content
                                     )
-                                    chat_history.extend(
-                                        self.convert_echo_response_to_chat_messages(
+                                    new_messages = (
+                                        self.convert_mhqa_response_to_chat_messages(
                                             agent_response
                                         )
                                     )
+                                    if last_added_messages > 0:
+                                        del chat_history[-last_added_messages:]
+                                    chat_history.extend(new_messages)
+                                    last_added_messages = len(new_messages)
 
                                     browser_state_chat_histories[selected_chat_id] = (
                                         chat_history
@@ -396,7 +425,7 @@ class GradioApp(A2AClientMixin):
                             f"No input message was provided for chat ID {selected_chat_id}."
                         )
                     yield (
-                        gr.update(value="", interactive=True),
+                        None,
                         browser_state_chat_histories,
                         selected_chat_id,
                         chat_history,
@@ -414,7 +443,15 @@ class GradioApp(A2AClientMixin):
 
     def construct_ui(self):
         with gr.Blocks(fill_width=True, fill_height=True) as self.ui:
-            gr.set_static_paths(paths=[GradioApp._APP_LOGO_PATH])
+            gr.set_static_paths(
+                paths=[
+                    GradioApp._APP_LOGO_PATH,
+                    GradioApp._ICON_USER_AVATAR,
+                    GradioApp._ICON_BOT_AVATAR,
+                    GradioApp._ICON_BTN_SEND,
+                    GradioApp._ICON_BTN_DELETE,
+                ]
+            )
             self.component_main_content()
 
         return self.ui

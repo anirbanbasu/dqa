@@ -38,11 +38,13 @@ class MCPToolInvocation(BaseModel):
 
 class MHQAResponse(MHQAActorIO):
     user_input: Annotated[str, "The original query from the user"]
-    agent_output: Annotated[str, "The agent response to the user query"]
+    agent_output: Annotated[Optional[str], "The agent response to the user query"] = (
+        None
+    )
     tool_invocations: Annotated[
-        List[MCPToolInvocation],
+        Optional[List[MCPToolInvocation]],
         "List of MCP tool invocations made during the response generation",
-    ]
+    ] = []
 
 
 MHQAAgentSkills: TypeAlias = MHQAActorMethods
