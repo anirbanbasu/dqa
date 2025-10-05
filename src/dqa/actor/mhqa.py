@@ -26,7 +26,7 @@ from dapr.actor import Actor, ActorInterface, actormethod
 from dapr.clients import DaprClient
 from pydantic import TypeAdapter
 
-from dqa import env
+from dqa import env, ic
 from dqa.actor import MHQAActorMethods
 from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
 
@@ -55,6 +55,67 @@ class MHQAActorInterface(ActorInterface):
 class MHQAActor(Actor, MHQAActorInterface):
     _chat_memory_key = "chat_memory"
     _memory_messages_type_adapter = TypeAdapter(List[ChatMessage])
+
+    @staticmethod
+    def parse_tool_message_from_str(msg: str) -> Dict[str, Any]:
+        """
+        Parse a message string representing an MCP tool call, extracting:
+        - is_error (bool)
+        - tool result (parsed JSON or raw text)
+        - content-level metadata (dict or None)
+        - outer-level meta (raw text or None)
+        """
+        # 1. Extract isError part
+        m_err = re.search(r"\bisError\s*=\s*(True|False)", msg)
+        is_error = None
+        if m_err:
+            is_error = m_err.group(1) == "True"
+        else:
+            # fallback default or raise
+            is_error = False
+
+        # 2. Extract the content block, i.e. the TextContent(...) part
+        # We look for content=\[TextContent( ... )\]
+        # This is a bit fragile but should work for typical formatting
+        m_content = re.search(r"content=\[TextContent\((.*?)\)\]", msg, re.DOTALL)
+        tool_result = None
+        content_meta = None
+        if m_content:
+            inner = m_content.group(1)
+            # inner is something like
+            # "type='text', text='...json...', annotations=None, meta={...}"
+            # Extract the text='...'
+            m_text = re.search(r"text='(.*?)'", inner, re.DOTALL)
+            if m_text:
+                tool_result = m_text.group(1)
+            # Extract the meta={...} inside
+            m_cmeta = re.search(r"meta=\{(.*)\}\s*(?:,|$)", inner, re.DOTALL)
+            if m_cmeta:
+                meta_body = m_cmeta.group(1)
+                # meta_body is something like "'frankfurtermcp': {'version': '0.3.6', ... }"
+                # We can wrap braces and convert quotes to valid JSON-like string
+                meta_text = "{" + meta_body + "}"
+                # But Python single quotes make it invalid JSON. Replace single quotes with double quotes.
+                # This is approximate and may break for nested cases; for more robust solution use an AST parser.
+                content_meta = meta_text.replace("'", '"')
+
+        # 3. Extract outer-level meta=... before content=...
+        m_outer = re.search(r"\bmeta\s*=\s*(None|\{.*?\})\s+content=", msg, re.DOTALL)
+        outer_meta = None
+        if m_outer:
+            outer = m_outer.group(1)
+            if outer == "None":
+                outer_meta = None
+            else:
+                # similar parse as for content_meta
+                outer_meta = outer.strip()
+
+        return {
+            "is_error": is_error,
+            "result": tool_result,
+            "content_meta": content_meta,
+            "outer_meta": outer_meta,
+        }
 
     def __init__(self, ctx, actor_id):
         super().__init__(ctx, actor_id)
@@ -130,14 +191,12 @@ class MHQAActor(Actor, MHQAActorInterface):
                 session_id=str(self.id),
             )
 
-            saved_memory_messages = await self._state_manager.get_or_add_state(
-                self._chat_memory_key, "[]"
+            saved_memory_messages = (
+                await self._state_manager.get_state(self._chat_memory_key)
+                if await self._state_manager.contains_state(self._chat_memory_key)
+                else None
             )
-            if (
-                saved_memory_messages
-                and isinstance(saved_memory_messages, str)
-                and len(saved_memory_messages) > 0
-            ):
+            if saved_memory_messages and isinstance(saved_memory_messages, str):
                 parsed_messages = self._memory_messages_type_adapter.validate_json(
                     saved_memory_messages
                 )
@@ -169,26 +228,42 @@ class MHQAActor(Actor, MHQAActorInterface):
                 elif isinstance(ev, ToolCall):
                     ...
                 elif isinstance(ev, ToolCallResult):
+                    parsed_tool_output = (
+                        MHQAActor.parse_tool_message_from_str(
+                            ev.tool_output.blocks[0].text
+                        )
+                        if type(ev.tool_output) is ToolOutput
+                        else None
+                    )
                     tool_invocations.append(
                         MCPToolInvocation(
                             name=ev.tool_name or ev.tool_id,
                             input=json.dumps(ev.tool_kwargs)
                             if type(ev.tool_kwargs) is dict
                             else str(ev.tool_kwargs),
-                            output=ev.tool_output.model_dump_json()
-                            if type(ev.tool_output) is ToolOutput
+                            output=parsed_tool_output.get("result", None)
+                            if parsed_tool_output
                             else str(ev.tool_output),
-                            metadata=None,
+                            metadata=parsed_tool_output.get("content_meta", None)
+                            if parsed_tool_output
+                            else None,
                         )
                     )
                 elif isinstance(ev, AgentOutput):
                     ...
                 else:
                     ...
+
+                response = MHQAResponse(
+                    thread_id=str(self.id),
+                    user_input=user_input,
+                    agent_output=full_response,
+                    tool_invocations=tool_invocations,
+                )
                 dc.publish_event(
                     pubsub_name=env.str("DAPR_PUBSUB_NAME", default="pubsub"),
                     topic_name=f"topic-{self.__class__.__name__}-{self.id}-respond",
-                    data=full_response.encode(),
+                    data=response.model_dump_json().encode(),
                 )
         memory_messages = await self.workflow_memory.aget_all()
         await self._state_manager.set_state(
@@ -197,82 +272,14 @@ class MHQAActor(Actor, MHQAActorInterface):
             self._memory_messages_type_adapter.dump_json(memory_messages).decode(),
         )
         await self._state_manager.save_state()
-        response = MHQAResponse(
-            thread_id=str(self.id),
-            user_input=user_input,
-            agent_output=full_response,
-            tool_invocations=tool_invocations,
-        )
         return response.model_dump()
 
     async def get_chat_history(self) -> list:
-        def parse_tool_message_from_str(msg: str) -> Dict[str, Any]:
-            """
-            Parse a message string representing an MCP tool call, extracting:
-            - is_error (bool)
-            - tool result (parsed JSON or raw text)
-            - content-level metadata (dict or None)
-            - outer-level meta (raw text or None)
-            """
-            # 1. Extract isError part
-            m_err = re.search(r"\bisError\s*=\s*(True|False)", msg)
-            is_error = None
-            if m_err:
-                is_error = m_err.group(1) == "True"
-            else:
-                # fallback default or raise
-                is_error = False
-
-            # 2. Extract the content block, i.e. the TextContent(...) part
-            # We look for content=\[TextContent( ... )\]
-            # This is a bit fragile but should work for typical formatting
-            m_content = re.search(r"content=\[TextContent\((.*?)\)\]", msg, re.DOTALL)
-            tool_result = None
-            content_meta = None
-            if m_content:
-                inner = m_content.group(1)
-                # inner is something like
-                # "type='text', text='...json...', annotations=None, meta={...}"
-                # Extract the text='...'
-                m_text = re.search(r"text='(.*?)'", inner, re.DOTALL)
-                if m_text:
-                    tool_result = m_text.group(1)
-                # Extract the meta={...} inside
-                m_cmeta = re.search(r"meta=\{(.*)\}\s*(?:,|$)", inner, re.DOTALL)
-                if m_cmeta:
-                    meta_body = m_cmeta.group(1)
-                    # meta_body is something like "'frankfurtermcp': {'version': '0.3.6', ... }"
-                    # We can wrap braces and convert quotes to valid JSON-like string
-                    meta_text = "{" + meta_body + "}"
-                    # But Python single quotes make it invalid JSON. Replace single quotes with double quotes.
-                    # This is approximate and may break for nested cases; for more robust solution use an AST parser.
-                    content_meta = meta_text.replace("'", '"')
-
-            # 3. Extract outer-level meta=... before content=...
-            m_outer = re.search(
-                r"\bmeta\s*=\s*(None|\{.*?\})\s+content=", msg, re.DOTALL
-            )
-            outer_meta = None
-            if m_outer:
-                outer = m_outer.group(1)
-                if outer == "None":
-                    outer_meta = None
-                else:
-                    # similar parse as for content_meta
-                    outer_meta = outer.strip()
-
-            return {
-                "is_error": is_error,
-                "result": tool_result,
-                "content_meta": content_meta,
-                "outer_meta": outer_meta,
-            }
-
         response: List[MHQAResponse] = []
         if not self._cancelled:
             chat_messages = await self.workflow_memory.aget_all()
             for msg in chat_messages:
-                # ic(msg.role, msg.content, type(msg.content), msg.additional_kwargs)
+                ic(msg.role, msg.content, type(msg.content), msg.additional_kwargs)
                 # Is this list traversal in a consistent order?
                 if msg.role == MessageRole.USER:
                     user_input: str = msg.content
@@ -296,13 +303,17 @@ class MHQAActor(Actor, MHQAActorInterface):
                         if len(tool_calls) > 0:
                             tool_function = tool_calls[0].get("function", {})
                             tool_name = tool_function.get("name", "")
-                            tool_input = tool_calls[0].get("argument", "")
+                            tool_input = tool_function.get("arguments", None)
                 elif msg.role == MessageRole.TOOL:
-                    parsed_tool_output = parse_tool_message_from_str(msg.content)
+                    parsed_tool_output = MHQAActor.parse_tool_message_from_str(
+                        msg.content
+                    )
                     tool_invocations.append(
                         MCPToolInvocation(
                             name=tool_name,
-                            input=tool_input,
+                            input=json.dumps(tool_input)
+                            if type(tool_input) is dict
+                            else str(tool_input),
                             output=parsed_tool_output.get("result", None),
                             metadata=parsed_tool_output.get("content_meta", None),
                         )
@@ -314,9 +325,12 @@ class MHQAActor(Actor, MHQAActorInterface):
     async def reset_chat_history(self) -> bool:
         if not self._cancelled:
             await self.workflow_memory.areset()
-            await self._state_manager.remove_state(self._chat_memory_key)
-            await self._state_manager.save_state()
-            return True
+            if await self._state_manager.contains_state(self._chat_memory_key):
+                await self._state_manager.remove_state(self._chat_memory_key)
+                await self._state_manager.save_state()
+                return True
+            else:
+                return False
         else:
             return False
 
