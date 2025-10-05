@@ -9,7 +9,6 @@ authors = [
 requires-python = ">=3.12.0"
 dependencies = [
     "a2a-sdk[http-server]>=0.3.6",
-    "asyncer>=0.0.8",
     "dapr>=1.16.0",
     "dapr-ext-fastapi>=1.16.0",
     "environs>=14.3.0",
