@@ -19,7 +19,7 @@ class MHQAAgentExecutor(AgentExecutor):
         self._actor_mhqa = MHQAActor.__name__
         self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=1))
 
-    async def do_mhqa_response(self, data: MHQAInput):
+    async def do_mhqa_respond(self, data: MHQAInput):
         proxy = ActorProxy.create(
             actor_type=self._actor_mhqa,
             actor_id=ActorId(actor_id=data.thread_id),
@@ -37,9 +37,8 @@ class MHQAAgentExecutor(AgentExecutor):
             raw_body=data.model_dump_json().encode(),
         )
         return result.decode().strip("\"'")
-        # Start listening to the pub-sub topic for responses (non-blocking)
 
-    async def do_get_history(self, data: MHQAHistoryInput) -> str:
+    async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
         proxy = ActorProxy.create(
             actor_type=self._actor_mhqa,
             actor_id=ActorId(actor_id=data.thread_id),
@@ -49,7 +48,7 @@ class MHQAAgentExecutor(AgentExecutor):
         result = await proxy.invoke_method(method=MHQAActorMethods.GetChatHistory)
         return result.decode().strip("\"'")
 
-    async def do_delete_history(self, data: MHQADeleteHistoryInput) -> str:
+    async def do_mhqa_delete_history(self, data: MHQADeleteHistoryInput) -> str:
         proxy = ActorProxy.create(
             actor_type=self._actor_mhqa,
             actor_id=ActorId(actor_id=data.thread_id),
@@ -75,11 +74,11 @@ class MHQAAgentExecutor(AgentExecutor):
         response = None
         match message_payload.skill:
             case MHQAAgentSkills.Respond:
-                response = await self.do_mhqa_response(data=message_payload.data)
+                response = await self.do_mhqa_respond(data=message_payload.data)
             case MHQAAgentSkills.GetChatHistory:
-                response = await self.do_get_history(data=message_payload.data)
+                response = await self.do_mhqa_get_history(data=message_payload.data)
             case MHQAAgentSkills.ResetChatHistory:
-                response = await self.do_delete_history(data=message_payload.data)
+                response = await self.do_mhqa_delete_history(data=message_payload.data)
             case _:
                 raise ValueError(f"Unknown skill '{message_payload.skill}' requested!")
         if response:

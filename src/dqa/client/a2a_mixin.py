@@ -34,9 +34,7 @@ class A2AClientMixin:
         final_agent_card_to_use = _public_card
 
         client = ClientFactory(
-            config=ClientConfig(
-                streaming=True, polling=False, httpx_client=httpx_client
-            )
+            config=ClientConfig(streaming=True, polling=True, httpx_client=httpx_client)
         ).create(card=final_agent_card_to_use)
         logger.info("A2A client initialised.")
         return client, final_agent_card_to_use

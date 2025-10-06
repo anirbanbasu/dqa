@@ -370,14 +370,17 @@ class GradioApp(A2AClientMixin):
                                 ),
                             )
 
-                            chat_history.extend(
+                            waiting_messages = (
                                 self.convert_mhqa_response_to_chat_messages(
                                     MHQAResponse(
-                                        thread_id=selected_chat_id, user_input=txt_input
+                                        thread_id=selected_chat_id,
+                                        user_input=txt_input,
+                                        agent_output="...",
                                     )
                                 )
                             )
-                            last_added_messages = 1
+                            chat_history.extend(waiting_messages)
+                            last_added_messages = len(waiting_messages)
 
                             yield (
                                 None,
@@ -420,16 +423,16 @@ class GradioApp(A2AClientMixin):
                                     browser_state_chat_histories[selected_chat_id] = (
                                         chat_history
                                     )
+                                    yield (
+                                        None,
+                                        browser_state_chat_histories,
+                                        selected_chat_id,
+                                        chat_history,
+                                    )
                     else:
                         gr.Warning(
                             f"No input message was provided for chat ID {selected_chat_id}."
                         )
-                    yield (
-                        None,
-                        browser_state_chat_histories,
-                        selected_chat_id,
-                        chat_history,
-                    )
                 except Exception as e:
                     yield (
                         gr.update(value="", interactive=True),
