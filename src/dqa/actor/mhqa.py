@@ -26,7 +26,7 @@ from dapr.actor import Actor, ActorInterface, actormethod
 from dapr.clients import DaprClient
 from pydantic import TypeAdapter
 
-from dqa import env
+from dqa import ParsedEnvVars
 from dqa.actor import MHQAActorMethods
 from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
 
@@ -124,7 +124,7 @@ class MHQAActor(Actor, MHQAActorInterface):
     async def _on_activate(self) -> None:
         if not hasattr(self, "llm_config"):
             self.llm_config = {}
-            llm_config_file = env.str("LLM_CONFIG_FILE", default="conf/llm.json")
+            llm_config_file = ParsedEnvVars().LLM_CONFIG_FILE
             if os.path.exists(llm_config_file):
                 with open(llm_config_file, "r") as f:
                     self.llm_config = json.load(f)
@@ -133,7 +133,7 @@ class MHQAActor(Actor, MHQAActorInterface):
             self.mcp_features = []
             self.mcp_config = {}
             try:
-                mcp_config_file = env.str("MCP_CONFIG_FILE", default="conf/mcp.json")
+                mcp_config_file = ParsedEnvVars().MCP_CONFIG_FILE
                 if os.path.exists(mcp_config_file):
                     with open(mcp_config_file, "r") as f:
                         self.mcp_config = json.load(f)
@@ -261,7 +261,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                     tool_invocations=tool_invocations,
                 )
                 dc.publish_event(
-                    pubsub_name=env.str("DAPR_PUBSUB_NAME", default="pubsub"),
+                    pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
                     topic_name=f"topic-{self.__class__.__name__}-{self.id}-respond",
                     data=response.model_dump_json().encode(),
                 )

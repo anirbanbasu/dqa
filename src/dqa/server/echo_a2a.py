@@ -13,7 +13,7 @@ from a2a.types import (
     AgentSkill,
 )
 
-from dqa import env
+from dqa import ParsedEnvVars
 from dqa.executor.echo_task import EchoAgentExecutor
 from dqa.model.echo_task import EchoAgentSkills
 
@@ -27,8 +27,8 @@ async def uvicorn_serve():
         # This is absolutely necessary to exit the program
         sys.exit(0)
 
-    _a2a_uvicorn_host = env.str("APP_A2A_SRV_HOST", "127.0.0.1")
-    _a2a_uvicorn_port = env.int("APP_ECHO_A2A_SRV_PORT", 32769)
+    _a2a_uvicorn_host = ParsedEnvVars().APP_A2A_SRV_HOST
+    _a2a_uvicorn_port = ParsedEnvVars().APP_ECHO_A2A_SRV_PORT
     signal.signal(signal.SIGINT, sigint_handler)
 
     echo_skill = AgentSkill(

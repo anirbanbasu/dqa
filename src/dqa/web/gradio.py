@@ -12,7 +12,7 @@ from a2a.utils import get_message_text
 
 import httpx
 from pydantic import TypeAdapter
-from dqa import env
+from dqa import ParsedEnvVars
 import gradio as gr
 
 from dqa.client.a2a_mixin import A2AClientMixin
@@ -47,8 +47,8 @@ class GradioApp(A2AClientMixin):
 
     def __init__(self):
         # self.ui = None
-        self._mhqa_a2a_uvicorn_host = env.str("APP_A2A_SRV_HOST", "127.0.0.1")
-        self._mhqa_a2a_uvicorn_port = env.int("APP_ECHO_A2A_SRV_PORT", 32770)
+        self._mhqa_a2a_uvicorn_host = ParsedEnvVars().APP_A2A_SRV_HOST
+        self._mhqa_a2a_uvicorn_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
         self._mhqa_a2a_base_url = (
             f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
         )
@@ -82,7 +82,7 @@ class GradioApp(A2AClientMixin):
                         content=f"Inputs: {tool_invocation.input}\nOutputs: {tool_invocation.output}\nMetadata: {tool_invocation.metadata}",
                         metadata={
                             "parent_id": message_id,
-                            "title": f"Tool used: {tool_invocation.name}",
+                            "title": f"⚙️ Tool used: {tool_invocation.name}",
                         },
                     )
                 )
@@ -129,8 +129,8 @@ class GradioApp(A2AClientMixin):
                     gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
                 with gr.Column(scale=3):
                     bstate_chat_histories = gr.BrowserState(
-                        storage_key="a2a_dapr_chat_histories",
-                        secret="a2a_dapr_bstate_secret",
+                        storage_key=ParsedEnvVars().BROWSER_STATE_CHAT_HISTORIES,
+                        secret=ParsedEnvVars().BROWSER_STATE_SECRET,
                     )
                     chatbot = gr.Chatbot(
                         type="messages",
@@ -375,7 +375,7 @@ class GradioApp(A2AClientMixin):
                                     MHQAResponse(
                                         thread_id=selected_chat_id,
                                         user_input=txt_input,
-                                        agent_output="...",
+                                        agent_output="🤔 thinking, please wait...",
                                     )
                                 )
                             )
@@ -445,7 +445,11 @@ class GradioApp(A2AClientMixin):
             return component
 
     def construct_ui(self):
-        with gr.Blocks(fill_width=True, fill_height=True) as self.ui:
+        with gr.Blocks(
+            fill_width=True,
+            fill_height=True,
+            theme=gr.themes.Monochrome(font="ui-sans-serif"),
+        ) as self.ui:
             gr.set_static_paths(
                 paths=[
                     GradioApp._APP_LOGO_PATH,
@@ -482,7 +486,12 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     try:
-        app.construct_ui().queue().launch(share=False, ssr_mode=False, show_api=False)
+        app.construct_ui().queue().launch(
+            share=False,
+            ssr_mode=False,
+            show_api=False,
+            mcp_server=False,
+        )
     except InterruptedError:
         logger.warning("Gradio server interrupted, shutting down...")
     except Exception as e:

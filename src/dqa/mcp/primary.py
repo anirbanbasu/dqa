@@ -3,8 +3,7 @@ import signal
 import sys
 
 from fastmcp import FastMCP
-from dqa import env
-from marshmallow.validate import OneOf
+from dqa import ParsedEnvVars
 
 from dqa.mcp.ollama import app as ollama_mcp
 from dqa.mcp.datetime import app as datetime_mcp
@@ -36,16 +35,6 @@ def server():
 
 
 def main():  # pragma: no cover
-    MCP_SERVER_TRANSPORT = "DQA_MCP_SERVER_TRANSPORT"
-    DEFAULT__MCP_SERVER_TRANSPORT = "streamable-http"
-    ALLOWED__MCP_SERVER_TRANSPORT = ["stdio", "sse", "streamable-http"]
-
-    MCP_SERVER_HOST = "FASTMCP_HOST"
-    DEFAULT__MCP_SERVER_HOST = "localhost"
-
-    MCP_SERVER_PORT = "FASTMCP_PORT"
-    DEFAULT__MCP_SERVER_PORT = 8000
-
     def sigint_handler(signal, frame):
         """
         Signal handler to shut down the server gracefully.
@@ -56,11 +45,7 @@ def main():  # pragma: no cover
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    transport_type = env.str(
-        MCP_SERVER_TRANSPORT,
-        default=DEFAULT__MCP_SERVER_TRANSPORT,
-        validate=OneOf(ALLOWED__MCP_SERVER_TRANSPORT),
-    )
+    transport_type = ParsedEnvVars().DQA_MCP_SERVER_TRANSPORT
 
     app = server()
 
@@ -72,14 +57,8 @@ def main():  # pragma: no cover
     else:
         app.run(
             transport=transport_type,
-            host=env.str(
-                MCP_SERVER_HOST,
-                default=DEFAULT__MCP_SERVER_HOST,
-            ),
-            port=env.int(
-                MCP_SERVER_PORT,
-                default=DEFAULT__MCP_SERVER_PORT,
-            ),
+            host=ParsedEnvVars().MCP_SERVER_HOST,
+            port=ParsedEnvVars().MCP_SERVER_PORT,
             uvicorn_config={
                 "timeout_graceful_shutdown": 5,  # seconds
             },

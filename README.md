@@ -9,10 +9,12 @@
 
 The DQA aka _difficult questions attempted_ project utilises large language model (LLM) agent(s) to perform _multi-hop question answering_ (MHQA).
 
-**Note that this repository is undergoing a complete overhaul of the [older, now obsolete, version of DQA](https://github.com/anirbanbasu/dqa-obsolete). The purpose of this overhaul is to standardise agent communication using the A2A protocol and to use the Dapr virtual actors to manage the backend logic.**
+_Note that this repository is undergoing a complete overhaul of the [older, now obsolete, version of DQA](https://github.com/anirbanbasu/dqa-obsolete). The purpose of this overhaul is to standardise agent communication using the A2A protocol and to use the Dapr virtual actors to manage the backend logic._
 
 ## Overview
-TBA
+DQA - Difficult Questions Attempted - is an agentic chatbot that attempts to answer non-trivial multi-hop questions using (large) language models (LLM) and tools available over the Model Context Protocol (MCP). The functionality of DQA is basic. As of late 2025, the functionality of DQA is available in most commercial chatbots.
+
+However, DQA is experimental with the emphasis on standardising agentic communication and managing backend functionality using Dapr-managed virtual actors. Although the instructions below explain the deployment of DQA on a single machine, it can be deployed and run on a Kubernetes cluster, with minimal modifications to the configuration.
 
 ## Installation
 
@@ -21,9 +23,36 @@ TBA
 - Configure Dapr to run [with docker](https://docs.dapr.io/operations/hosting/self-hosted/self-hosted-with-docker/).
 - Run `dapr init` to initialise `daprd` and the relevant containers.
 
+_If deployment over Kubernetes is desired then check [these deployment instructions](https://docs.dapr.io/operations/hosting/kubernetes/kubernetes-deploy/)_.
+
+## Configuration and environment variables
+
+There are two main configuration files.
+ - LLM configuration at `conf/llm.json`.
+ - MCP configuration at `conf/mcp.json`.
+
+There is already a default configuration provided for either of these.
+
+There are Dapr related configuration files too.
+ - The main Dapr application configuration at `dapr.yaml`. Change the various hosts and ports in this configuration if you want to use ports that are not the default ones.
+ - Dapr telemetry configuration at `.dapr/config.yaml`.
+ - Dapr hot-swappable component configuration files at `.dapr/components/`.
+
+The following environment variables are also relevant but not essential, except for `OLLAMA_API_KEY`.
+ - `OLLAMA_API_KEY`: The Ollama API key is required for MCP-based web-search and cloud hosted models on Ollama.
+ - `APP_LOG_LEVEL`: The general log level of the DQA app. Defaults to `INFO`.
+ - `DQA_MCP_SERVER_TRANSPORT`, `FASTMCP_HOST` and `FASTMCP_PORT`: These specify the transport type, the host and port for the built-in MCP server of DQA. The default values are `stdio`, `localhost` and `8000` respectively.
+ - `LLM_CONFIG_FILE` and `MCP_CONFIG_FILE`: These specify where the LLM and MCP configurations These default to `conf/llm.json` and `conf/mcp.json` respectively.
+ - [Gradio environment variables](https://www.gradio.app/guides/environment-variables) to configure the DQA web app. However, MCP server (not to be confused with DQA's built-in MCP server), SSR mode, API and public sharing will be disabled, irrespective of what is specified through the environment variables.
+ - `BROWSER_STATE_SECRET`: This is the secret used by Gradio to encrypt the browser state data. The default value is `a2a_dapr_bstate_secret`.
+ - `BROWSER_STATE_CHAT_HISTORIES`: This is the key in browser state used by Gradio to store the chat histories (local values).
+ - `APP_DAPR_SVC_HOST` and `APP_DAPR_SVC_PORT`: The host and port at which Dapr actor service will listen on. These default to `127.0.0.1` and `32768`. Should you change these, you must change the corresponding information in `dapr.yaml`.
+ - `DAPR_PUBSUB_NAME`: The configured name of the publish-subscribe component at `.dapr/components/pubsub.yaml`. Change this environment variable only if you change the corresponding pub-sub component configuration.
+ - `APP_A2A_SRV_HOST` and `APP_MHQA_A2A_SRV_PORT`: The host and port at which A2A endpoint will be available. These default to `127.0.0.1` and `32770`. Should you change these, you must change the corresponding information in `dapr.yaml`.
+
 ## Usage
 
-- Start the Dapr actor service and the A2A endpoints by running `./start_dapr_multi.sh`. (This will send the dapr sidecar processes in the background.)
+- Start the Dapr actor service and the A2A endpoints by running `./start_dapr_multi.sh`. (This will send the Dapr sidecar processes in the background.)
 - Invoke the A2A agent using JSON-RPC by calling `uv run dqa-cli --help` to learn about the various skills-based A2A endpoint invocations.
 - Or, start the Gradio web app by running `uv run dqa-web-app` and then browse to http://localhost:7860.
 - Once done, stop the dapr sidecars by running `./stop_dapr_multi.sh`.
