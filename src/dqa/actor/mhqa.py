@@ -19,7 +19,7 @@ from llama_index.core.agent.workflow import (
     AgentWorkflow,
     FunctionAgent,
 )
-
+from dqa import ic
 from abc import abstractmethod
 import os
 from dapr.actor import Actor, ActorInterface, actormethod
@@ -221,6 +221,7 @@ class MHQAActor(Actor, MHQAActorInterface):
         )
         full_response = ""
         tool_invocations: List[MCPToolInvocation] = []
+        ic(f"topic-{self.__class__.__name__}-{self.id}-respond")
         with DaprClient() as dc:
             async for ev in wf_handler.stream_events():
                 if isinstance(ev, AgentStream):

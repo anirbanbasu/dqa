@@ -1,9 +1,13 @@
 from dapr.actor import ActorProxy, ActorId, ActorProxyFactory
 from dapr.clients.retry import RetryPolicy
+from dapr.common.pubsub.subscription import SubscriptionMessage
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.utils import new_agent_text_message
 
+from dapr.clients.grpc._response import TopicEventResponse
+
+from dqa import ParsedEnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.model.mhqa import (
     MHQAAgentSkills,
@@ -13,11 +17,23 @@ from dqa.model.mhqa import (
     MHQAAgentInputMessage,
 )
 
+from dqa import ic
+
+from dapr.clients import DaprClient
+
 
 class MHQAAgentExecutor(AgentExecutor):
     def __init__(self):
         self._actor_mhqa = MHQAActor.__name__
         self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=1))
+
+    def message_handler(self, message: SubscriptionMessage) -> TopicEventResponse:
+        """Callback function to handle incoming messages."""
+        ic(message)
+        ic(message.__dict__)
+        ic(message.data(), message.topic())
+        # Return success to acknowledge the message
+        return TopicEventResponse("SUCCESS")
 
     async def do_mhqa_respond(self, data: MHQAInput):
         proxy = ActorProxy.create(
@@ -32,10 +48,21 @@ class MHQAAgentExecutor(AgentExecutor):
         #         raw_body=data.model_dump_json().encode(),
         #     )
         # )
+
+        with DaprClient() as dc:
+            ic(f"topic-{self._actor_mhqa}-{data.thread_id}-respond")
+            # close_fn =
+            dc.subscribe_with_handler(
+                pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                topic=f"topic-{self._actor_mhqa}-{data.thread_id}-respond",
+                handler_fn=self.message_handler,
+            )
         result = await proxy.invoke_method(
             method=MHQAActorMethods.Respond,
             raw_body=data.model_dump_json().encode(),
         )
+        # close_fn()  # Unsubscribe from the topic
+
         return result.decode().strip("\"'")
 
     async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
