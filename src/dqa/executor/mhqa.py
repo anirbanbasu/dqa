@@ -1,3 +1,4 @@
+import logging
 from dapr.actor import ActorProxy, ActorId, ActorProxyFactory
 from dapr.clients.retry import RetryPolicy
 from dapr.common.pubsub.subscription import SubscriptionMessage
@@ -5,21 +6,24 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.utils import new_agent_text_message
 
-from dapr.clients.grpc._response import TopicEventResponse
+from dapr.clients.grpc._response import TopicEventResponse, TopicEventResponseStatus
 
 from dqa import ParsedEnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
+from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
     MHQAAgentSkills,
     MHQADeleteHistoryInput,
     MHQAHistoryInput,
     MHQAInput,
     MHQAAgentInputMessage,
+    MHQAResponse,
 )
 
-from dqa import ic
 
 from dapr.clients import DaprClient
+
+logger = logging.getLogger(__name__)
 
 
 class MHQAAgentExecutor(AgentExecutor):
@@ -27,41 +31,57 @@ class MHQAAgentExecutor(AgentExecutor):
         self._actor_mhqa = MHQAActor.__name__
         self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=1))
 
-    def message_handler(self, message: SubscriptionMessage) -> TopicEventResponse:
-        """Callback function to handle incoming messages."""
-        ic(message)
-        ic(message.__dict__)
-        ic(message.data(), message.topic())
-        # Return success to acknowledge the message
-        return TopicEventResponse("SUCCESS")
-
     async def do_mhqa_respond(self, data: MHQAInput):
+        def message_handler(message: SubscriptionMessage):
+            try:
+                logger.debug(
+                    f"Received message: {message.data()} at {message.pubsub_name()}:{message.topic()}"
+                )
+                result = (
+                    MHQAResponse.model_validate_json(message.data())
+                    if type(message.data()) is str
+                    else MHQAResponse.model_validate(message.data())
+                )
+                logger.info(result.agent_output)
+                return TopicEventResponse(TopicEventResponseStatus.success)
+
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                return TopicEventResponse(TopicEventResponseStatus.retry)
+
         proxy = ActorProxy.create(
             actor_type=self._actor_mhqa,
             actor_id=ActorId(actor_id=data.thread_id),
             actor_interface=MHQAActorInterface,
             actor_proxy_factory=self._factory,
         )
-        # asyncio.create_task(
-        #     proxy.invoke_method(
-        #         method=MHQAActorMethods.Respond,
-        #         raw_body=data.model_dump_json().encode(),
-        #     )
-        # )
 
+        pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
         with DaprClient() as dc:
-            ic(f"topic-{self._actor_mhqa}-{data.thread_id}-respond")
-            # close_fn =
-            dc.subscribe_with_handler(
+            close_fn = dc.subscribe_with_handler(
                 pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
-                topic=f"topic-{self._actor_mhqa}-{data.thread_id}-respond",
-                handler_fn=self.message_handler,
+                topic=pubsub_topic_name,
+                handler_fn=message_handler,
             )
-        result = await proxy.invoke_method(
-            method=MHQAActorMethods.Respond,
-            raw_body=data.model_dump_json().encode(),
-        )
-        # close_fn()  # Unsubscribe from the topic
+            result = await proxy.invoke_method(
+                method=MHQAActorMethods.Respond,
+                raw_body=data.model_dump_json().encode(),
+            )
+            close_fn()  # Unsubscribe from the topic
+            # subscription = dc.subscribe(pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME, topic=pubsub_topic_name)
+            # asyncio.create_task(
+            #     proxy.invoke_method(
+            #         method=MHQAActorMethods.Respond,
+            #         raw_body=data.model_dump_json().encode(),
+            #     )
+            # )
+            # for msg in subscription:
+            #     result = MHQAResponse.model_validate_json(msg.data().decode().strip("\"'"))
+            #     logger.info(f"Received message from topic {pubsub_topic_name}: {result.model_dump()}")
+            #     if not subscription.next_message():
+            #         logger.warning("Closing subscription.")
+            #         subscription.close()
+            #     yield json.dumps(result.model_dump())
 
         return result.decode().strip("\"'")
 

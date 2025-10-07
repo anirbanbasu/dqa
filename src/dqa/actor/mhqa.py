@@ -19,7 +19,6 @@ from llama_index.core.agent.workflow import (
     AgentWorkflow,
     FunctionAgent,
 )
-from dqa import ic
 from abc import abstractmethod
 import os
 from dapr.actor import Actor, ActorInterface, actormethod
@@ -28,6 +27,7 @@ from pydantic import TypeAdapter
 
 from dqa import ParsedEnvVars
 from dqa.actor import MHQAActorMethods
+from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
 
 
@@ -221,7 +221,7 @@ class MHQAActor(Actor, MHQAActorInterface):
         )
         full_response = ""
         tool_invocations: List[MCPToolInvocation] = []
-        ic(f"topic-{self.__class__.__name__}-{self.id}-respond")
+        pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{self.id}"
         with DaprClient() as dc:
             async for ev in wf_handler.stream_events():
                 if isinstance(ev, AgentStream):
@@ -263,7 +263,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                 )
                 dc.publish_event(
                     pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
-                    topic_name=f"topic-{self.__class__.__name__}-{self.id}-respond",
+                    topic_name=pubsub_topic_name,
                     data=response.model_dump_json().encode(),
                 )
         memory_messages = await self.workflow_memory.aget_all()
