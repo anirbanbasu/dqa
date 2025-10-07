@@ -81,6 +81,7 @@ class MHQAAgentExecutor(AgentExecutor):
                     raw_body=data.model_dump_json().encode(),
                 )
             )
+            await asyncio.sleep(0.1)  # Hit await to start the task
             for msg in subscription:
                 result = MHQAResponse.model_validate_json(msg.data())
                 yield json.dumps(result.model_dump())
