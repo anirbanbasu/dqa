@@ -5,14 +5,12 @@ from typing import List
 from uuid import uuid4
 
 
-from a2a.types import (
-    Message,
-)
+from a2a.types import Message, Task
 from a2a.utils import get_message_text
 
 import httpx
 from pydantic import TypeAdapter
-from dqa import ParsedEnvVars
+from dqa import ParsedEnvVars, ic
 import gradio as gr
 
 from dqa.client.a2a_mixin import A2AClientMixin
@@ -214,8 +212,13 @@ class GradioApp(A2AClientMixin):
                     logger.info("Parsing streaming response from the A2A endpoint")
                     response_adapter = TypeAdapter(List[MHQAResponse])
                     async for response in streaming_response:
-                        if isinstance(response, Message):
-                            full_message_content = get_message_text(response)
+                        if (
+                            isinstance(response[0], Task)
+                            and len(response[0].history) > 1
+                        ):
+                            full_message_content = get_message_text(
+                                response[0].history[-1]
+                            )
                             validated_response = response_adapter.validate_json(
                                 full_message_content
                             )
@@ -228,6 +231,7 @@ class GradioApp(A2AClientMixin):
 
             @gr.on(
                 triggers=[state_selected_chat_id.change],
+                trigger_mode="always_last",
                 inputs=[state_selected_chat_id, bstate_chat_histories],
                 outputs=[btn_chat_delete, chatbot, bstate_chat_histories],
             )
@@ -291,8 +295,13 @@ class GradioApp(A2AClientMixin):
                     )
                     streaming_response = client.send_message(send_message)
                     async for response in streaming_response:
-                        if isinstance(response, Message):
-                            full_message_content = get_message_text(response)
+                        if (
+                            isinstance(response[0], Task)
+                            and len(response[0].history) > 1
+                        ):
+                            full_message_content = get_message_text(
+                                response[0].history[-1]
+                            )
                 logger.info(full_message_content)
 
             @gr.on(
@@ -378,22 +387,21 @@ class GradioApp(A2AClientMixin):
                                 ),
                             )
 
-                            waiting_messages = (
+                            temp_user_message = (
                                 self.convert_mhqa_response_to_chat_messages(
                                     MHQAResponse(
                                         thread_id=selected_chat_id,
                                         user_input=txt_input,
-                                        agent_output="🤔 thinking, please wait...",
                                     )
                                 )
                             )
-                            chat_history.extend(waiting_messages)
-                            last_added_messages = len(waiting_messages)
+                            chat_history.extend(temp_user_message)
+                            last_added_messages = len(temp_user_message)
 
                             yield (
                                 None,
-                                browser_state_chat_histories,
-                                selected_chat_id,
+                                None,
+                                None,
                                 chat_history,
                             )
 
@@ -413,8 +421,14 @@ class GradioApp(A2AClientMixin):
                                 "Parsing streaming response from the A2A endpoint"
                             )
                             async for response in streaming_response:
-                                if isinstance(response, Message):
-                                    full_message_content = get_message_text(response)
+                                ic(response[0], type(response[0]))
+                                if (
+                                    isinstance(response[0], Task)
+                                    and len(response[0].history) > 1
+                                ):
+                                    full_message_content = get_message_text(
+                                        response[0].history[-1]
+                                    )
                                     agent_response = MHQAResponse.model_validate_json(
                                         full_message_content
                                     )
@@ -433,14 +447,20 @@ class GradioApp(A2AClientMixin):
                                     )
                                     yield (
                                         None,
-                                        browser_state_chat_histories,
-                                        selected_chat_id,
+                                        None,
+                                        None,
                                         chat_history,
                                     )
                     else:
                         gr.Warning(
                             f"No input message was provided for chat ID {selected_chat_id}."
                         )
+                    yield (
+                        None,
+                        browser_state_chat_histories,
+                        selected_chat_id,
+                        chat_history,
+                    )
                 except Exception as e:
                     yield (
                         gr.update(value="", interactive=True),
