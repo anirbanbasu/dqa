@@ -11,6 +11,8 @@ from llama_index.core.workflow import Context
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.tools.types import ToolOutput
 
+from dqa import ic
+
 from llama_index.core.agent.workflow import (
     AgentOutput,
     ToolCall,
@@ -261,6 +263,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                     agent_output=full_response,
                     tool_invocations=tool_invocations,
                 )
+                ic(f"Published {response}")
                 dc.publish_event(
                     pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
                     topic_name=pubsub_topic_name,

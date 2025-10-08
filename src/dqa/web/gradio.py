@@ -347,8 +347,8 @@ class GradioApp(A2AClientMixin):
                 triggers=[btn_send.click, txt_input.submit],
                 inputs=[
                     txt_input,
-                    state_selected_chat_id,
                     bstate_chat_histories,
+                    state_selected_chat_id,
                     chatbot,
                 ],
                 outputs=[
@@ -359,20 +359,20 @@ class GradioApp(A2AClientMixin):
                 ],
             )
             async def btn_echo_clicked(
-                txt_input: str,
-                state_selected_chat: str,
+                user_query: str,
                 browser_state_chat_histories: dict,
+                state_selected_chat: str,
                 chat_history: list,
             ):
                 selected_chat_id = (
                     state_selected_chat if state_selected_chat else uuid4().hex
                 )
                 try:
-                    if txt_input and txt_input.strip() != "":
+                    if user_query and user_query.strip() != "":
                         if not browser_state_chat_histories:
                             browser_state_chat_histories = {}
 
-                        logger.info(f"Sending message to A2A endpoint: {txt_input}")
+                        logger.info(f"Sending message to A2A endpoint: {user_query}")
                         async with httpx.AsyncClient(timeout=600) as httpx_client:
                             client, _ = await self.obtain_a2a_client(
                                 httpx_client=httpx_client,
@@ -383,7 +383,7 @@ class GradioApp(A2AClientMixin):
                                 skill=MHQAAgentSkills.Respond,
                                 data=MHQAInput(
                                     thread_id=selected_chat_id,
-                                    user_input=txt_input,
+                                    user_input=user_query,
                                 ),
                             )
 
@@ -391,19 +391,17 @@ class GradioApp(A2AClientMixin):
                                 self.convert_mhqa_response_to_chat_messages(
                                     MHQAResponse(
                                         thread_id=selected_chat_id,
-                                        user_input=txt_input,
+                                        user_input=user_query,
                                     )
                                 )
                             )
                             chat_history.extend(temp_user_message)
                             last_added_messages = len(temp_user_message)
 
-                            yield (
-                                None,
-                                None,
-                                None,
-                                chat_history,
-                            )
+                            yield {
+                                txt_input: None,
+                                chatbot: chat_history,
+                            }
 
                             send_message = Message(
                                 role="user",
@@ -421,36 +419,46 @@ class GradioApp(A2AClientMixin):
                                 "Parsing streaming response from the A2A endpoint"
                             )
                             async for response in streaming_response:
-                                ic(response[0], type(response[0]))
+                                if response[1]:
+                                    ic(response[1].status.state)
                                 if (
                                     isinstance(response[0], Task)
+                                    # The first message won't contain a MHQAResponse
                                     and len(response[0].history) > 1
                                 ):
                                     full_message_content = get_message_text(
                                         response[0].history[-1]
                                     )
-                                    agent_response = MHQAResponse.model_validate_json(
+                                    if (
                                         full_message_content
-                                    )
-                                    new_messages = (
-                                        self.convert_mhqa_response_to_chat_messages(
-                                            agent_response
+                                        and full_message_content.strip() != ""
+                                    ):
+                                        agent_response = (
+                                            MHQAResponse.model_validate_json(
+                                                full_message_content
+                                            )
                                         )
-                                    )
-                                    if last_added_messages > 0:
-                                        del chat_history[-last_added_messages:]
-                                    chat_history.extend(new_messages)
-                                    last_added_messages = len(new_messages)
+                                        if (
+                                            agent_response.agent_output
+                                            and agent_response.agent_output.strip()
+                                            != ""
+                                        ):
+                                            # ic(agent_response.agent_output)
+                                            new_messages = self.convert_mhqa_response_to_chat_messages(
+                                                agent_response
+                                            )
+                                            if last_added_messages > 0:
+                                                del chat_history[-last_added_messages:]
+                                            chat_history.extend(new_messages)
+                                            last_added_messages = len(new_messages)
 
-                                    browser_state_chat_histories[selected_chat_id] = (
-                                        chat_history
-                                    )
-                                    yield (
-                                        None,
-                                        None,
-                                        None,
-                                        chat_history,
-                                    )
+                                            browser_state_chat_histories[
+                                                selected_chat_id
+                                            ] = chat_history
+                                            yield {
+                                                bstate_chat_histories: browser_state_chat_histories,
+                                                chatbot: chat_history,
+                                            }
                     else:
                         gr.Warning(
                             f"No input message was provided for chat ID {selected_chat_id}."
@@ -462,12 +470,12 @@ class GradioApp(A2AClientMixin):
                         chat_history,
                     )
                 except Exception as e:
-                    yield (
-                        gr.update(value="", interactive=True),
-                        browser_state_chat_histories,
-                        selected_chat_id,
-                        chat_history,
-                    )
+                    yield {
+                        txt_input: user_query,
+                        bstate_chat_histories: browser_state_chat_histories,
+                        state_selected_chat_id: selected_chat_id,
+                        chatbot: chat_history,
+                    }
                     raise gr.Error(e)
 
             return component

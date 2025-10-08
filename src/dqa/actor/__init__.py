@@ -1,8 +1,8 @@
-from enum import StrEnum, auto
+from enum import StrEnum
 
 
 class MHQAActorMethods(StrEnum):
-    Respond = auto()
-    GetChatHistory = auto()
-    ResetChatHistory = auto()
-    Cancel = auto()
+    Respond = "Respond"
+    GetChatHistory = "GetChatHistory"
+    ResetChatHistory = "ResetChatHistory"
+    Cancel = "Cancel"

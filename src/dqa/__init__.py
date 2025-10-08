@@ -57,5 +57,5 @@ logging.basicConfig(
     level=ParsedEnvVars().APP_LOG_LEVEL,
     format="%(message)s",
     datefmt="[%X]",
-    handlers=[RichHandler()],
+    handlers=[RichHandler(show_time=True, show_level=True, show_path=True)],
 )
