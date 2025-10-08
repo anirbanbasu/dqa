@@ -143,6 +143,18 @@ class GradioApp(A2AClientMixin):
                                 GradioApp._ICON_USER_AVATAR,
                                 GradioApp._ICON_BOT_AVATAR,
                             ],
+                            latex_delimiters=[
+                                {
+                                    "left": "$$",
+                                    "right": "$$",
+                                    "display": True,
+                                },
+                                {
+                                    "left": "\\[",
+                                    "right": "\\]",
+                                    "display": True,
+                                },
+                            ],
                         )
                         with gr.Row(equal_height=True):
                             txt_input = gr.Textbox(
