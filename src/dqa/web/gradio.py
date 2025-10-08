@@ -48,7 +48,8 @@ class GradioApp(A2AClientMixin):
         self._mhqa_a2a_uvicorn_host = ParsedEnvVars().APP_A2A_SRV_HOST
         self._mhqa_a2a_uvicorn_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
         self._mhqa_a2a_base_url = (
-            f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
+            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            or f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
         )
 
     def convert_mhqa_response_to_chat_messages(self, response: MHQAResponse):

@@ -73,7 +73,10 @@ class DQACliApp(A2AClientMixin):
         self.echo_base_url = f"http://{a2a_asgi_host}:{echo_a2a_asgi_port}"
 
         mhqa_a2a_asgi_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
-        self.mhqa_base_url = f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
+        self.mhqa_base_url = (
+            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            or f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
+        )
         logger.debug(f"Echo A2A base URL: {self.echo_base_url}")
         logger.debug(f"MHQA A2A base URL: {self.mhqa_base_url}")
 

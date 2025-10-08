@@ -50,6 +50,7 @@ The following environment variables are also relevant but not essential, except 
  - `APP_DAPR_PUBSUB_STALE_MSG_SECS`: This specifies how old a message should be on the Dapr publish-subscribe topic queue before it will be considered too old, and dropped. The default value is 60 seconds.
  - `DAPR_PUBSUB_NAME`: The configured name of the publish-subscribe component at `.dapr/components/pubsub.yaml`. Change this environment variable only if you change the corresponding pub-sub component configuration.
  - `APP_A2A_SRV_HOST` and `APP_MHQA_A2A_SRV_PORT`: The host and port at which A2A endpoint will be available. These default to `127.0.0.1` and `32770`. Should you change these, you must change the corresponding information in `dapr.yaml`.
+ - `APP_MHQA_A2A_REMOTE_URL`: This environment variable can be used to specify the full remote URL including the protocol, i.e., `http` or `https` where the MHQA A2A endpoint is available. This is useful in a scenario where the web app is deployed on a machine that is different from where the MHQA A2A endpoint and Dapr service are. Default value is `None`.
 
 ## Usage
 
