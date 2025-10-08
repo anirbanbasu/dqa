@@ -1,4 +1,5 @@
 from abc import ABC
+from enum import StrEnum
 from typing import List, Optional, TypeAlias, Union
 
 from typing_extensions import Annotated
@@ -36,6 +37,12 @@ class MCPToolInvocation(BaseModel):
     ]
 
 
+class MHQAResponseStatus(StrEnum):
+    completed = "completed"
+    failed = "failed"
+    in_progress = "in_progress"
+
+
 class MHQAResponse(MHQAActorIO):
     user_input: Annotated[str, "The original query from the user"]
     agent_output: Annotated[Optional[str], "The agent response to the user query"] = (
@@ -45,6 +52,9 @@ class MHQAResponse(MHQAActorIO):
         Optional[List[MCPToolInvocation]],
         "List of MCP tool invocations made during the response generation",
     ] = []
+    status: Annotated[Optional[MHQAResponseStatus], "Status of the response"] = (
+        MHQAResponseStatus.in_progress
+    )
 
 
 MHQAAgentSkills: TypeAlias = MHQAActorMethods

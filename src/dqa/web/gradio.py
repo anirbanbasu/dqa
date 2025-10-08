@@ -219,6 +219,7 @@ class GradioApp(A2AClientMixin):
                             full_message_content = get_message_text(
                                 response[0].history[-1]
                             )
+                            ic(full_message_content)
                             validated_response = response_adapter.validate_json(
                                 full_message_content
                             )
@@ -240,6 +241,13 @@ class GradioApp(A2AClientMixin):
             ):
                 try:
                     if selected_chat_id and selected_chat_id.strip() != "":
+                        yield {
+                            btn_chat_delete: gr.update(interactive=False),
+                            chatbot: gr.update(
+                                value=[],
+                                label=f"Fetching historical messages for chat ID: {selected_chat_id}",
+                            ),
+                        }
                         refreshed_history = await refresh_chat_history_from_agent(
                             selected_chat_id
                         )
@@ -419,8 +427,6 @@ class GradioApp(A2AClientMixin):
                                 "Parsing streaming response from the A2A endpoint"
                             )
                             async for response in streaming_response:
-                                if response[1]:
-                                    ic(response[1].status.state)
                                 if (
                                     isinstance(response[0], Task)
                                     # The first message won't contain a MHQAResponse
@@ -443,7 +449,7 @@ class GradioApp(A2AClientMixin):
                                             and agent_response.agent_output.strip()
                                             != ""
                                         ):
-                                            # ic(agent_response.agent_output)
+                                            # print(agent_response.agent_output)
                                             new_messages = self.convert_mhqa_response_to_chat_messages(
                                                 agent_response
                                             )

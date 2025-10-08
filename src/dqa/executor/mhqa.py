@@ -1,7 +1,10 @@
+import datetime
 import logging
+import math
 import anyio
 from dapr.actor import ActorProxy, ActorId, ActorProxyFactory
 from dapr.clients.retry import RetryPolicy
+from dapr.clients.grpc.subscription import SubscriptionMessage, TopicEventResponse
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
@@ -9,7 +12,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.types import TaskState
 
 
-from dqa import ParsedEnvVars, ic
+from dqa import ParsedEnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -18,6 +21,8 @@ from dqa.model.mhqa import (
     MHQAHistoryInput,
     MHQAInput,
     MHQAAgentInputMessage,
+    MHQAResponse,
+    MHQAResponseStatus,
 )
 
 
@@ -32,22 +37,25 @@ class MHQAAgentExecutor(AgentExecutor):
         self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=1))
 
     async def do_mhqa_respond(self, data: MHQAInput):
-        # def message_handler(message: SubscriptionMessage) -> TopicEventResponse:
-        #     try:
-        #         logger.debug(
-        #             f"Received message: {message.data()} at {message.pubsub_name()}:{message.topic()}"
-        #         )
-        #         result = (
-        #             MHQAResponse.model_validate_json(message.data())
-        #             if type(message.data()) is str
-        #             else MHQAResponse.model_validate(message.data())
-        #         )
-        #         logger.info(result.agent_output)
-        #         return TopicEventResponse(TopicEventResponseStatus.success)
+        # TODO: Potential memory leak without closing the streams?
+        send_stream, recv_stream = anyio.create_memory_object_stream(math.inf)
 
-        #     except Exception as e:
-        #         logger.error(f"Error processing message: {e}")
-        #         return TopicEventResponse(TopicEventResponseStatus.retry)
+        def message_handler(message: SubscriptionMessage) -> TopicEventResponse:
+            # TODO: Is this a reasonable way to drop stale messages?
+            parsed_timestamp = message.extensions().get("time", None)
+            if parsed_timestamp is not None:
+                timenow = datetime.datetime.now(datetime.timezone.utc)
+                timestamp = datetime.datetime.fromisoformat(parsed_timestamp)
+                td = timenow - timestamp
+                if td > datetime.timedelta(
+                    seconds=ParsedEnvVars().APP_DAPR_PUBSUB_STALE_MSG_SECS
+                ):
+                    logger.warning(
+                        f"Dropping stale message for topic={message.topic()} with age {td} seconds"
+                    )
+                    return TopicEventResponse("drop")
+            send_stream.send_nowait(message.data())
+            return TopicEventResponse("success")
 
         async def invoke_actor():
             proxy = ActorProxy.create(
@@ -62,41 +70,17 @@ class MHQAAgentExecutor(AgentExecutor):
             )
 
         with DaprClient() as dc:
-            # close_fn = dc.subscribe_with_handler(
-            #     pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
-            #     topic=pubsub_topic_name,
-            #     handler_fn=message_handler,
-            # )
-            # result = await proxy.invoke_method(
-            #     method=MHQAActorMethods.Respond,
-            #     raw_body=data.model_dump_json().encode(),
-            # )
-            # close_fn()  # Unsubscribe from the topic
             async with anyio.create_task_group() as tg:
                 pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
-                subscription = dc.subscribe(
+                dc.subscribe_with_handler(
                     pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
                     topic=pubsub_topic_name,
+                    handler_fn=message_handler,
                 )
                 tg.start_soon(invoke_actor)
-            while True:
-                # FIXME: How do we discard messages not relevant to this request?
-                msg = (
-                    subscription.next_message()
-                    if subscription._is_stream_active()
-                    else None
-                )
-                if msg is None:
-                    break
-                result = msg.data()
-                subscription.respond_success(msg)
-                await anyio.sleep(0.01)
-                yield result
-            ic("Exited subscription loop")
-            subscription.close()
-            # yield result
 
-        # return result.decode().strip("\"'")
+            async for item in recv_stream:
+                yield item
 
     async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
         proxy = ActorProxy.create(
@@ -153,7 +137,9 @@ class MHQAAgentExecutor(AgentExecutor):
                     response_generator = self.do_mhqa_respond(data=message_payload.data)
                     async for partial_response in response_generator:
                         response = partial_response
-                        ic(f"Parsed from generator: {response}")
+                        parsed_response = MHQAResponse.model_validate_json(response)
+                        if parsed_response.status == MHQAResponseStatus.completed:
+                            break
                         await task_updater.start_work(
                             new_agent_text_message(
                                 text=response,
@@ -172,7 +158,6 @@ class MHQAAgentExecutor(AgentExecutor):
                         f"Unknown skill '{message_payload.skill}' requested!"
                     )
             if response:
-                ic(f"Parsed from generator FINAL: {response}")
                 await task_updater.complete(
                     new_agent_text_message(
                         text=response,
@@ -186,6 +171,8 @@ class MHQAAgentExecutor(AgentExecutor):
             logger.error(f"Error in MHQAAgentExecutor. {e}")
             await task_updater.failed(
                 message=new_agent_text_message(
+                    # FIXME: The output will fail JSON validation in the client side
+                    # because it is not of type MHQAResponse
                     text=str(e),
                     task_id=task.id,
                     context_id=task.context_id,

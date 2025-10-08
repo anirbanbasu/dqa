@@ -11,7 +11,6 @@ from llama_index.core.workflow import Context
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.tools.types import ToolOutput
 
-from dqa import ic
 
 from llama_index.core.agent.workflow import (
     AgentOutput,
@@ -30,7 +29,7 @@ from pydantic import TypeAdapter
 from dqa import ParsedEnvVars
 from dqa.actor import MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
-from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
+from dqa.model.mhqa import MCPToolInvocation, MHQAResponse, MHQAResponseStatus
 
 
 logger = logging.getLogger(__name__)
@@ -263,12 +262,17 @@ class MHQAActor(Actor, MHQAActorInterface):
                     agent_output=full_response,
                     tool_invocations=tool_invocations,
                 )
-                ic(f"Published {response}")
                 dc.publish_event(
                     pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
                     topic_name=pubsub_topic_name,
                     data=response.model_dump_json().encode(),
                 )
+            response.status = MHQAResponseStatus.completed
+            dc.publish_event(
+                pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                topic_name=pubsub_topic_name,
+                data=response.model_dump_json().encode(),
+            )
         memory_messages = await self.workflow_memory.aget_all()
         await self._state_manager.set_state(
             self._chat_memory_key,

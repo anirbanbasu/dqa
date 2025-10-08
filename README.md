@@ -47,6 +47,7 @@ The following environment variables are also relevant but not essential, except 
  - `BROWSER_STATE_SECRET`: This is the secret used by Gradio to encrypt the browser state data. The default value is `a2a_dapr_bstate_secret`.
  - `BROWSER_STATE_CHAT_HISTORIES`: This is the key in browser state used by Gradio to store the chat histories (local values). The default value is `a2a_dapr_chat_histories`.
  - `APP_DAPR_SVC_HOST` and `APP_DAPR_SVC_PORT`: The host and port at which Dapr actor service will listen on. These default to `127.0.0.1` and `32768`. Should you change these, you must change the corresponding information in `dapr.yaml`.
+ - `APP_DAPR_PUBSUB_STALE_MSG_SECS`: This specifies how old a message should be on the Dapr publish-subscribe topic queue before it will be considered too old, and dropped. The default value is 60 seconds.
  - `DAPR_PUBSUB_NAME`: The configured name of the publish-subscribe component at `.dapr/components/pubsub.yaml`. Change this environment variable only if you change the corresponding pub-sub component configuration.
  - `APP_A2A_SRV_HOST` and `APP_MHQA_A2A_SRV_PORT`: The host and port at which A2A endpoint will be available. These default to `127.0.0.1` and `32770`. Should you change these, you must change the corresponding information in `dapr.yaml`.
 
