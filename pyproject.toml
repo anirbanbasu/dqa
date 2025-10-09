@@ -20,6 +20,7 @@ dependencies = [
     "llama-index-tools-mcp>=0.4.1",
     "ollama>=0.6.0",
     "typer>=0.19.1",
+    "yfmcp>=0.4.8",
 ]
 
 [project.scripts]

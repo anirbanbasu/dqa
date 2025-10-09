@@ -268,7 +268,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                     and response
                     and response.agent_output.strip() != ""
                 ):
-                    logger.info(f"Publishing: {response.agent_output}")
+                    # logger.info(f"Publishing: {response.agent_output}")
                     dc.publish_event(
                         pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
                         topic_name=pubsub_topic_name,

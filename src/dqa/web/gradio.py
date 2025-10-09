@@ -122,6 +122,7 @@ class GradioApp(A2AClientMixin):
                             pinned_columns=1,
                             interactive=False,
                             static_columns=[0],
+                            show_search="filter",
                         )
                         btn_chat_delete = gr.Button(
                             "Delete selected chat",
@@ -386,6 +387,21 @@ class GradioApp(A2AClientMixin):
                         if not browser_state_chat_histories:
                             browser_state_chat_histories = {}
 
+                        temp_user_message = self.convert_mhqa_response_to_chat_messages(
+                            MHQAResponse(
+                                thread_id=selected_chat_id,
+                                user_input=user_query,
+                            )
+                        )
+
+                        chat_history.extend(temp_user_message)
+                        last_added_messages = len(temp_user_message)
+
+                        yield {
+                            txt_input: None,
+                            chatbot: chat_history,
+                            state_selected_chat_id: selected_chat_id,
+                        }
                         logger.info(f"Sending message to A2A endpoint: {user_query}")
                         async with httpx.AsyncClient(timeout=600) as httpx_client:
                             client, _ = await self.obtain_a2a_client(
@@ -400,22 +416,6 @@ class GradioApp(A2AClientMixin):
                                     user_input=user_query,
                                 ),
                             )
-
-                            temp_user_message = (
-                                self.convert_mhqa_response_to_chat_messages(
-                                    MHQAResponse(
-                                        thread_id=selected_chat_id,
-                                        user_input=user_query,
-                                    )
-                                )
-                            )
-                            chat_history.extend(temp_user_message)
-                            last_added_messages = len(temp_user_message)
-
-                            yield {
-                                txt_input: None,
-                                chatbot: chat_history,
-                            }
 
                             send_message = Message(
                                 role="user",
