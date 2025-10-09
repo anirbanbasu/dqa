@@ -73,7 +73,10 @@ class DQACliApp(A2AClientMixin):
         self.echo_base_url = f"http://{a2a_asgi_host}:{echo_a2a_asgi_port}"
 
         mhqa_a2a_asgi_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
-        self.mhqa_base_url = f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
+        self.mhqa_base_url = (
+            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            or f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
+        )
         logger.debug(f"Echo A2A base URL: {self.echo_base_url}")
         logger.debug(f"MHQA A2A base URL: {self.mhqa_base_url}")
 
@@ -277,8 +280,8 @@ class DQACliApp(A2AClientMixin):
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
             async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
+                if response[0].status.message:
+                    full_message_content = get_message_text(response[0].status.message)
             validated_response = MHQAResponse.model_validate_json(full_message_content)
             return validated_response
 
@@ -324,8 +327,8 @@ class DQACliApp(A2AClientMixin):
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
             async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
+                if response[0].status.message:
+                    full_message_content = get_message_text(response[0].status.message)
             response_adapter = TypeAdapter(List[MHQAResponse])
             validated_response = response_adapter.validate_json(full_message_content)
             validated_response = validated_response[
@@ -374,8 +377,8 @@ class DQACliApp(A2AClientMixin):
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
             async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
+                if response[0].status.message:
+                    full_message_content = get_message_text(response[0].status.message)
             return full_message_content
 
     async def run_mhqa_delete_history(
@@ -387,7 +390,9 @@ class DQACliApp(A2AClientMixin):
             response = await self._mhqa_delete_history(
                 thread_id=thread_id,
             )
-            print(response)
+            print(
+                f"Deletion of thread '{thread_id}': {'successful' if response == 'true' else 'failed; maybe the thread does not exist?'}"
+            )
         except Exception as e:
             logger.error(f"Error in MHQA delete history. {e}")
         finally:
@@ -486,7 +491,7 @@ def mhqa_get_history(
 
 
 @app.command()
-async def mhqa_delete_history(
+def mhqa_delete_history(
     thread_id: str = typer.Option(
         help="A thread ID to identify your conversation.",
     ),

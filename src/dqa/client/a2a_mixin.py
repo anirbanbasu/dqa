@@ -24,17 +24,17 @@ class A2AClientMixin:
         final_agent_card_to_use: AgentCard | None = None
 
         logger.info(
-            f"Attempting to fetch public agent card from: {base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
+            f"Fetching A2A agent card from: {base_url}{AGENT_CARD_WELL_KNOWN_PATH}"
         )
         _public_card = (
             await resolver.get_agent_card()
         )  # Fetches from default public path
         logger.info("Successfully fetched public agent card.")
-        logger.info(_public_card.model_dump_json(indent=2, exclude_none=True))
+        logger.debug(_public_card.model_dump_json(indent=2, exclude_none=True))
         final_agent_card_to_use = _public_card
 
         client = ClientFactory(
             config=ClientConfig(streaming=True, polling=True, httpx_client=httpx_client)
         ).create(card=final_agent_card_to_use)
-        logger.info("A2A client initialised.")
+        logger.debug("A2A client initialised.")
         return client, final_agent_card_to_use

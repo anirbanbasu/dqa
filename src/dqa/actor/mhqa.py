@@ -11,6 +11,7 @@ from llama_index.core.workflow import Context
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.tools.types import ToolOutput
 
+
 from llama_index.core.agent.workflow import (
     AgentOutput,
     ToolCall,
@@ -19,7 +20,6 @@ from llama_index.core.agent.workflow import (
     AgentWorkflow,
     FunctionAgent,
 )
-
 from abc import abstractmethod
 import os
 from dapr.actor import Actor, ActorInterface, actormethod
@@ -28,7 +28,8 @@ from pydantic import TypeAdapter
 
 from dqa import ParsedEnvVars
 from dqa.actor import MHQAActorMethods
-from dqa.model.mhqa import MCPToolInvocation, MHQAResponse
+from dqa.actor.pubsub_topics import PubSubTopics
+from dqa.model.mhqa import MCPToolInvocation, MHQAResponse, MHQAResponseStatus
 
 
 logger = logging.getLogger(__name__)
@@ -221,6 +222,7 @@ class MHQAActor(Actor, MHQAActorInterface):
         )
         full_response = ""
         tool_invocations: List[MCPToolInvocation] = []
+        pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{self.id}"
         with DaprClient() as dc:
             async for ev in wf_handler.stream_events():
                 if isinstance(ev, AgentStream):
@@ -260,11 +262,24 @@ class MHQAActor(Actor, MHQAActorInterface):
                     agent_output=full_response,
                     tool_invocations=tool_invocations,
                 )
-                dc.publish_event(
-                    pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
-                    topic_name=f"topic-{self.__class__.__name__}-{self.id}-respond",
-                    data=response.model_dump_json().encode(),
-                )
+                if (
+                    isinstance(ev, AgentStream)
+                    and ev.delta.strip() != ""
+                    and response
+                    and response.agent_output.strip() != ""
+                ):
+                    # logger.info(f"Publishing: {response.agent_output}")
+                    dc.publish_event(
+                        pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                        topic_name=pubsub_topic_name,
+                        data=response.model_dump_json().encode(),
+                    )
+            response.status = MHQAResponseStatus.completed
+            dc.publish_event(
+                pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                topic_name=pubsub_topic_name,
+                data=response.model_dump_json().encode(),
+            )
         memory_messages = await self.workflow_memory.aget_all()
         await self._state_manager.set_state(
             self._chat_memory_key,
@@ -293,6 +308,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                                 user_input=user_input,
                                 agent_output=agent_output,
                                 tool_invocations=tool_invocations,
+                                status=MHQAResponseStatus.completed,
                             )
                         )
                         tool_name = ""

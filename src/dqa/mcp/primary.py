@@ -9,6 +9,7 @@ from dqa.mcp.ollama import app as ollama_mcp
 from dqa.mcp.datetime import app as datetime_mcp
 from dqa.mcp.arithmetic import app as basic_arithmetic_mcp
 from frankfurtermcp.server import app as frankfurter_mcp
+from yfmcp.server import mcp as yfmcp_mcp
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ def server():
         on_duplicate_tools="error",
     )
 
+    # See: https://gofastmcp.com/servers/composition
+    # Live linking
     logger.info("Mounting Ollama web search and fetch MCP...")
     server.mount(ollama_mcp(), prefix="ollama")
     logger.info("Mounting Frankfurter currency conversion MCP...")
@@ -30,6 +33,8 @@ def server():
     server.mount(datetime_mcp(), prefix="datetime")
     logger.info("Mounting Basic Arithmetic MCP...")
     server.mount(basic_arithmetic_mcp(), prefix="arithmetic")
+    logger.info("Mounting YFMCP...")
+    server.mount(yfmcp_mcp, prefix="yfmcp", as_proxy=True)
 
     return server
 

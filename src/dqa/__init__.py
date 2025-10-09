@@ -30,8 +30,12 @@ class ParsedEnvVars:
     MCP_CONFIG_FILE: str = env.str("MCP_CONFIG_FILE", default="conf/mcp.json")
     APP_DAPR_SVC_HOST: str = env.str("APP_DAPR_SVC_HOST", default="127.0.0.1")
     APP_DAPR_SVC_PORT: int = env.int("APP_DAPR_SVC_PORT", default=32768)
+    APP_DAPR_PUBSUB_STALE_MSG_SECS: int = env.int(
+        "APP_DAPR_PUBSUB_STALE_MSG_SECS", default=60
+    )
     APP_A2A_SRV_HOST: str = env.str("APP_A2A_SRV_HOST", default="127.0.0.1")
     APP_MHQA_A2A_SRV_PORT: int = env.int("APP_MHQA_A2A_SRV_PORT", default=32770)
+    APP_MHQA_A2A_REMOTE_URL: str = env.str("APP_MHQA_A2A_REMOTE_URL", default=None)
     APP_ECHO_A2A_SRV_PORT: int = env.int("APP_ECHO_A2A_SRV_PORT", default=32769)
     DAPR_PUBSUB_NAME: str = env.str("DAPR_PUBSUB_NAME", default="pubsub")
     MCP_SERVER_HOST: str = env.str("FASTMCP_HOST", default="localhost")
@@ -57,5 +61,5 @@ logging.basicConfig(
     level=ParsedEnvVars().APP_LOG_LEVEL,
     format="%(message)s",
     datefmt="[%X]",
-    handlers=[RichHandler()],
+    handlers=[RichHandler(show_time=True, show_level=True, show_path=True)],
 )

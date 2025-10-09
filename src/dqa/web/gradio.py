@@ -5,9 +5,7 @@ from typing import List
 from uuid import uuid4
 
 
-from a2a.types import (
-    Message,
-)
+from a2a.types import Message
 from a2a.utils import get_message_text
 
 import httpx
@@ -50,7 +48,8 @@ class GradioApp(A2AClientMixin):
         self._mhqa_a2a_uvicorn_host = ParsedEnvVars().APP_A2A_SRV_HOST
         self._mhqa_a2a_uvicorn_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
         self._mhqa_a2a_base_url = (
-            f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
+            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            or f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
         )
 
     def convert_mhqa_response_to_chat_messages(self, response: MHQAResponse):
@@ -100,73 +99,94 @@ class GradioApp(A2AClientMixin):
                         show_label=False,
                         container=False,
                     )
+
                     gr.Markdown(
                         "Select an existing chat to continue, or start a new chat. Alternatively, manually add a new chat ID."
                     )
-                    txt_chat_id = gr.Textbox(
-                        label="Manually add a new chat ID",
-                        info="Enter a chat ID or, leave blank to create new. To add to the list, press Enter.",
-                        placeholder="Enter a new chat ID",
-                        show_copy_button=False,
-                        lines=1,
-                        max_lines=1,
-                    )
-                    list_task_ids = gr.List(
-                        wrap=True,
-                        line_breaks=True,
-                        headers=["Chat IDs"],
-                        column_widths=["160px"],
-                        interactive=False,
-                    )
                     state_selected_chat_id = gr.State(value=None)
-                    btn_chat_delete = gr.Button(
-                        "Delete selected chat",
-                        size="sm",
-                        variant="stop",
-                        icon=GradioApp._ICON_BTN_DELETE,
-                        interactive=False,
-                    )
+                    with gr.Group():
+                        txt_chat_id = gr.Textbox(
+                            label="Manually add a new chat ID",
+                            info="Enter a chat ID or, leave blank to create a new UUID. To add to the list, press Enter.",
+                            placeholder="Enter a new chat ID",
+                            show_copy_button=False,
+                            lines=1,
+                            max_lines=1,
+                        )
+                        list_task_ids = gr.List(
+                            wrap=True,
+                            line_breaks=True,
+                            headers=["Chat IDs"],
+                            min_width=128,
+                            column_widths=[128],
+                            pinned_columns=1,
+                            interactive=False,
+                            static_columns=[0],
+                            show_search="filter",
+                        )
+                        btn_chat_delete = gr.Button(
+                            "Delete selected chat",
+                            size="sm",
+                            variant="stop",
+                            icon=GradioApp._ICON_BTN_DELETE,
+                            interactive=False,
+                        )
                     gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
                 with gr.Column(scale=3):
                     bstate_chat_histories = gr.BrowserState(
                         storage_key=ParsedEnvVars().BROWSER_STATE_CHAT_HISTORIES,
                         secret=ParsedEnvVars().BROWSER_STATE_SECRET,
                     )
-                    chatbot = gr.Chatbot(
-                        type="messages",
-                        label="Chat history (a new chat will be created if none if selected)",
-                        avatar_images=[
-                            GradioApp._ICON_USER_AVATAR,
-                            GradioApp._ICON_BOT_AVATAR,
-                        ],
-                    )
-                    with gr.Row(equal_height=True):
-                        txt_input = gr.Textbox(
-                            scale=3,
-                            lines=4,
-                            label="Your message",
-                            info="Enter your non-trivial question to ask the AI agent.",
-                            placeholder="Type a message and press Shift+Enter, or click the Send button.",
-                            show_copy_button=False,
-                        )
-                        btn_send = gr.Button(
-                            "Send", size="lg", icon=GradioApp._ICON_BTN_SEND, scale=1
-                        )
-                    with gr.Column():
-                        gr.Examples(
-                            label="Example of input messages",
-                            examples=[
-                                "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
-                                "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
-                                "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
-                                "I am an odd number. Take away one letter and I become even. What number am I?",
-                                "Using only an addition, how do you add eight 8's and get the number 1000?",
-                                "Watson borrowed 100 Euros from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds?",
-                                "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
-                                "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
+                    with gr.Group():
+                        chatbot = gr.Chatbot(
+                            type="messages",
+                            label="Chat history (a new chat will be created if none if selected)",
+                            avatar_images=[
+                                GradioApp._ICON_USER_AVATAR,
+                                GradioApp._ICON_BOT_AVATAR,
                             ],
-                            inputs=[txt_input],
+                            latex_delimiters=[
+                                {
+                                    "left": "$$",
+                                    "right": "$$",
+                                    "display": True,
+                                },
+                                {
+                                    "left": "\\[",
+                                    "right": "\\]",
+                                    "display": True,
+                                },
+                            ],
                         )
+                        with gr.Row(equal_height=True):
+                            txt_input = gr.Textbox(
+                                scale=3,
+                                lines=4,
+                                label="Your message",
+                                info="Enter your non-trivial question to ask the AI agent.",
+                                placeholder="Type a message and press Shift+Enter, or click the Send button.",
+                                show_copy_button=False,
+                            )
+                            btn_send = gr.Button(
+                                "Send",
+                                size="lg",
+                                icon=GradioApp._ICON_BTN_SEND,
+                                scale=1,
+                            )
+                    gr.Examples(
+                        label="Example of input messages",
+                        examples=[
+                            "What is the most culturally important city of Japan? Explain the reasoning behind your answer.",
+                            "Heidi had 12 apples. She traded 6 apples for 3 oranges with Peter and bought 6 more oranges from a shop. She ate one apple on her way home. How many oranges does Heidi have left?",
+                            "Is it possible to find the indefinite integral of sin(x)/x? If yes, what is the value?",
+                            "I am an odd number. Take away one letter and I become even. What number am I?",
+                            "Using only an addition, how do you add eight 8's and get the number 1000?",
+                            "Watson borrowed 100 Euros from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds?",
+                            "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
+                            "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
+                        ],
+                        inputs=[txt_input],
+                    )
 
             @gr.on(
                 triggers=[bstate_chat_histories.change, self.ui.load],
@@ -206,8 +226,10 @@ class GradioApp(A2AClientMixin):
                     logger.info("Parsing streaming response from the A2A endpoint")
                     response_adapter = TypeAdapter(List[MHQAResponse])
                     async for response in streaming_response:
-                        if isinstance(response, Message):
-                            full_message_content = get_message_text(response)
+                        if response[0].status.message:
+                            full_message_content = get_message_text(
+                                response[0].status.message
+                            )
                             validated_response = response_adapter.validate_json(
                                 full_message_content
                             )
@@ -220,6 +242,7 @@ class GradioApp(A2AClientMixin):
 
             @gr.on(
                 triggers=[state_selected_chat_id.change],
+                trigger_mode="always_last",
                 inputs=[state_selected_chat_id, bstate_chat_histories],
                 outputs=[btn_chat_delete, chatbot, bstate_chat_histories],
             )
@@ -228,6 +251,13 @@ class GradioApp(A2AClientMixin):
             ):
                 try:
                     if selected_chat_id and selected_chat_id.strip() != "":
+                        yield {
+                            btn_chat_delete: gr.update(interactive=False),
+                            chatbot: gr.update(
+                                value=[],
+                                label=f"Fetching historical messages for chat ID: {selected_chat_id}",
+                            ),
+                        }
                         refreshed_history = await refresh_chat_history_from_agent(
                             selected_chat_id
                         )
@@ -283,8 +313,10 @@ class GradioApp(A2AClientMixin):
                     )
                     streaming_response = client.send_message(send_message)
                     async for response in streaming_response:
-                        if isinstance(response, Message):
-                            full_message_content = get_message_text(response)
+                        if response[0].status.message:
+                            full_message_content = get_message_text(
+                                response[0].status.message
+                            )
                 logger.info(full_message_content)
 
             @gr.on(
@@ -330,8 +362,8 @@ class GradioApp(A2AClientMixin):
                 triggers=[btn_send.click, txt_input.submit],
                 inputs=[
                     txt_input,
-                    state_selected_chat_id,
                     bstate_chat_histories,
+                    state_selected_chat_id,
                     chatbot,
                 ],
                 outputs=[
@@ -342,20 +374,35 @@ class GradioApp(A2AClientMixin):
                 ],
             )
             async def btn_echo_clicked(
-                txt_input: str,
-                state_selected_chat: str,
+                user_query: str,
                 browser_state_chat_histories: dict,
+                state_selected_chat: str,
                 chat_history: list,
             ):
                 selected_chat_id = (
                     state_selected_chat if state_selected_chat else uuid4().hex
                 )
                 try:
-                    if txt_input and txt_input.strip() != "":
+                    if user_query and user_query.strip() != "":
                         if not browser_state_chat_histories:
                             browser_state_chat_histories = {}
 
-                        logger.info(f"Sending message to A2A endpoint: {txt_input}")
+                        temp_user_message = self.convert_mhqa_response_to_chat_messages(
+                            MHQAResponse(
+                                thread_id=selected_chat_id,
+                                user_input=user_query,
+                            )
+                        )
+
+                        chat_history.extend(temp_user_message)
+                        last_added_messages = len(temp_user_message)
+
+                        yield {
+                            txt_input: None,
+                            chatbot: chat_history,
+                            state_selected_chat_id: selected_chat_id,
+                        }
+                        logger.info(f"Sending message to A2A endpoint: {user_query}")
                         async with httpx.AsyncClient(timeout=600) as httpx_client:
                             client, _ = await self.obtain_a2a_client(
                                 httpx_client=httpx_client,
@@ -366,27 +413,8 @@ class GradioApp(A2AClientMixin):
                                 skill=MHQAAgentSkills.Respond,
                                 data=MHQAInput(
                                     thread_id=selected_chat_id,
-                                    user_input=txt_input,
+                                    user_input=user_query,
                                 ),
-                            )
-
-                            waiting_messages = (
-                                self.convert_mhqa_response_to_chat_messages(
-                                    MHQAResponse(
-                                        thread_id=selected_chat_id,
-                                        user_input=txt_input,
-                                        agent_output="🤔 thinking, please wait...",
-                                    )
-                                )
-                            )
-                            chat_history.extend(waiting_messages)
-                            last_added_messages = len(waiting_messages)
-
-                            yield (
-                                None,
-                                browser_state_chat_histories,
-                                selected_chat_id,
-                                chat_history,
                             )
 
                             send_message = Message(
@@ -405,41 +433,57 @@ class GradioApp(A2AClientMixin):
                                 "Parsing streaming response from the A2A endpoint"
                             )
                             async for response in streaming_response:
-                                if isinstance(response, Message):
-                                    full_message_content = get_message_text(response)
-                                    agent_response = MHQAResponse.model_validate_json(
+                                if response[0].status.message:
+                                    full_message_content = get_message_text(
+                                        response[0].status.message
+                                    )
+                                    if (
                                         full_message_content
-                                    )
-                                    new_messages = (
-                                        self.convert_mhqa_response_to_chat_messages(
-                                            agent_response
+                                        and full_message_content.strip() != ""
+                                    ):
+                                        agent_response = (
+                                            MHQAResponse.model_validate_json(
+                                                full_message_content
+                                            )
                                         )
-                                    )
-                                    if last_added_messages > 0:
-                                        del chat_history[-last_added_messages:]
-                                    chat_history.extend(new_messages)
-                                    last_added_messages = len(new_messages)
+                                        if (
+                                            agent_response.agent_output
+                                            and agent_response.agent_output.strip()
+                                            != ""
+                                        ):
+                                            # print(agent_response.agent_output)
+                                            new_messages = self.convert_mhqa_response_to_chat_messages(
+                                                agent_response
+                                            )
+                                            if last_added_messages > 0:
+                                                del chat_history[-last_added_messages:]
+                                            chat_history.extend(new_messages)
+                                            last_added_messages = len(new_messages)
 
-                                    browser_state_chat_histories[selected_chat_id] = (
-                                        chat_history
-                                    )
-                                    yield (
-                                        None,
-                                        browser_state_chat_histories,
-                                        selected_chat_id,
-                                        chat_history,
-                                    )
+                                            browser_state_chat_histories[
+                                                selected_chat_id
+                                            ] = chat_history
+                                            yield {
+                                                bstate_chat_histories: browser_state_chat_histories,
+                                                chatbot: chat_history,
+                                            }
                     else:
                         gr.Warning(
                             f"No input message was provided for chat ID {selected_chat_id}."
                         )
-                except Exception as e:
                     yield (
-                        gr.update(value="", interactive=True),
+                        None,
                         browser_state_chat_histories,
                         selected_chat_id,
                         chat_history,
                     )
+                except Exception as e:
+                    yield {
+                        txt_input: user_query,
+                        bstate_chat_histories: browser_state_chat_histories,
+                        state_selected_chat_id: selected_chat_id,
+                        chatbot: chat_history,
+                    }
                     raise gr.Error(e)
 
             return component
@@ -448,7 +492,7 @@ class GradioApp(A2AClientMixin):
         with gr.Blocks(
             fill_width=True,
             fill_height=True,
-            theme=gr.themes.Monochrome(font="ui-sans-serif"),
+            theme=gr.themes.Monochrome(font=gr.themes.GoogleFont("Sora")),
         ) as self.ui:
             gr.set_static_paths(
                 paths=[
@@ -487,10 +531,7 @@ def main():
 
     try:
         app.construct_ui().queue().launch(
-            share=False,
-            ssr_mode=False,
-            show_api=False,
-            mcp_server=False,
+            share=False, ssr_mode=False, show_api=False, mcp_server=False, pwa=False
         )
     except InterruptedError:
         logger.warning("Gradio server interrupted, shutting down...")
