@@ -262,11 +262,18 @@ class MHQAActor(Actor, MHQAActorInterface):
                     agent_output=full_response,
                     tool_invocations=tool_invocations,
                 )
-                dc.publish_event(
-                    pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
-                    topic_name=pubsub_topic_name,
-                    data=response.model_dump_json().encode(),
-                )
+                if (
+                    isinstance(ev, AgentStream)
+                    and ev.delta.strip() != ""
+                    and response
+                    and response.agent_output.strip() != ""
+                ):
+                    logger.info(f"Publishing: {response.agent_output}")
+                    dc.publish_event(
+                        pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                        topic_name=pubsub_topic_name,
+                        data=response.model_dump_json().encode(),
+                    )
             response.status = MHQAResponseStatus.completed
             dc.publish_event(
                 pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
@@ -301,6 +308,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                                 user_input=user_input,
                                 agent_output=agent_output,
                                 tool_invocations=tool_invocations,
+                                status=MHQAResponseStatus.completed,
                             )
                         )
                         tool_name = ""
