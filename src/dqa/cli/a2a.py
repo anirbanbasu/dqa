@@ -280,8 +280,8 @@ class DQACliApp(A2AClientMixin):
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
             async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
+                if response[0].status.message:
+                    full_message_content = get_message_text(response[0].status.message)
             validated_response = MHQAResponse.model_validate_json(full_message_content)
             return validated_response
 
@@ -327,8 +327,8 @@ class DQACliApp(A2AClientMixin):
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
             async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
+                if response[0].status.message:
+                    full_message_content = get_message_text(response[0].status.message)
             response_adapter = TypeAdapter(List[MHQAResponse])
             validated_response = response_adapter.validate_json(full_message_content)
             validated_response = validated_response[
@@ -377,8 +377,8 @@ class DQACliApp(A2AClientMixin):
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
             async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
+                if response[0].status.message:
+                    full_message_content = get_message_text(response[0].status.message)
             return full_message_content
 
     async def run_mhqa_delete_history(
@@ -390,7 +390,9 @@ class DQACliApp(A2AClientMixin):
             response = await self._mhqa_delete_history(
                 thread_id=thread_id,
             )
-            print(response)
+            print(
+                f"Deletion of thread '{thread_id}': {'successful' if response == 'true' else 'failed; maybe the thread does not exist?'}"
+            )
         except Exception as e:
             logger.error(f"Error in MHQA delete history. {e}")
         finally:
@@ -489,7 +491,7 @@ def mhqa_get_history(
 
 
 @app.command()
-async def mhqa_delete_history(
+def mhqa_delete_history(
     thread_id: str = typer.Option(
         help="A thread ID to identify your conversation.",
     ),

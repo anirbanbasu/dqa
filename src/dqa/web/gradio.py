@@ -5,12 +5,12 @@ from typing import List
 from uuid import uuid4
 
 
-from a2a.types import Message, Task
+from a2a.types import Message
 from a2a.utils import get_message_text
 
 import httpx
 from pydantic import TypeAdapter
-from dqa import ParsedEnvVars, ic
+from dqa import ParsedEnvVars
 import gradio as gr
 
 from dqa.client.a2a_mixin import A2AClientMixin
@@ -225,14 +225,10 @@ class GradioApp(A2AClientMixin):
                     logger.info("Parsing streaming response from the A2A endpoint")
                     response_adapter = TypeAdapter(List[MHQAResponse])
                     async for response in streaming_response:
-                        if (
-                            isinstance(response[0], Task)
-                            and len(response[0].history) > 1
-                        ):
+                        if response[0].status.message:
                             full_message_content = get_message_text(
-                                response[0].history[-1]
+                                response[0].status.message
                             )
-                            ic(full_message_content)
                             validated_response = response_adapter.validate_json(
                                 full_message_content
                             )
@@ -316,12 +312,9 @@ class GradioApp(A2AClientMixin):
                     )
                     streaming_response = client.send_message(send_message)
                     async for response in streaming_response:
-                        if (
-                            isinstance(response[0], Task)
-                            and len(response[0].history) > 1
-                        ):
+                        if response[0].status.message:
                             full_message_content = get_message_text(
-                                response[0].history[-1]
+                                response[0].status.message
                             )
                 logger.info(full_message_content)
 
@@ -440,13 +433,9 @@ class GradioApp(A2AClientMixin):
                                 "Parsing streaming response from the A2A endpoint"
                             )
                             async for response in streaming_response:
-                                if (
-                                    isinstance(response[0], Task)
-                                    # The first message won't contain a MHQAResponse
-                                    and len(response[0].history) > 1
-                                ):
+                                if response[0].status.message:
                                     full_message_content = get_message_text(
-                                        response[0].history[-1]
+                                        response[0].status.message
                                     )
                                     if (
                                         full_message_content
