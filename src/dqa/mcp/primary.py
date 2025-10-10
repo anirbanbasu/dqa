@@ -2,7 +2,7 @@ import logging
 import signal
 import sys
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Client
 from dqa import ParsedEnvVars
 
 from dqa.mcp.ollama import app as ollama_mcp
@@ -25,16 +25,36 @@ def server():
 
     # See: https://gofastmcp.com/servers/composition
     # Live linking
-    logger.info("Mounting Ollama web search and fetch MCP...")
-    server.mount(ollama_mcp(), prefix="ollama")
-    logger.info("Mounting Frankfurter currency conversion MCP...")
     server.mount(frankfurter_mcp(), prefix="currency")
-    logger.info("Mounting DateTime MCP...")
+    logger.info("Mounted Frankfurter currency conversion MCP.")
     server.mount(datetime_mcp(), prefix="datetime")
-    logger.info("Mounting Basic Arithmetic MCP...")
+    logger.info("Mounted DateTime MCP.")
     server.mount(basic_arithmetic_mcp(), prefix="arithmetic")
-    logger.info("Mounting YFMCP...")
+    logger.info("Mounted Basic Arithmetic MCP.")
     server.mount(yfmcp_mcp, prefix="yfmcp", as_proxy=True)
+    logger.info("Mounted YFMCP.")
+
+    if ParsedEnvVars().API_KEY_ALPHAVANTAGE:
+        # See: https://github.com/alphavantage/alpha_vantage_mcp
+        alphavantage_remote_url = f"https://mcp.alphavantage.co/mcp?apikey={ParsedEnvVars().API_KEY_ALPHAVANTAGE}"
+        alphavantage_remote_proxy = FastMCP.as_proxy(Client(alphavantage_remote_url))
+        server.mount(alphavantage_remote_proxy, prefix="alphavantage")
+        logger.info("Mounted AlphaVantage remote MCP.")
+        logger.warning(
+            "AlphaVantage MCP is a rate-limited remote service, expect higher latency."
+        )
+    else:
+        logger.warning(
+            "No AlphaVantage API key found in environment variable 'API_KEY_ALPHAVANTAGE'. Skipping mounting AlphaVantage remote MCP."
+        )
+
+    if ParsedEnvVars().API_KEY_OLLAMA:
+        server.mount(ollama_mcp(), prefix="ollama")
+        logger.info("Mounted Ollama MCP.")
+    else:
+        logger.warning(
+            "No Ollama API key found in environment variable 'API_KEY_OLLAMA'. Skipping mounting Ollama MCP."
+        )
 
     return server
 

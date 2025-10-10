@@ -34,5 +34,17 @@ class TestPrimaryMCP(MCPTestMixin):
         """
         Test that the primary MCP server has composed the necessary MCPs correctly.
         """
+        n_base_tools = 22  # Base tools from local MCPs
+        n_ollama_tools = 2
+        n_alphavantage_tools = 118
         tools = asyncio.run(self.list_tools(mcp_client))
-        assert len(tools) == 22
+        assert len(tools) in [
+            # Base
+            n_base_tools,
+            # With Ollama only
+            n_base_tools + n_ollama_tools,
+            # With AlphaVantage only
+            n_base_tools + n_alphavantage_tools,
+            # With both Ollama and AlphaVantage
+            n_base_tools + n_ollama_tools + n_alphavantage_tools,
+        ]

@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 class MHQAAgentExecutor(AgentExecutor):
     def __init__(self):
         self._actor_mhqa = MHQAActor.__name__
-        self._factory = ActorProxyFactory(retry_policy=RetryPolicy(max_attempts=1))
+        self._factory = ActorProxyFactory(
+            retry_policy=RetryPolicy(
+                max_attempts=ParsedEnvVars().APP_DAPR_ACTOR_RETRY_ATTEMPTS
+            )
+        )
 
     async def do_mhqa_respond(self, data: MHQAInput):
         # TODO: Potential memory leak without closing the streams?

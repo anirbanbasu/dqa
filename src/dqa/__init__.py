@@ -33,6 +33,9 @@ class ParsedEnvVars:
     APP_DAPR_PUBSUB_STALE_MSG_SECS: int = env.int(
         "APP_DAPR_PUBSUB_STALE_MSG_SECS", default=60
     )
+    APP_DAPR_ACTOR_RETRY_ATTEMPTS: int = env.int(
+        "APP_DAPR_ACTOR_RETRY_ATTEMPTS", default=3
+    )
     APP_A2A_SRV_HOST: str = env.str("APP_A2A_SRV_HOST", default="127.0.0.1")
     APP_MHQA_A2A_SRV_PORT: int = env.int("APP_MHQA_A2A_SRV_PORT", default=32770)
     APP_MHQA_A2A_REMOTE_URL: str = env.str("APP_MHQA_A2A_REMOTE_URL", default=None)
@@ -46,6 +49,9 @@ class ParsedEnvVars:
     BROWSER_STATE_CHAT_HISTORIES: str = env.str(
         "BROWSER_STATE_CHAT_HISTORIES", default="a2a_dapr_chat_histories"
     )
+
+    API_KEY_ALPHAVANTAGE: str = env.str("ALPHAVANTAGE_API_KEY", default=None)
+    API_KEY_OLLAMA: str = env.str("OLLAMA_API_KEY", default=None)
 
     _instance: ClassVar = None
 

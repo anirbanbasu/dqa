@@ -391,6 +391,7 @@ class GradioApp(A2AClientMixin):
                             MHQAResponse(
                                 thread_id=selected_chat_id,
                                 user_input=user_query,
+                                agent_output="Attempting to find an answer, 🤔 please wait...",
                             )
                         )
 

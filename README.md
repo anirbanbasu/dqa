@@ -38,8 +38,14 @@ There are Dapr related configuration files too.
  - Dapr telemetry configuration at `.dapr/config.yaml`.
  - Dapr hot-swappable component configuration files at `.dapr/components/`.
 
-The following environment variables are also relevant but not essential, except for `OLLAMA_API_KEY`.
- - `OLLAMA_API_KEY`: The Ollama API key is required for MCP-based web-search and cloud hosted models on Ollama.
+
+
+The following API keys are optional but maybe provided for additional functionality. If not provided, the corresponding functionality will not be available.
+
+ - `OLLAMA_API_KEY`: The Ollama API key is required for MCP-based web search, web fetch and cloud hosted models on Ollama. MCP features include 2 tools. Create one from [your Ollama account](https://ollama.com/settings/keys).
+ - `ALPHAVANTAGE_API_KEY`: The API key to MCP-based Alpha Vantage finance related functions. MCP features include 118 tools. Obtain your [free API key from Alpha Vantage](https://www.alphavantage.co/support/#api-key). Note that basic finance tools are available through the [yfinance MCP](https://github.com/narumiruna/yfinance-mcp) even if Alpha Vantage MCP is not loaded.
+
+The following environment variables are all optional.
  - `APP_LOG_LEVEL`: The general log level of the DQA app. Defaults to `INFO`.
  - `DQA_MCP_SERVER_TRANSPORT`, `FASTMCP_HOST` and `FASTMCP_PORT`: These specify the transport type, the host and port for the built-in MCP server of DQA. The default values are `stdio`, `localhost` and `8000` respectively.
  - `LLM_CONFIG_FILE` and `MCP_CONFIG_FILE`: These specify where the LLM and MCP configurations These default to `conf/llm.json` and `conf/mcp.json` respectively.
@@ -48,6 +54,7 @@ The following environment variables are also relevant but not essential, except 
  - `BROWSER_STATE_CHAT_HISTORIES`: This is the key in browser state used by Gradio to store the chat histories (local values). The default value is `a2a_dapr_chat_histories`.
  - `APP_DAPR_SVC_HOST` and `APP_DAPR_SVC_PORT`: The host and port at which Dapr actor service will listen on. These default to `127.0.0.1` and `32768`. Should you change these, you must change the corresponding information in `dapr.yaml`.
  - `APP_DAPR_PUBSUB_STALE_MSG_SECS`: This specifies how old a message should be on the Dapr publish-subscribe topic queue before it will be considered too old, and dropped. The default value is 60 seconds.
+ - `APP_DAPR_ACTOR_RETRY_ATTEMPTS`: This specifies the number of times an agent executor will try to invoke a method on an actor, if it fails to succeed. The default value is 3.
  - `DAPR_PUBSUB_NAME`: The configured name of the publish-subscribe component at `.dapr/components/pubsub.yaml`. Change this environment variable only if you change the corresponding pub-sub component configuration.
  - `APP_A2A_SRV_HOST` and `APP_MHQA_A2A_SRV_PORT`: The host and port at which A2A endpoint will be available. These default to `127.0.0.1` and `32770`. Should you change these, you must change the corresponding information in `dapr.yaml`.
  - `APP_MHQA_A2A_REMOTE_URL`: This environment variable can be used to specify the full remote URL including the protocol, i.e., `http` or `https` where the MHQA A2A endpoint is available. This is useful in a scenario where the web app is deployed on a machine that is different from where the MHQA A2A endpoint and Dapr service are. Default value is `None`.

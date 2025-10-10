@@ -158,10 +158,13 @@ class MHQAActor(Actor, MHQAActorInterface):
                 logger.error(f"Error parsing MCP config. {e}")
                 logger.exception(e)
 
+        # logger.info(
+        #     f"MCP tools available to {self.__class__.__name__} ({self.id}): {
+        #         ','.join([f.metadata.name for f in self.mcp_features])
+        #     }"
+        # )
         logger.info(
-            f"MCP tools available to {self.__class__.__name__} ({self.id}): {
-                ','.join([f.metadata.name for f in self.mcp_features])
-            }"
+            f"MCP tools available to {self.__class__.__name__} ({self.id}): {len(self.mcp_features)}"
         )
 
         if not hasattr(self, "workflow"):
