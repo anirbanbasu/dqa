@@ -42,8 +42,9 @@ There are Dapr related configuration files too.
 
 The following API keys are optional but maybe provided for additional functionality. If not provided, the corresponding functionality will not be available.
 
- - `OLLAMA_API_KEY`: The Ollama API key is required for MCP-based web search, web fetch and cloud hosted models on Ollama. MCP features include 2 tools. Create one from [your Ollama account](https://ollama.com/settings/keys).
+ - `OLLAMA_API_KEY`: The Ollama API key is required for MCP-based web search, web fetch and cloud hosted models on Ollama. MCP features include 2 tools. Create an API key from [your Ollama account](https://ollama.com/settings/keys).
  - `ALPHAVANTAGE_API_KEY`: The API key to MCP-based Alpha Vantage finance related functions. MCP features include 118 tools. Obtain your [free API key from Alpha Vantage](https://www.alphavantage.co/support/#api-key). Note that basic finance tools are available through the [yfinance MCP](https://github.com/narumiruna/yfinance-mcp) even if Alpha Vantage MCP is not loaded.
+ - `TAVILY_API_KEY`: The API key for Tavily search and research services. MCP features include 4 tools. Get your API key [from your Tavily account](https://app.tavily.com/home).
 
 The following environment variables are all optional.
  - `APP_LOG_LEVEL`: The general log level of the DQA app. Defaults to `INFO`.

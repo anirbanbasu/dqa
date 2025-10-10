@@ -48,6 +48,23 @@ def server():
             "No AlphaVantage API key found in environment variable 'API_KEY_ALPHAVANTAGE'. Skipping mounting AlphaVantage remote MCP."
         )
 
+    if ParsedEnvVars().API_KEY_TAVILY:
+        # See: https://github.com/alphavantage/alpha_vantage_mcp
+        tavily_remote_url = (
+            f"https://mcp.tavily.com/mcp/?tavilyApiKey={ParsedEnvVars().API_KEY_TAVILY}"
+        )
+        tavily_remote_proxy = FastMCP.as_proxy(Client(tavily_remote_url))
+        # Prefix is not necessary because Tavily tools are prefixed with "tavily_" already.
+        server.mount(tavily_remote_proxy)
+        logger.info("Mounted Tavily remote MCP.")
+        logger.warning(
+            "Tavily MCP is a rate-limited remote service, expect higher latency."
+        )
+    else:
+        logger.warning(
+            "No AlphaVantage API key found in environment variable 'TAVILY_API_KEY'. Skipping mounting Tavily remote MCP."
+        )
+
     if ParsedEnvVars().API_KEY_OLLAMA:
         server.mount(ollama_mcp(), prefix="ollama")
         logger.info("Mounted Ollama MCP.")

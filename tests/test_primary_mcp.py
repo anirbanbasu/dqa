@@ -4,6 +4,8 @@ import pytest
 from dqa.mcp.primary import server as primary_mcp
 from tests.mcp_test_mixin import MCPTestMixin
 
+from itertools import combinations
+
 
 class TestPrimaryMCP(MCPTestMixin):
     # No need to test each MCP exhaustively here, they have their own tests.
@@ -34,17 +36,28 @@ class TestPrimaryMCP(MCPTestMixin):
         """
         Test that the primary MCP server has composed the necessary MCPs correctly.
         """
+
+        def possible_tool_counts(base: int, additions: list[int]) -> set[int]:
+            """
+            Given a base count and a list of possible additions, return all possible total counts.
+            """
+
+            counts = {base}
+            for r in range(1, len(additions) + 1):
+                for combo in combinations(additions, r):
+                    counts.add(base + sum(combo))
+            return counts
+
         n_base_tools = 22  # Base tools from local MCPs
         n_ollama_tools = 2
         n_alphavantage_tools = 118
+        n_tavily_tools = 4
         tools = asyncio.run(self.list_tools(mcp_client))
-        assert len(tools) in [
-            # Base
+        assert len(tools) in possible_tool_counts(
             n_base_tools,
-            # With Ollama only
-            n_base_tools + n_ollama_tools,
-            # With AlphaVantage only
-            n_base_tools + n_alphavantage_tools,
-            # With both Ollama and AlphaVantage
-            n_base_tools + n_ollama_tools + n_alphavantage_tools,
-        ]
+            [
+                n_ollama_tools,
+                n_alphavantage_tools,
+                n_tavily_tools,
+            ],
+        )

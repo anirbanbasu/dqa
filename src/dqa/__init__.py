@@ -51,6 +51,7 @@ class ParsedEnvVars:
     )
 
     API_KEY_ALPHAVANTAGE: str = env.str("ALPHAVANTAGE_API_KEY", default=None)
+    API_KEY_TAVILY: str = env.str("TAVILY_API_KEY", default=None)
     API_KEY_OLLAMA: str = env.str("OLLAMA_API_KEY", default=None)
 
     _instance: ClassVar = None
