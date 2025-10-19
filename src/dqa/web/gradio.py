@@ -10,7 +10,7 @@ from a2a.utils import get_message_text
 
 import httpx
 from pydantic import TypeAdapter
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 import gradio as gr
 
 from dqa.client.a2a_mixin import A2AClientMixin
@@ -45,10 +45,10 @@ class GradioApp(A2AClientMixin):
 
     def __init__(self):
         # self.ui = None
-        self._mhqa_a2a_uvicorn_host = ParsedEnvVars().APP_A2A_SRV_HOST
-        self._mhqa_a2a_uvicorn_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
+        self._mhqa_a2a_uvicorn_host = EnvVars.APP_A2A_SRV_HOST
+        self._mhqa_a2a_uvicorn_port = EnvVars.APP_MHQA_A2A_SRV_PORT
         self._mhqa_a2a_base_url = (
-            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            EnvVars.APP_MHQA_A2A_REMOTE_URL
             or f"http://{self._mhqa_a2a_uvicorn_host}:{self._mhqa_a2a_uvicorn_port}"
         )
 
@@ -134,8 +134,8 @@ class GradioApp(A2AClientMixin):
                     gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
                 with gr.Column(scale=3):
                     bstate_chat_histories = gr.BrowserState(
-                        storage_key=ParsedEnvVars().BROWSER_STATE_CHAT_HISTORIES,
-                        secret=ParsedEnvVars().BROWSER_STATE_SECRET,
+                        storage_key=EnvVars.BROWSER_STATE_CHAT_HISTORIES,
+                        secret=EnvVars.BROWSER_STATE_SECRET,
                     )
                     with gr.Group():
                         chatbot = gr.Chatbot(

@@ -13,7 +13,7 @@ from a2a.types import (
     AgentSkill,
 )
 
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 from dqa.executor.mhqa import MHQAAgentExecutor
 from dqa.model.mhqa import MHQAAgentSkills
 
@@ -27,8 +27,8 @@ async def uvicorn_serve():
         # This is absolutely necessary to exit the program
         sys.exit(0)
 
-    _a2a_uvicorn_host = ParsedEnvVars().APP_A2A_SRV_HOST
-    _a2a_uvicorn_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
+    _a2a_uvicorn_host = EnvVars.APP_A2A_SRV_HOST
+    _a2a_uvicorn_port = EnvVars.APP_MHQA_A2A_SRV_PORT
     signal.signal(signal.SIGINT, sigint_handler)
 
     respond_skill = AgentSkill(

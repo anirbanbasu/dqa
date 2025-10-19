@@ -17,7 +17,7 @@ env = Env()
 env.read_env()
 
 
-class ParsedEnvVars:
+class EnvVars:
     APP_LOG_LEVEL: str = env.str("APP_LOG_LEVEL", default="INFO").upper()
     DQA_MCP_SERVER_TRANSPORT: str = env.str(
         "DQA_MCP_SERVER_TRANSPORT",
@@ -56,7 +56,7 @@ class ParsedEnvVars:
 
     _instance: ClassVar = None
 
-    def __new__(cls: type["ParsedEnvVars"]) -> "ParsedEnvVars":
+    def __new__(cls: type["EnvVars"]) -> "EnvVars":
         if cls._instance is None:
             # Create instance using super().__new__ to bypass any recursion
             instance = super().__new__(cls)
@@ -65,7 +65,7 @@ class ParsedEnvVars:
 
 
 logging.basicConfig(
-    level=ParsedEnvVars().APP_LOG_LEVEL,
+    level=EnvVars.APP_LOG_LEVEL,
     format="%(message)s",
     datefmt="[%X]",
     handlers=[RichHandler(show_time=True, show_level=True, show_path=True)],

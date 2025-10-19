@@ -12,7 +12,7 @@ from dqa.actor.mhqa import MHQAActor
 
 from contextlib import asynccontextmanager
 
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 
 
 @asynccontextmanager
@@ -48,8 +48,8 @@ ActorRuntime.set_actor_config(config)
 def main():
     uvicorn.run(
         app,
-        host=ParsedEnvVars().APP_DAPR_SVC_HOST,
-        port=ParsedEnvVars().APP_DAPR_SVC_PORT,
+        host=EnvVars.APP_DAPR_SVC_HOST,
+        port=EnvVars.APP_DAPR_SVC_PORT,
     )
 
 

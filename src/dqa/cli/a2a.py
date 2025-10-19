@@ -14,7 +14,7 @@ from a2a.utils import get_message_text
 
 import httpx
 
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 
 from a2a.types import Message
 
@@ -68,13 +68,13 @@ class DQACliApp(A2AClientMixin):
 
     def _initialize(self):
         logger.debug("Initialising A2A server URLs...")
-        a2a_asgi_host = ParsedEnvVars().APP_A2A_SRV_HOST
-        echo_a2a_asgi_port = ParsedEnvVars().APP_ECHO_A2A_SRV_PORT
+        a2a_asgi_host = EnvVars.APP_A2A_SRV_HOST
+        echo_a2a_asgi_port = EnvVars.APP_ECHO_A2A_SRV_PORT
         self.echo_base_url = f"http://{a2a_asgi_host}:{echo_a2a_asgi_port}"
 
-        mhqa_a2a_asgi_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
+        mhqa_a2a_asgi_port = EnvVars.APP_MHQA_A2A_SRV_PORT
         self.mhqa_base_url = (
-            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            EnvVars.APP_MHQA_A2A_REMOTE_URL
             or f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
         )
         logger.debug(f"Echo A2A base URL: {self.echo_base_url}")

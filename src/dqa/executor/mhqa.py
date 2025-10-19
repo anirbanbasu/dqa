@@ -12,7 +12,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.types import TaskState
 
 
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -35,9 +35,7 @@ class MHQAAgentExecutor(AgentExecutor):
     def __init__(self):
         self._actor_mhqa = MHQAActor.__name__
         self._factory = ActorProxyFactory(
-            retry_policy=RetryPolicy(
-                max_attempts=ParsedEnvVars().APP_DAPR_ACTOR_RETRY_ATTEMPTS
-            )
+            retry_policy=RetryPolicy(max_attempts=EnvVars.APP_DAPR_ACTOR_RETRY_ATTEMPTS)
         )
 
     async def do_mhqa_respond(self, data: MHQAInput):
@@ -52,7 +50,7 @@ class MHQAAgentExecutor(AgentExecutor):
                 timestamp = datetime.datetime.fromisoformat(parsed_timestamp)
                 td = timenow - timestamp
                 if td > datetime.timedelta(
-                    seconds=ParsedEnvVars().APP_DAPR_PUBSUB_STALE_MSG_SECS
+                    seconds=EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS
                 ):
                     logger.warning(
                         f"Dropping stale message for topic={message.topic()} with age {td} seconds"
@@ -77,7 +75,7 @@ class MHQAAgentExecutor(AgentExecutor):
             async with anyio.create_task_group() as tg:
                 pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
                 dc.subscribe_with_handler(
-                    pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                    pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
                     topic=pubsub_topic_name,
                     handler_fn=message_handler,
                 )
