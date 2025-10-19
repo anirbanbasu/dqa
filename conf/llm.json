@@ -4,5 +4,29 @@
     "model": "gpt-oss:20b-cloud",
     "request_timeout": 300,
     "thinking": false
+  },
+  "decomposer": {
+    "base_url": "http://localhost:11434",
+    "model": "gpt-oss:20b-cloud",
+    "request_timeout": 60,
+    "thinking": false
+  },
+  "responder": {
+    "base_url": "http://localhost:11434",
+    "model": "gpt-oss:20b-cloud",
+    "request_timeout": 60,
+    "thinking": false
+  },
+  "reasoner": {
+    "base_url": "http://localhost:11434",
+    "model": "gpt-oss:20b-cloud",
+    "request_timeout": 60,
+    "thinking": false
+  },
+  "reviewer": {
+    "base_url": "http://localhost:11434",
+    "model": "gpt-oss:20b-cloud",
+    "request_timeout": 60,
+    "thinking": false
   }
 }

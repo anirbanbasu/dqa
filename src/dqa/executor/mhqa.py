@@ -172,7 +172,7 @@ class MHQAAgentExecutor(AgentExecutor):
             else:
                 raise ValueError("No response received from the actor(s)!")
         except Exception as e:
-            logger.error(f"Error in MHQAAgentExecutor. {e}")
+            logger.exception(f"Error in MHQAAgentExecutor. {e}")
             await task_updater.failed(
                 message=new_agent_text_message(
                     # FIXME: The output will fail JSON validation in the client side
