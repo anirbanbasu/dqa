@@ -2,6 +2,8 @@ import json
 import logging
 from typing import List
 
+from dqa import ic
+
 
 from llama_index.core.base.llms.types import ChatMessage, MessageRole
 from llama_index.core.tools.types import ToolOutput
@@ -9,6 +11,7 @@ from llama_index.core.tools.types import ToolOutput
 
 from llama_index.core.agent.workflow import (
     AgentOutput,
+    AgentInput,
     ToolCall,
     ToolCallResult,
     AgentStream,
@@ -91,6 +94,8 @@ class MHQAActor(Actor, MHQAActorInterface):
 
     async def respond(self, data: dict) -> dict:
         user_input = data.get("user_input", "")
+        if not user_input or user_input == "":
+            raise ValueError("User input cannot be empty.")
         wf_handler = self._wf_orchestrator.workflow.run(
             user_msg=user_input,
             memory=self._wf_orchestrator.workflow_memory,
@@ -112,7 +117,11 @@ class MHQAActor(Actor, MHQAActorInterface):
                     print(f"🤖 Agent: {current_agent}")
                     print(f"{'=' * 50}\n")
                 if isinstance(event, AgentStream):
-                    full_response += event.delta
+                    if event.delta:
+                        print(event.delta, end="", flush=True)
+                        full_response += event.delta
+                elif isinstance(event, AgentInput):
+                    print("📥 Input:", event.input)
                 elif isinstance(event, ToolCall):
                     print(f"🔨 Calling Tool: {event.tool_name}")
                     print(f"  With arguments: {event.tool_kwargs}")
@@ -149,11 +158,14 @@ class MHQAActor(Actor, MHQAActorInterface):
                             "🛠️  Planning to use tools:",
                             [call.tool_name for call in event.tool_calls],
                         )
-                # elif isinstance(ev, InputRequiredEvent):
+                # elif isinstance(event, InputRequiredEvent):
                 #     ic("Input required event encountered in MHQAActor.respond")
-                #     ic(ev)
+                #     ic(event)
+                # elif isinstance(event, HumanResponseEvent):
+                #     ic("Human response event encountered in MHQAActor.respond")
+                #     ic(event)
                 else:
-                    ...
+                    ic(type(event))
 
                 response = MHQAResponse(
                     thread_id=str(self.id),
@@ -173,6 +185,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                         topic_name=pubsub_topic_name,
                         data=response.model_dump_json().encode(),
                     )
+
             response.status = MHQAResponseStatus.completed
             dc.publish_event(
                 pubsub_name=EnvVars.DAPR_PUBSUB_NAME,

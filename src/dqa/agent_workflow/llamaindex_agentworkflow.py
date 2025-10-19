@@ -1,4 +1,3 @@
-from enum import StrEnum
 import json
 import logging
 import os
@@ -27,14 +26,12 @@ from dqa import EnvVars
 logger = logging.getLogger(__name__)
 
 
-class MHQAAgentNames(StrEnum):
+class MHQAAgentWorkflowOrchestrator:
     DECOMPOSER = "Decomposer"
     RESPONDER = "Responder"
     REASONER = "Reasoner"
     REVIEWER = "Reviewer"
 
-
-class MHQAAgentWorkflowOrchestrator:
     def __init__(self):
         self.initialised = False
 
@@ -79,63 +76,71 @@ class MHQAAgentWorkflowOrchestrator:
 
         if not hasattr(self, "workflow"):
             decomposer_agent = FunctionAgent(
-                name=MHQAAgentNames.DECOMPOSER,
+                name=MHQAAgentWorkflowOrchestrator.DECOMPOSER,
                 description="Decomposes complex questions into simpler sub-questions.",
                 system_prompt=(
-                    f"You are the {MHQAAgentNames.DECOMPOSER} agent. "
+                    f"You are the {MHQAAgentWorkflowOrchestrator.DECOMPOSER} agent. "
                     "Determine if the user query is a question or a statement.\n"
                     "If the user query is a question and it has no direct answer, decompose it into smaller sub-questions. "
                     "If the user query is a simple question then decompose it into just one single sub-question, which is the question posed by the user."
                     "If the user input is only a statement but not a question then respond with an acknowledgment only.\n"
                     "Store in state the decomposed sub-questions in a list format. "
-                    f"If the user query is not a statement, hand off to the {MHQAAgentNames.RESPONDER} agent.\n"
+                    f"If the user query is not a statement, hand off to the {MHQAAgentWorkflowOrchestrator.RESPONDER} agent.\n"
                 ),
                 tools=[],
-                can_handoff_to=[MHQAAgentNames.RESPONDER],
-                llm=Ollama(**self.llm_config[MHQAAgentNames.DECOMPOSER.lower()]),
+                can_handoff_to=[MHQAAgentWorkflowOrchestrator.RESPONDER],
+                llm=Ollama(
+                    **self.llm_config[MHQAAgentWorkflowOrchestrator.DECOMPOSER.lower()]
+                ),
             )
 
             responder_agent = FunctionAgent(
-                name=MHQAAgentNames.RESPONDER,
+                name=MHQAAgentWorkflowOrchestrator.RESPONDER,
                 description="Responds to sub-questions using available tools.",
                 system_prompt=(
-                    f"You are the {MHQAAgentNames.RESPONDER} agent.\n"
-                    f"You would receive a list of questions by the {MHQAAgentNames.DECOMPOSER} agent. "
+                    f"You are the {MHQAAgentWorkflowOrchestrator.RESPONDER} agent.\n"
+                    # f"You would receive a list of questions by the {MHQAAgentWorkflowOrchestrator.DECOMPOSER} agent. "
                     "Call the appropriate tools for each question given to you and output a list of tool call responses. "
                     "Store in state the responses you have gathered for each question. "
-                    f"Once you are finished with all the questions, hand off to the {MHQAAgentNames.REASONER} agent.\n"
+                    f"Once you are finished with all the questions, hand off to the {MHQAAgentWorkflowOrchestrator.REASONER} agent.\n"
                 ),
                 tools=self.mcp_features,
-                can_handoff_to=[MHQAAgentNames.REASONER],
-                llm=Ollama(**self.llm_config[MHQAAgentNames.RESPONDER.lower()]),
+                can_handoff_to=[MHQAAgentWorkflowOrchestrator.REASONER],
+                llm=Ollama(
+                    **self.llm_config[MHQAAgentWorkflowOrchestrator.RESPONDER.lower()]
+                ),
             )
 
             reasoner_agent = ReActAgent(
-                name=MHQAAgentNames.REASONER,
+                name=MHQAAgentWorkflowOrchestrator.REASONER,
                 description="Reasons through gathered evidences to formulate a combined response.",
                 system_prompt=(
-                    f"You are the {MHQAAgentNames.REASONER} agent.\n"
-                    f"You would receive from the {MHQAAgentNames.RESPONDER} agent a list of questions and the evidences it gathered for each question. "
+                    f"You are the {MHQAAgentWorkflowOrchestrator.REASONER} agent.\n"
+                    # f"You would receive from the {MHQAAgentWorkflowOrchestrator.RESPONDER} agent a list of questions and the evidences it gathered for each question. "
                     "Reason through the evidences for the individual questions and combine them into a single response that serves as a coherent answer to the original user query.\n"
-                    f"Hand off to the {MHQAAgentNames.REVIEWER} agent for a review of your combined response.\n"
+                    f"Hand off to the {MHQAAgentWorkflowOrchestrator.REVIEWER} agent for a review of your combined response.\n"
                 ),
                 tools=[],
-                can_handoff_to=[MHQAAgentNames.REVIEWER],
-                llm=Ollama(**self.llm_config[MHQAAgentNames.REASONER.lower()]),
+                can_handoff_to=[MHQAAgentWorkflowOrchestrator.REVIEWER],
+                llm=Ollama(
+                    **self.llm_config[MHQAAgentWorkflowOrchestrator.REASONER.lower()]
+                ),
             )
 
             reviewer_agent = ReActAgent(
-                name=MHQAAgentNames.REVIEWER,
+                name=MHQAAgentWorkflowOrchestrator.REVIEWER,
                 description="Reviews the combined response for quality and completeness.",
                 system_prompt=(
-                    f"You are the {MHQAAgentNames.REVIEWER} agent.\n"
-                    f"You would receive from the {MHQAAgentNames.REASONER} agent a response to the user question. "
+                    f"You are the {MHQAAgentWorkflowOrchestrator.REVIEWER} agent.\n"
+                    # f"You would receive from the {MHQAAgentWorkflowOrchestrator.REASONER} agent a response to the user question. "
                     "Review the response in terms of quality and highlight any potential gaps. "
                     "Once done, provide the response and your review to the user. "
-                    "Make sure that your final answer is in properly formatted Markdown.\n"
+                    "Make sure that your final answer is in correct Markdown format.\n"
                 ),
                 tools=[],
-                llm=Ollama(**self.llm_config[MHQAAgentNames.REVIEWER.lower()]),
+                llm=Ollama(
+                    **self.llm_config[MHQAAgentWorkflowOrchestrator.REVIEWER.lower()]
+                ),
             )
 
             self.workflow = AgentWorkflow(
@@ -146,7 +151,6 @@ class MHQAAgentWorkflowOrchestrator:
                     reviewer_agent,
                 ],
                 initial_state={
-                    "user_query": "to be provided",
                     "sub_questions": [],
                     "evidences": [],
                     "combined_response": "not written yet",
@@ -160,7 +164,7 @@ class MHQAAgentWorkflowOrchestrator:
             )
 
             self.workflow_memory = Memory.from_defaults(
-                session_id=str(actor_id),
+                session_id=actor_id,
             )
         self.initialised = (
             hasattr(self, "mcp_features")
