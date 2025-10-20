@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List
+from typing import ClassVar, List
 
 from dqa import ic
 
@@ -52,15 +52,18 @@ class MHQAActorInterface(ActorInterface):
 
 
 class MHQAActor(Actor, MHQAActorInterface):
-    _chat_memory_key = "chat_memory"
-    _memory_messages_type_adapter = TypeAdapter(List[ChatMessage])
-    _wf_orchestrator: MHQAAgentWorkflowOrchestrator = MHQAAgentWorkflowOrchestrator()
+    _chat_memory_key: ClassVar[str] = "chat_memory"
+    _memory_messages_type_adapter: ClassVar[TypeAdapter] = TypeAdapter(
+        List[ChatMessage]
+    )
 
     def __init__(self, ctx, actor_id):
         super().__init__(ctx, actor_id)
         self._cancelled = False
 
     async def _on_activate(self) -> None:
+        if not hasattr(self, "_wf_orchestrator"):
+            self._wf_orchestrator = MHQAAgentWorkflowOrchestrator()
         if not self._wf_orchestrator.initialised:
             await self._wf_orchestrator.initialise(str(self.id))
 
@@ -107,28 +110,30 @@ class MHQAActor(Actor, MHQAActorInterface):
         pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{self.id}"
         with DaprClient() as dc:
             current_agent = ""
-            async for event in wf_handler.stream_events(expose_internal=True):
+            async for event in wf_handler.stream_events():
                 if (
                     hasattr(event, "current_agent_name")
                     and event.current_agent_name != current_agent
                 ):
                     current_agent = event.current_agent_name
-                    print(f"\n{'=' * 50}")
-                    print(f"🤖 Agent: {current_agent}")
-                    print(f"{'=' * 50}\n")
+                    print(f"\n{'=' * 50}", flush=True)
+                    print(f"🤖 Agent: {current_agent}", flush=True)
+                    print(f"{'=' * 50}\n", flush=True)
                 if isinstance(event, AgentStream):
                     if event.delta:
                         print(event.delta, end="", flush=True)
                         full_response += event.delta
                 elif isinstance(event, AgentInput):
-                    print("📥 Input:", event.input)
+                    print(
+                        f"📥 {event.current_agent_name} Input:", event.input, flush=True
+                    )
                 elif isinstance(event, ToolCall):
-                    print(f"🔨 Calling Tool: {event.tool_name}")
-                    print(f"  With arguments: {event.tool_kwargs}")
+                    print(f"🔨 Calling Tool: {event.tool_name}", flush=True)
+                    print(f"  With arguments: {event.tool_kwargs}", flush=True)
                 elif isinstance(event, ToolCallResult):
-                    print(f"🔧 Tool Result ({event.tool_name}):")
-                    print(f"  Arguments: {event.tool_kwargs}")
-                    print(f"  Output: {event.tool_output}")
+                    print(f"🔧 Tool Result ({event.tool_name}):", flush=True)
+                    print(f"  Arguments: {event.tool_kwargs}", flush=True)
+                    print(f"  Output: {event.tool_output}", flush=True)
                     parsed_tool_output = (
                         MHQAAgentWorkflowOrchestrator.parse_tool_message_from_str(
                             event.tool_output.blocks[0].text
@@ -152,11 +157,16 @@ class MHQAActor(Actor, MHQAActorInterface):
                     )
                 elif isinstance(event, AgentOutput):
                     if event.response.content:
-                        print("📤 Output:", event.response.content)
+                        print(
+                            f"📤 {event.current_agent_name} Output:",
+                            event.response.content,
+                            flush=True,
+                        )
                     if event.tool_calls:
                         print(
                             "🛠️  Planning to use tools:",
                             [call.tool_name for call in event.tool_calls],
+                            flush=True,
                         )
                 # elif isinstance(event, InputRequiredEvent):
                 #     ic("Input required event encountered in MHQAActor.respond")
@@ -166,6 +176,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                 #     ic(event)
                 else:
                     ic(type(event))
+                    ...
 
                 response = MHQAResponse(
                     thread_id=str(self.id),

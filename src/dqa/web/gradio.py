@@ -329,6 +329,7 @@ class GradioApp(A2AClientMixin):
             ):
                 if selected_chat_id and browser_state_chat_histories:
                     if selected_chat_id in browser_state_chat_histories:
+                        gr.Info(f"Requested deletion of chat ID: {selected_chat_id}...")
                         await delete_remote_chat_history(selected_chat_id)
                         del browser_state_chat_histories[selected_chat_id]
                         selected_chat_id = None
