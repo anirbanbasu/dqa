@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -18,6 +19,14 @@ from llama_index.core.agent.workflow import (
     AgentWorkflow,
     FunctionAgent,
     ReActAgent,
+)
+
+from llama_index.core.agent.workflow import (
+    AgentOutput,
+    AgentInput,
+    ToolCall,
+    ToolCallResult,
+    AgentStream,
 )
 
 
@@ -251,3 +260,84 @@ class MHQAAgentWorkflowOrchestrator:
             "content_meta": content_meta,
             "outer_meta": outer_meta,
         }
+
+
+async def init_and_chat(actor_id: str, user_query: str):
+    orchestrator = MHQAAgentWorkflowOrchestrator()
+    await orchestrator.initialise(actor_id=actor_id)
+    if not orchestrator.initialised:
+        raise RuntimeError("Orchestrator failed to initialise properly.")
+
+    print(", ".join([f.metadata.name for f in orchestrator.mcp_features]))
+
+    # Run the workflow
+    wfh = orchestrator.workflow.run(
+        user_msg=user_query,
+        memory=orchestrator.workflow_memory,
+        context=orchestrator.workflow_context,
+        max_iterations=5,
+    )
+
+    full_response = ""
+    current_agent = ""
+    async for event in wfh.stream_events():
+        if (
+            hasattr(event, "current_agent_name")
+            and event.current_agent_name != current_agent
+        ):
+            current_agent = event.current_agent_name
+            print(f"\n{'=' * 50}", flush=True)
+            print(f"🤖 Agent: {current_agent}", flush=True)
+            print(f"{'=' * 50}\n", flush=True)
+        if isinstance(event, AgentStream):
+            if event.delta:
+                print(event.delta, end="", flush=True)
+                full_response += event.delta
+        elif isinstance(event, AgentInput):
+            print(f"📥 {event.current_agent_name} Input:", event.input, flush=True)
+        elif isinstance(event, ToolCall):
+            print(f"🔨 Calling Tool: {event.tool_name}", flush=True)
+            print(f"  With arguments: {event.tool_kwargs}", flush=True)
+        elif isinstance(event, ToolCallResult):
+            print(f"🔧 Tool Result ({event.tool_name}):", flush=True)
+            print(f"  Arguments: {event.tool_kwargs}", flush=True)
+            print(f"  Output: {event.tool_output}", flush=True)
+        elif isinstance(event, AgentOutput):
+            if event.response.content:
+                print(
+                    f"📤 {event.current_agent_name} Output:",
+                    event.response.content,
+                    flush=True,
+                )
+            if event.tool_calls:
+                print(
+                    "🛠️  Planning to use tools:",
+                    [call.tool_name for call in event.tool_calls],
+                    flush=True,
+                )
+        # elif isinstance(event, InputRequiredEvent):
+        #     ic("Input required event encountered in MHQAActor.respond")
+        #     ic(event)
+        # elif isinstance(event, HumanResponseEvent):
+        #     ic("Human response event encountered in MHQAActor.respond")
+        #     ic(event)
+        else:
+            ic(type(event))
+            ...
+
+    # Retrieve the final response from the workflow state
+    return full_response
+
+
+def main():
+    result = asyncio.run(
+        init_and_chat(
+            "test_actor",
+            "Watson borrowed 100 Euros from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds?",
+        )
+    )
+    print(result)
+
+
+if __name__ == "__main__":
+    main()
