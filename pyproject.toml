@@ -32,7 +32,7 @@ dqa-mcp = "dqa.mcp.primary:main"
 dqa-cli = "dqa.cli.a2a:main"
 dqa-web-app = "dqa.web.gradio:main"
 demo-client = "dqa.cli.demo:main"
-test-ma = "dqa.agent_workflow.llamaindex_agentworkflow:main"
+test-ma = "dqa.agent_workflow.wf_orchestrator:main"
 
 [build-system]
 requires = ["uv_build>=0.8.15,<0.9.0"]

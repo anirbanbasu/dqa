@@ -26,7 +26,7 @@ from pydantic import TypeAdapter
 from dqa import EnvVars
 from dqa.actor import MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
-from dqa.agent_workflow.llamaindex_agentworkflow import MHQAAgentWorkflowOrchestrator
+from dqa.agent_workflow.wf_orchestrator import MHQAWorkflowOrchestrator
 from dqa.model.mhqa import MCPToolInvocation, MHQAResponse, MHQAResponseStatus
 
 
@@ -63,7 +63,7 @@ class MHQAActor(Actor, MHQAActorInterface):
 
     async def _on_activate(self) -> None:
         if not hasattr(self, "_wf_orchestrator"):
-            self._wf_orchestrator = MHQAAgentWorkflowOrchestrator()
+            self._wf_orchestrator = MHQAWorkflowOrchestrator()
         if not self._wf_orchestrator.initialised:
             await self._wf_orchestrator.initialise(str(self.id))
 
@@ -135,7 +135,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                     print(f"  Arguments: {event.tool_kwargs}", flush=True)
                     print(f"  Output: {event.tool_output}", flush=True)
                     parsed_tool_output = (
-                        MHQAAgentWorkflowOrchestrator.parse_tool_message_from_str(
+                        MHQAWorkflowOrchestrator.parse_tool_message_from_str(
                             event.tool_output.blocks[0].text
                         )
                         if type(event.tool_output) is ToolOutput
@@ -245,7 +245,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                             tool_input = tool_function.get("arguments", None)
                 elif msg.role == MessageRole.TOOL:
                     parsed_tool_output = (
-                        MHQAAgentWorkflowOrchestrator.parse_tool_message_from_str(
+                        MHQAWorkflowOrchestrator.parse_tool_message_from_str(
                             msg.content
                         )
                     )
