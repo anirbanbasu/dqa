@@ -254,7 +254,7 @@ class GradioApp(A2AClientMixin):
                         yield {
                             btn_chat_delete: gr.update(interactive=False),
                             chatbot: gr.update(
-                                value=[],
+                                # value=[],
                                 label=f"Fetching historical messages for chat ID: {selected_chat_id}",
                             ),
                         }
