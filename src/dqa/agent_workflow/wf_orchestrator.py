@@ -16,7 +16,6 @@ from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import Context
 
 from llama_index.core.agent.workflow import (
-    AgentWorkflow,
     FunctionAgent,
     ReActAgent,
 )
@@ -31,6 +30,7 @@ from llama_index.core.agent.workflow import (
 
 
 from dqa import EnvVars
+from dqa.agent_workflow.mhqa_workflow import MHQAFlow, MHQAFlowAgentType
 
 logger = logging.getLogger(__name__)
 
@@ -85,21 +85,32 @@ class MHQAWorkflowOrchestrator:
 
         if not hasattr(self, "workflow"):
             self.decomposer_agent = FunctionAgent(
-                name=MHQAWorkflowOrchestrator.DECOMPOSER,
+                name=MHQAFlowAgentType.DECOMPOSER.value,
                 description="Decomposes complex questions into simpler sub-questions.",
                 system_prompt=(
-                    f"You are the {MHQAWorkflowOrchestrator.DECOMPOSER} agent. "
+                    f"You are the {MHQAFlowAgentType.DECOMPOSER.value} agent. "
                     "Determine if the user query is a question or a statement.\n"
-                    "If the user query is a question and it has no direct answer, decompose it into smaller sub-questions. "
                     "If the user query is a simple question then decompose it into just one single sub-question, which is the question posed by the user."
-                    "If the user input is only a statement but not a question then respond with an acknowledgment only.\n"
-                    "Store in state the decomposed sub-questions in a list format. "
-                    f"For each sub-question, hand off to the {MHQAWorkflowOrchestrator.RESPONDER} agent so that it can answer the question using its tools. "
-                    "Never respond to the user directly unless the user query is just a statement.\n"
+                    "Otherwise, respond with a list of decomposed distinct sub-questions in a format as shown in the example below.\n"
+                    # "The decomposed sub-questions must be precise and as necessary to answer the original question.\n" \
+                    "\n<example-decomposition>\n"
+                    '{"user_message": "The user message exactly as you received it."\n'
+                    '"statement": false\n'
+                    '"sub_questions": [\n'
+                    '  "Sub-question 1",\n'
+                    '  "Sub-question 2",\n'
+                    "  ...\n"
+                    "]}\n"
+                    "</example-decomposition>\n"
+                    "If the user input is only a statement but not a question then respond with an acknowledgment only, in the format shown below.\n"
+                    "\n<example-acknowledgement>\n"
+                    '{"user_message": "The user message exactly as you received it."\n'
+                    '"statement": true\n'
+                    '"acknowledgement": "Your acknowledgement to the user message."\n'
+                    "</example-acknowledgement>\n"
                 ),
-                can_handoff_to=[MHQAWorkflowOrchestrator.RESPONDER],
                 llm=Ollama(
-                    **self.llm_config[MHQAWorkflowOrchestrator.DECOMPOSER.lower()]
+                    **self.llm_config[MHQAFlowAgentType.DECOMPOSER.value.lower()]
                 ),
             )
 
@@ -151,21 +162,13 @@ class MHQAWorkflowOrchestrator:
                 ),
             )
 
-            self.workflow = AgentWorkflow(
-                agents=[
-                    self.decomposer_agent,
-                    self.responder_agent,
-                    self.reasoner_agent,
-                    self.reviewer_agent,
-                ],
-                initial_state={
-                    "sub_questions": [],
-                    "evidences": [],
-                    "combined_response": "not written yet",
-                    "final_response": "not written yet",
-                    "review_notes": "not written yet",
+            self.workflow = MHQAFlow(
+                agents={
+                    MHQAFlowAgentType.DECOMPOSER: self.decomposer_agent,
+                    MHQAFlowAgentType.RESPONDER: self.responder_agent,
+                    MHQAFlowAgentType.REASONER: self.reasoner_agent,
+                    MHQAFlowAgentType.REVIEWER: self.reviewer_agent,
                 },
-                root_agent=self.decomposer_agent.name,
                 verbose=True,
             )
             self.workflow_context = Context(
@@ -269,13 +272,12 @@ async def init_and_chat(actor_id: str, user_query: str):
         raise RuntimeError("Orchestrator failed to initialise properly.")
 
     print(", ".join([f.metadata.name for f in orchestrator.mcp_features]))
-
     # Run the workflow
     wfh = orchestrator.workflow.run(
         user_msg=user_query,
         memory=orchestrator.workflow_memory,
         context=orchestrator.workflow_context,
-        max_iterations=5,
+        max_iterations=1,
     )
 
     full_response = ""
@@ -294,24 +296,24 @@ async def init_and_chat(actor_id: str, user_query: str):
                 print(event.delta, end="", flush=True)
                 full_response += event.delta
         elif isinstance(event, AgentInput):
-            print(f"📥 {event.current_agent_name} Input:", event.input, flush=True)
+            print(f"\n📥 {event.current_agent_name} Input:", event.input, flush=True)
         elif isinstance(event, ToolCall):
-            print(f"🔨 Calling Tool: {event.tool_name}", flush=True)
+            print(f"\n🔨 Calling Tool: {event.tool_name}", flush=True)
             print(f"  With arguments: {event.tool_kwargs}", flush=True)
         elif isinstance(event, ToolCallResult):
-            print(f"🔧 Tool Result ({event.tool_name}):", flush=True)
+            print(f"\n🔧 Tool Result ({event.tool_name}):", flush=True)
             print(f"  Arguments: {event.tool_kwargs}", flush=True)
             print(f"  Output: {event.tool_output}", flush=True)
         elif isinstance(event, AgentOutput):
             if event.response.content:
                 print(
-                    f"📤 {event.current_agent_name} Output:",
+                    f"\n📤 {event.current_agent_name} Output:",
                     event.response.content,
                     flush=True,
                 )
             if event.tool_calls:
                 print(
-                    "🛠️  Planning to use tools:",
+                    "\n🛠️  Planning to use tools:",
                     [call.tool_name for call in event.tool_calls],
                     flush=True,
                 )
@@ -322,7 +324,6 @@ async def init_and_chat(actor_id: str, user_query: str):
         #     ic("Human response event encountered in MHQAActor.respond")
         #     ic(event)
         else:
-            ic(type(event))
             ...
 
     # Retrieve the final response from the workflow state
@@ -334,6 +335,7 @@ def main():
         init_and_chat(
             "test_actor",
             "Watson borrowed 100 Euros from Holmes, yesterday, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds?",
+            # "Hi there, the name's Sherlock!"
         )
     )
     print(result)
