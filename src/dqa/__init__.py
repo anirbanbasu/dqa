@@ -42,7 +42,7 @@ class EnvVars:
     APP_A2A_SRV_HOST: str = env.str("APP_A2A_SRV_HOST", default="127.0.0.1")
     APP_MHQA_A2A_SRV_PORT: int = env.int("APP_MHQA_A2A_SRV_PORT", default=32770)
     APP_MHQA_A2A_REMOTE_URL: str = env.str("APP_MHQA_A2A_REMOTE_URL", default=None)
-    APP_ECHO_A2A_SRV_PORT: int = env.int("APP_ECHO_A2A_SRV_PORT", default=32769)
+    # APP_ECHO_A2A_SRV_PORT: int = env.int("APP_ECHO_A2A_SRV_PORT", default=32769)
     DAPR_PUBSUB_NAME: str = env.str("DAPR_PUBSUB_NAME", default="pubsub")
     MCP_SERVER_HOST: str = env.str("FASTMCP_HOST", default="localhost")
     MCP_SERVER_PORT: int = env.int("FASTMCP_PORT", default=8000)
