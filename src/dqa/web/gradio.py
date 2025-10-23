@@ -94,24 +94,25 @@ class GradioApp(A2AClientMixin):
                 with gr.Column(scale=1):
                     gr.Image(
                         GradioApp._APP_LOGO_PATH,
-                        show_fullscreen_button=False,
-                        show_download_button=False,
                         show_label=False,
                         container=False,
+                        interactive=False,
+                        buttons=[],
                     )
 
-                    gr.Markdown(
-                        "Select an existing chat to continue, or start a new chat. Alternatively, manually add a new chat ID."
-                    )
                     state_selected_chat_id = gr.State(value=None)
                     with gr.Group():
+                        gr.Markdown(
+                            "Select an existing chat to continue, or start a new chat. Alternatively, manually add a new chat ID.",
+                            padding=True,
+                        )
                         txt_chat_id = gr.Textbox(
                             label="Manually add a new chat ID",
-                            info="Enter a chat ID or, leave blank to create a new UUID. To add to the list, press Enter.",
+                            # info="Enter a chat ID or, leave blank to create a new UUID. To add to the list, press Enter.",
                             placeholder="Enter a new chat ID",
-                            show_copy_button=False,
                             lines=1,
                             max_lines=1,
+                            buttons=["copy"],
                         )
                         list_task_ids = gr.List(
                             wrap=True,
@@ -123,6 +124,7 @@ class GradioApp(A2AClientMixin):
                             interactive=False,
                             static_columns=[0],
                             show_search="filter",
+                            buttons=[],
                         )
                         btn_chat_delete = gr.Button(
                             "Delete selected chat",
@@ -131,16 +133,16 @@ class GradioApp(A2AClientMixin):
                             icon=GradioApp._ICON_BTN_DELETE,
                             interactive=False,
                         )
-                    gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY)
                 with gr.Column(scale=3):
                     bstate_chat_histories = gr.BrowserState(
                         storage_key=EnvVars.BROWSER_STATE_CHAT_HISTORIES,
                         secret=EnvVars.BROWSER_STATE_SECRET,
                     )
                     with gr.Group():
+                        gr.Markdown(GradioApp._MD_EU_AI_ACT_TRANSPARENCY, padding=True)
                         chatbot = gr.Chatbot(
-                            type="messages",
                             label="Chat history (a new chat will be created if none if selected)",
+                            show_label=True,
                             avatar_images=[
                                 GradioApp._ICON_USER_AVATAR,
                                 GradioApp._ICON_BOT_AVATAR,
@@ -157,6 +159,7 @@ class GradioApp(A2AClientMixin):
                                     "display": True,
                                 },
                             ],
+                            buttons=[],
                         )
                         with gr.Row(equal_height=True):
                             txt_input = gr.Textbox(
@@ -165,7 +168,7 @@ class GradioApp(A2AClientMixin):
                                 label="Your message",
                                 info="Enter your non-trivial question to ask the AI agent.",
                                 placeholder="Type a message and press Shift+Enter, or click the Send button.",
-                                show_copy_button=False,
+                                buttons=["copy"],
                             )
                             btn_send = gr.Button(
                                 "Send",
@@ -185,6 +188,7 @@ class GradioApp(A2AClientMixin):
                             "Express the number 2025 as a sum of the cubes of monotonically increasing positive integers.",
                             "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
                         ],
+                        examples_per_page=5,
                         inputs=[txt_input],
                     )
 
@@ -532,8 +536,12 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     try:
-        app.construct_ui().queue().launch(
-            share=False, ssr_mode=False, show_api=False, mcp_server=False, pwa=False
+        app.construct_ui().queue(api_open=False).launch(
+            share=False,
+            ssr_mode=False,
+            mcp_server=False,
+            pwa=False,
+            footer_links=[],
         )
     except InterruptedError:
         logger.warning("Gradio server interrupted, shutting down...")
