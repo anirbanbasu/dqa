@@ -26,6 +26,9 @@ class EnvVars:
     )
     FASTMCP_HOST: str = env.str("FASTMCP_HOST", default="localhost")
     FASTMCP_PORT: int = env.int("FASTMCP_PORT", default=8000)
+    WORKFLOW_SINGLE_AGENT_MODE: bool = env.bool(
+        "WORKFLOW_SINGLE_AGENT_MODE", default=True
+    )
     LLM_CONFIG_FILE: str = env.str("LLM_CONFIG_FILE", default="conf/llm.json")
     MCP_CONFIG_FILE: str = env.str("MCP_CONFIG_FILE", default="conf/mcp.json")
     APP_DAPR_SVC_HOST: str = env.str("APP_DAPR_SVC_HOST", default="127.0.0.1")

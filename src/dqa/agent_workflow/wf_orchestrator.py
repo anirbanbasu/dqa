@@ -14,6 +14,7 @@ from llama_index.core.workflow.events import InputRequiredEvent, HumanResponseEv
 from llama_index.core.memory import Memory
 from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import Context
+from llama_index.core.agent.workflow import AgentWorkflow
 
 from llama_index.core.agent.workflow import (
     FunctionAgent,
@@ -84,100 +85,125 @@ class MHQAWorkflowOrchestrator:
             )
 
         if not hasattr(self, "workflow"):
-            self.decomposer_agent = FunctionAgent(
-                name=MHQAFlowAgentType.DECOMPOSER.value,
-                description="Decomposes complex questions into simpler sub-questions.",
-                system_prompt=(
-                    f"You are the {MHQAFlowAgentType.DECOMPOSER.value} agent. "
-                    "Determine if the user query is a question or a statement.\n"
-                    "If the user query is a simple question then decompose it into just one single sub-question, which is the question posed by the user."
-                    "Otherwise, respond with a list of decomposed distinct sub-questions in a format as shown in the example below.\n"
-                    # "The decomposed sub-questions must be precise and as necessary to answer the original question.\n" \
-                    "\n<example-decomposition>\n"
-                    '{"user_message": "The user message exactly as you received it."\n'
-                    '"statement": false\n'
-                    '"sub_questions": [\n'
-                    '  "Sub-question 1",\n'
-                    '  "Sub-question 2",\n'
-                    "  ...\n"
-                    "]}\n"
-                    "</example-decomposition>\n"
-                    "If the user input is only a statement but not a question then respond with an acknowledgment only, in the format shown below.\n"
-                    "\n<example-acknowledgement>\n"
-                    '{"user_message": "The user message exactly as you received it."\n'
-                    '"statement": true\n'
-                    '"acknowledgement": "Your acknowledgement to the user message."\n'
-                    "</example-acknowledgement>\n"
-                ),
-                llm=Ollama(
-                    **self.llm_config[MHQAFlowAgentType.DECOMPOSER.value.lower()]
-                ),
+            self.workflow_memory = Memory.from_defaults(
+                session_id=actor_id,
             )
 
-            self.responder_agent = FunctionAgent(
-                name=MHQAWorkflowOrchestrator.RESPONDER,
-                description="Gathers evidences for sub-questions using available tools.",
-                system_prompt=(
-                    f"You are the {MHQAWorkflowOrchestrator.RESPONDER} agent.\n"
-                    # f"You would receive a list of questions by the {MHQAAgentWorkflowOrchestrator.DECOMPOSER} agent. "
-                    "Call one or more of the tools provided to you to gather evidences/responses for each question given to you. "
-                    "Generate a list of tool call responses. "
-                    "Store in state the responses you have gathered for each question. "
-                    f"After processing the questions given to you, NEVER respond to the user directly but always hand off to the {MHQAWorkflowOrchestrator.REASONER} agent.\n"
-                ),
-                can_handoff_to=[MHQAWorkflowOrchestrator.REASONER],
-                tools=self.mcp_features,
-                llm=Ollama(
-                    **self.llm_config[MHQAWorkflowOrchestrator.RESPONDER.lower()]
-                ),
-            )
+            if EnvVars.WORKFLOW_SINGLE_AGENT_MODE:
+                logger.info("Initialising workflow in single agent mode.")
+                self.responder_agent = FunctionAgent(
+                    name="MHQA Agent",
+                    description="Handles the entire MHQA workflow in single agent mode.",
+                    system_prompt=(
+                        "You are a multi-purpose multi-hop question answering agent capable of decomposing questions from the user, "
+                        "gathering evidences using available tools, reasoning through them, "
+                        "and providing a final response to the user.\n"
+                        "If the user query is not a question but a statement, respond with an acknowledgment only.\n"
+                        "Your final response to the user must always be in correct Markdown format.\n"
+                    ),
+                    tools=self.mcp_features,
+                    llm=Ollama(**self.llm_config.get("single_agent", None)),
+                )
 
-            self.reasoner_agent = ReActAgent(
-                name=MHQAWorkflowOrchestrator.REASONER,
-                description="Reasons through gathered evidences to formulate a combined response.",
-                system_prompt=(
-                    f"You are the {MHQAWorkflowOrchestrator.REASONER} agent.\n"
-                    # f"You would receive from the {MHQAAgentWorkflowOrchestrator.RESPONDER} agent a list of questions and the evidences it gathered for each question. "
-                    "Reason through the evidences for the individual questions and combine them into a single response that serves as a coherent answer to the original user query.\n"
-                    f"NEVER respond to the user directly but always hand off to the {MHQAWorkflowOrchestrator.REVIEWER} agent for a review of your combined response.\n"
-                ),
-                can_handoff_to=[MHQAWorkflowOrchestrator.REVIEWER],
-                llm=Ollama(
-                    **self.llm_config[MHQAWorkflowOrchestrator.REASONER.lower()]
-                ),
-            )
+                self.workflow = AgentWorkflow(
+                    agents=[self.responder_agent],
+                    verbose=True,
+                )
+            else:
+                logger.info("Initialising workflow in multi-agent mode.")
+                self.decomposer_agent = FunctionAgent(
+                    name=MHQAFlowAgentType.DECOMPOSER.value,
+                    description="Decomposes complex questions into simpler sub-questions.",
+                    system_prompt=(
+                        f"You are the {MHQAFlowAgentType.DECOMPOSER.value} agent. "
+                        "Determine if the user query is a question or a statement.\n"
+                        "If the user query is a simple question then decompose it into just one single sub-question, which is the question posed by the user."
+                        "Otherwise, respond with a list of decomposed distinct sub-questions in a format as shown in the example below.\n"
+                        # "The decomposed sub-questions must be precise and as necessary to answer the original question.\n" \
+                        "\n<example-decomposition>\n"
+                        '{"user_message": "The user message exactly as you received it."\n'
+                        '"statement": false\n'
+                        '"sub_questions": [\n'
+                        '  "Sub-question 1",\n'
+                        '  "Sub-question 2",\n'
+                        "  ...\n"
+                        "]}\n"
+                        "</example-decomposition>\n"
+                        "If the user input is only a statement but not a question then respond with an acknowledgment only, in the format shown below.\n"
+                        "\n<example-acknowledgement>\n"
+                        '{"user_message": "The user message exactly as you received it."\n'
+                        '"statement": true\n'
+                        '"acknowledgement": "Your acknowledgement to the user message."\n'
+                        "</example-acknowledgement>\n"
+                    ),
+                    llm=Ollama(
+                        **self.llm_config.get(
+                            MHQAFlowAgentType.DECOMPOSER.value.lower(), None
+                        )
+                    ),
+                )
 
-            self.reviewer_agent = ReActAgent(
-                name=MHQAWorkflowOrchestrator.REVIEWER,
-                description="Reviews the combined response for quality and completeness; and responds to the user.",
-                system_prompt=(
-                    f"You are the {MHQAWorkflowOrchestrator.REVIEWER} agent.\n"
-                    # f"You would receive from the {MHQAAgentWorkflowOrchestrator.REASONER} agent a response to the user question. "
-                    "Review the response in terms of quality and highlight any potential gaps. "
-                    f"Respond to the user with the {MHQAWorkflowOrchestrator.REASONER} agent response and your review. "
-                    "Make sure that your final response is in correct Markdown format.\n"
-                ),
-                llm=Ollama(
-                    **self.llm_config[MHQAWorkflowOrchestrator.REVIEWER.lower()]
-                ),
-            )
+                self.responder_agent = FunctionAgent(
+                    name=MHQAWorkflowOrchestrator.RESPONDER,
+                    description="Gathers evidences for sub-questions using available tools.",
+                    system_prompt=(
+                        f"You are the {MHQAWorkflowOrchestrator.RESPONDER} agent.\n"
+                        # f"You would receive a list of questions by the {MHQAAgentWorkflowOrchestrator.DECOMPOSER} agent. "
+                        "Call one or more of the tools provided to you to gather evidences/responses for each question given to you. "
+                        "Generate a list of tool call responses. "
+                        "Store in state the responses you have gathered for each question. "
+                        f"After processing the questions given to you, NEVER respond to the user directly but always hand off to the {MHQAWorkflowOrchestrator.REASONER} agent.\n"
+                    ),
+                    can_handoff_to=[MHQAWorkflowOrchestrator.REASONER],
+                    tools=self.mcp_features,
+                    llm=Ollama(
+                        **self.llm_config[MHQAWorkflowOrchestrator.RESPONDER.lower()]
+                    ),
+                )
 
-            self.workflow = MHQAFlow(
-                agents={
-                    MHQAFlowAgentType.DECOMPOSER: self.decomposer_agent,
-                    MHQAFlowAgentType.RESPONDER: self.responder_agent,
-                    MHQAFlowAgentType.REASONER: self.reasoner_agent,
-                    MHQAFlowAgentType.REVIEWER: self.reviewer_agent,
-                },
-                verbose=True,
-            )
+                self.reasoner_agent = ReActAgent(
+                    name=MHQAWorkflowOrchestrator.REASONER,
+                    description="Reasons through gathered evidences to formulate a combined response.",
+                    system_prompt=(
+                        f"You are the {MHQAWorkflowOrchestrator.REASONER} agent.\n"
+                        # f"You would receive from the {MHQAAgentWorkflowOrchestrator.RESPONDER} agent a list of questions and the evidences it gathered for each question. "
+                        "Reason through the evidences for the individual questions and combine them into a single response that serves as a coherent answer to the original user query.\n"
+                        f"NEVER respond to the user directly but always hand off to the {MHQAWorkflowOrchestrator.REVIEWER} agent for a review of your combined response.\n"
+                    ),
+                    can_handoff_to=[MHQAWorkflowOrchestrator.REVIEWER],
+                    llm=Ollama(
+                        **self.llm_config[MHQAWorkflowOrchestrator.REASONER.lower()]
+                    ),
+                )
+
+                self.reviewer_agent = ReActAgent(
+                    name=MHQAWorkflowOrchestrator.REVIEWER,
+                    description="Reviews the combined response for quality and completeness; and responds to the user.",
+                    system_prompt=(
+                        f"You are the {MHQAWorkflowOrchestrator.REVIEWER} agent.\n"
+                        # f"You would receive from the {MHQAAgentWorkflowOrchestrator.REASONER} agent a response to the user question. "
+                        "Review the response in terms of quality and highlight any potential gaps. "
+                        f"Respond to the user with the {MHQAWorkflowOrchestrator.REASONER} agent response and your review. "
+                        "Make sure that your final response is in correct Markdown format.\n"
+                    ),
+                    llm=Ollama(
+                        **self.llm_config[MHQAWorkflowOrchestrator.REVIEWER.lower()]
+                    ),
+                )
+
+                self.workflow = MHQAFlow(
+                    agents={
+                        MHQAFlowAgentType.DECOMPOSER: self.decomposer_agent,
+                        MHQAFlowAgentType.RESPONDER: self.responder_agent,
+                        MHQAFlowAgentType.REASONER: self.reasoner_agent,
+                        MHQAFlowAgentType.REVIEWER: self.reviewer_agent,
+                    },
+                    verbose=True,
+                )
             self.workflow_context = Context(
                 workflow=self.workflow,
             )
 
-            self.workflow_memory = Memory.from_defaults(
-                session_id=actor_id,
-            )
         self.initialised = (
             hasattr(self, "mcp_features")
             and hasattr(self, "workflow")
