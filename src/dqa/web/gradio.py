@@ -254,6 +254,8 @@ class GradioApp(A2AClientMixin):
                 selected_chat_id: str, chat_histories: dict
             ):
                 try:
+                    if not chat_histories:
+                        chat_histories = {}
                     if selected_chat_id and selected_chat_id.strip() != "":
                         yield {
                             btn_chat_delete: gr.update(interactive=False),
