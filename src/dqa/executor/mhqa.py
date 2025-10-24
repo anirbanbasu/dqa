@@ -66,6 +66,7 @@ class MHQAAgentExecutor(AgentExecutor):
                 actor_interface=MHQAActorInterface,
                 actor_proxy_factory=self._factory,
             )
+            # FIXME: Timeout error can happen here and all similar invoke_method calls
             return await proxy.invoke_method(
                 method=MHQAActorMethods.Respond,
                 raw_body=data.model_dump_json().encode(),
@@ -133,22 +134,27 @@ class MHQAAgentExecutor(AgentExecutor):
             ):
                 raise ValueError(("Missing mandatory thread_id in the input!"))
 
-            response = None
+            response: str | None = None
             match message_payload.skill:
                 case MHQAAgentSkills.Respond:
                     response_generator = self.do_mhqa_respond(data=message_payload.data)
                     async for partial_response in response_generator:
-                        response = partial_response
-                        parsed_response = MHQAResponse.model_validate_json(response)
-                        if parsed_response.status == MHQAResponseStatus.completed:
-                            break
-                        await task_updater.start_work(
-                            new_agent_text_message(
-                                text=response,
-                                task_id=task.id,
-                                context_id=task.context_id,
+                        try:
+                            response = partial_response
+                            parsed_response = MHQAResponse.model_validate_json(response)
+                            if parsed_response.status == MHQAResponseStatus.completed:
+                                break
+                            await task_updater.start_work(
+                                new_agent_text_message(
+                                    text=response,
+                                    task_id=task.id,
+                                    context_id=task.context_id,
+                                )
                             )
-                        )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error parsing partial MHQA response. {e}. Ignoring and continuing to stream."
+                            )
                 case MHQAAgentSkills.GetChatHistory:
                     response = await self.do_mhqa_get_history(data=message_payload.data)
                 case MHQAAgentSkills.ResetChatHistory:
