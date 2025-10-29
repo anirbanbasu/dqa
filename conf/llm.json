@@ -1,36 +1,11 @@
 {
-  "single_agent": {
-    "base_url": "http://localhost:11434",
-    "model": "gpt-oss:20b-cloud",
-    "request_timeout": 300,
-    "temperature": 0.7,
-    "json_mode": false,
-    "thinking": false
-  },
-  "decomposer": {
-    "base_url": "http://localhost:11434",
-    "model": "gpt-oss:20b-cloud",
-    "request_timeout": 60,
-    "temperature": 0.4,
-    "json_mode": true,
-    "thinking": false
-  },
   "responder": {
-    "base_url": "http://localhost:11434",
+    "base_url": "http://localhost:11434/v1",
     "model": "gpt-oss:20b-cloud",
-    "request_timeout": 60,
-    "thinking": false
-  },
-  "reasoner": {
-    "base_url": "http://localhost:11434",
-    "model": "gpt-oss:20b-cloud",
-    "request_timeout": 60,
-    "thinking": false
+    "temperature": 0.7
   },
   "reviewer": {
-    "base_url": "http://localhost:11434",
-    "model": "gpt-oss:20b-cloud",
-    "request_timeout": 60,
-    "thinking": false
+    "base_url": "http://localhost:11434/v1",
+    "model": "gpt-oss:20b-cloud"
   }
 }

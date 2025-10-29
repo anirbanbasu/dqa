@@ -1,14 +1,16 @@
 {
-  "builtin": {
-    "transport": "stdio",
-    "command": "uv",
-    "args": [
-      "run",
-      "dqa-mcp"
-    ],
-    "env": {
-      "APP_LOG_LEVEL": "CRITICAL",
-      "DQA_MCP_SERVER_TRANSPORT": "stdio"
+  "mcpServers": {
+    "builtin": {
+      "transport": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "dqa-mcp"
+      ],
+      "env": {
+        "APP_LOG_LEVEL": "CRITICAL",
+        "DQA_MCP_SERVER_TRANSPORT": "stdio"
+      }
     }
   }
 }
