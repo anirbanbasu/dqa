@@ -5,6 +5,7 @@ import os
 import re
 from typing import Any, Dict
 
+from pydantic_core import to_jsonable_python
 from pydantic_graph import Graph
 
 from dqa import ic
@@ -124,6 +125,9 @@ async def init_and_chat(actor_id: str, user_query: str):
     state = ResponseState(user_message=user_query, responder_messages=message_history)
     mhqa_graph = Graph(nodes=(Respond, Review))
     result = await mhqa_graph.run(Respond(), state=state)
+    message_memory = to_jsonable_python(result.state.responder_messages)
+    with open(chat_message_history_file, "w") as f:
+        json.dump(message_memory, f, indent=2)
     return result.output
     # async with orchestrator.single_agent.run_stream(
     #     user_query,
