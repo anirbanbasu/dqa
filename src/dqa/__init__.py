@@ -39,6 +39,7 @@ class EnvVars:
     APP_DAPR_ACTOR_RETRY_ATTEMPTS: int = env.int(
         "APP_DAPR_ACTOR_RETRY_ATTEMPTS", default=3
     )
+    AGENT_RETRY_ATTEMPTS: int = env.int("AGENT_RETRY_ATTEMPTS", default=3)
     APP_A2A_SRV_HOST: str = env.str("APP_A2A_SRV_HOST", default="127.0.0.1")
     APP_MHQA_A2A_SRV_PORT: int = env.int("APP_MHQA_A2A_SRV_PORT", default=32770)
     APP_MHQA_A2A_REMOTE_URL: str = env.str("APP_MHQA_A2A_REMOTE_URL", default=None)
