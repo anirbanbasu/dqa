@@ -132,6 +132,7 @@ class DQACliApp(A2AClientMixin):
             print_json(response.model_dump_json())
         except Exception as e:
             logger.error(f"Error in MHQA chat. {e}")
+            logger.exception(e)
         finally:
             self._cleanup()
 

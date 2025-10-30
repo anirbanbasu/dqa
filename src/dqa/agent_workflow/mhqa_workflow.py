@@ -5,11 +5,11 @@ import logging
 
 from dataclasses import dataclass, field
 import os
-from typing import AsyncIterable, ClassVar
+from typing import AsyncIterable
 
 from pydantic import BaseModel
 
-from pydantic_ai import ModelMessage, format_as_xml
+from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter, format_as_xml
 
 from pydantic_ai import (
     Agent,
@@ -29,7 +29,8 @@ from pydantic_ai.durable_exec.prefect import PrefectAgent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.toolsets.fastmcp import FastMCPToolset
-from pydantic_graph import BaseNode, End, GraphRunContext
+from pydantic_core import to_jsonable_python
+from pydantic_graph import BaseNode, End, Graph, GraphRunContext
 
 from dqa import EnvVars
 
@@ -62,10 +63,20 @@ class ResponseOK(BaseModel):
     pass
 
 
-class MHQAWorkflow:
-    """Multi-Hop Question Answering Workflow."""
+class MHQAWorkflowHelper:
+    """Multi-Hop Question Answering Workflow Helper."""
 
-    _instance: ClassVar = None
+    # _instance: ClassVar = None
+
+    def __init__(
+        self, message_history_json: str | None = None, agent_event_stream_handler=None
+    ):
+        if not hasattr(self, "initialised"):
+            self.update_message_history_from_json(message_history_json)
+            self.agent_event_stream_handler = (
+                agent_event_stream_handler or MHQAWorkflowHelper.event_stream_handler
+            )
+            self.initialise()
 
     def initialise(self):
         try:
@@ -120,7 +131,7 @@ class MHQAWorkflow:
                 output_type=Response,
                 toolsets=[FastMCPToolset(self.mcp_config)],
                 retries=EnvVars.AGENT_RETRY_ATTEMPTS,
-                event_stream_handler=MHQAWorkflow.event_stream_handler,
+                event_stream_handler=self.agent_event_stream_handler,
             )
 
             self.responder_agent = (
@@ -147,7 +158,7 @@ class MHQAWorkflow:
                 ),
                 output_type=ResponseRevisionRequired | ResponseOK,
                 retries=EnvVars.AGENT_RETRY_ATTEMPTS,
-                event_stream_handler=MHQAWorkflow.event_stream_handler,
+                event_stream_handler=self.agent_event_stream_handler,
             )
 
             self.reviewer_agent = (
@@ -158,33 +169,58 @@ class MHQAWorkflow:
 
             # ic(self.responder_agent, self.reviewer_agent)
 
+            self.mhqa_graph = Graph(nodes=(Respond, Review))
+
             self.initialised = (
                 hasattr(self, "llm_config")
                 and hasattr(self, "mcp_config")
+                and hasattr(self, "message_history")
                 and hasattr(self, "responder_agent")
                 and hasattr(self, "reviewer_agent")
+                and hasattr(self, "mhqa_graph")
             )
         except Exception as e:
             logger.error(f"Error initialising MHQA workflow. {e}")
+
+    def update_message_history_from_json(self, message_history_json: str | None = None):
+        self.message_history_json = message_history_json
+        if hasattr(self, "message_history_json") and self.message_history_json:
+            self.message_history = ModelMessagesTypeAdapter.validate_python(
+                json.loads(self.message_history_json)
+            )
+        else:
+            self.message_history = []
+
+    async def run_workflow(self, user_message: str):
+        state = ResponseState(
+            user_message=user_message, responder_messages=self.message_history
+        )
+        result = await self.mhqa_graph.run(Respond(helper=self), state=state)
+        self.message_history = to_jsonable_python(result.state.responder_messages)
+        self.message_history_json = json.dumps(self.message_history)
+        return result
+
+    def create_respond_node(self, response_feedback: str | None = None) -> Respond:
+        return Respond(helper=self, response_feedback=response_feedback)
+
+    def create_review_node(self, response_text: str | None = None) -> Review:
+        return Review(helper=self, response_text=response_text)
 
     async def handle_event(event: AgentStreamEvent):
         if isinstance(event, PartStartEvent):
             if isinstance(event.part, ThinkingPart):
                 print(f"\n[Thinking]\n{event.part.content}", flush=True, end="")
             else:
+                # Such as starting TextPart, ToolCallPart, etc.
                 print()
         elif isinstance(event, PartDeltaEvent):
             if isinstance(event.delta, TextPartDelta):
-                # print(
-                #     f"[Request] Part {event.index} text delta: {event.delta.content_delta!r}"
-                # )
+                # This handler chooses to output deltas for the thinking part but not the text parts
                 pass
             elif isinstance(event.delta, ThinkingPartDelta):
                 print(f"{event.delta.content_delta}", flush=True, end="")
             elif isinstance(event.delta, ToolCallPartDelta):
-                # print(
-                #     f"[Request] Part {event.index} args delta: {event.delta.args_delta}"
-                # )
+                # We don't output deltas for tool calls
                 pass
         elif isinstance(event, FunctionToolCallEvent):
             print(
@@ -195,9 +231,7 @@ class MHQAWorkflow:
                 f"[Tools] Tool call {event.tool_call_id!r} returned => {event.result.content}"
             )
         elif isinstance(event, FinalResultEvent):
-            # print(
-            #     f"[Result] The model starting producing a final result (tool_name={event.tool_name})"
-            # )
+            # We don't output this through the event stream handler
             pass
 
     async def event_stream_handler(
@@ -205,17 +239,20 @@ class MHQAWorkflow:
         event_stream: AsyncIterable[AgentStreamEvent],
     ):
         async for event in event_stream:
-            await MHQAWorkflow.handle_event(event)
-
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(MHQAWorkflow, cls).__new__(cls)
-            cls._instance.initialise()
-        return cls._instance
+            await MHQAWorkflowHelper.handle_event(event)
 
 
 class Respond(BaseNode[ResponseState]):
-    response_feedback: str | None = None
+    # response_feedback: str | None = None
+
+    def __init__(
+        self, helper: MHQAWorkflowHelper, response_feedback: str | None = None
+    ):
+        super().__init__()
+        self._helper = helper
+        if not self._helper.initialised:
+            self._helper.initialise()
+        self.response_feedback = response_feedback
 
     async def run(self, ctx: GraphRunContext[ResponseState]) -> Review | End[str]:
         if self.response_feedback:
@@ -225,20 +262,25 @@ class Respond(BaseNode[ResponseState]):
             )
         else:
             prompt = f"Provide your response to the message from the user.\n{ctx.state.user_message}"
-        result = await MHQAWorkflow().responder_agent.run(
+        result = await self._helper.responder_agent.run(
             prompt, message_history=ctx.state.responder_messages
         )
         ctx.state.responder_messages.extend(result.new_messages())
         if result.output.is_user_message_a_statement:
             return End(result.output.body)
         else:
-            review_node = Review()
-            review_node.response_text = result.output.body
-            return review_node
+            return self._helper.create_review_node(response_text=result.output.body)
 
 
 class Review(BaseNode[ResponseState, None, str]):
-    response_text: str
+    # response_text: str | None
+
+    def __init__(self, helper: MHQAWorkflowHelper, response_text: str | None = None):
+        super().__init__()
+        self._helper = helper
+        if not self._helper.initialised:
+            self._helper.initialise()
+        self.response_text = response_text
 
     async def run(self, ctx: GraphRunContext[ResponseState]) -> Respond | End[str]:
         prompt = format_as_xml(
@@ -248,10 +290,10 @@ class Review(BaseNode[ResponseState, None, str]):
                 "supporting_evidences": ctx.state.responder_messages,
             }
         )
-        result = await MHQAWorkflow().reviewer_agent.run(prompt)
+        result = await MHQAWorkflowHelper().reviewer_agent.run(prompt)
         if isinstance(result.output, ResponseRevisionRequired):
-            respond_node = Respond()
-            respond_node.response_feedback = result.output.review
-            return respond_node
+            return self._helper.create_respond_node(
+                response_feedback=result.output.review
+            )
         else:
             return End(self.response_text)
