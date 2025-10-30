@@ -19,6 +19,7 @@ However, DQA is experimental with the emphasis on standardising agentic communic
 ## Installation
 
 - Install [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/).
+- Install self-hosted ([with Docker](https://docs.prefect.io/v3/how-to-guides/self-hosted/server-docker)) a Prefect server by running `docker run -p 4200:4200 -d --restart unless-stopped --name prefect prefecthq/prefect:3-latest -- prefect server start --host 0.0.0.0`. _This is only necessary for [Durable Agents](https://ai.pydantic.dev/durable_execution/overview/) connecting to a self-hosted Prefect server_. Note that Durable Agents support is experimental and may be dropped in the future.
 - Install project dependencies by running `uv sync --all-groups`.
 - Configure Dapr to run [with docker](https://docs.dapr.io/operations/hosting/self-hosted/self-hosted-with-docker/).
 - Run `dapr init` to initialise `daprd` and the relevant containers.
@@ -49,9 +50,9 @@ The following API keys are optional but maybe provided for additional functional
 The following environment variables are all optional.
  - `APP_LOG_LEVEL`: The general log level of the DQA app. Defaults to `INFO`.
  - `DQA_MCP_SERVER_TRANSPORT`, `FASTMCP_HOST` and `FASTMCP_PORT`: These specify the transport type, the host and port for the built-in MCP server of DQA. The default values are `stdio`, `localhost` and `8000` respectively.
- - `WORKFLOW_SINGLE_AGENT_MODE`: This specifies if the underlying agent configuration should use only one agent or multiple agents. Default value is `True` indicating that only one agent will be used.
  - `LLM_CONFIG_FILE` and `MCP_CONFIG_FILE`: These specify where the LLM and MCP configurations These default to `conf/llm.json` and `conf/mcp.json` respectively.
  - [Gradio environment variables](https://www.gradio.app/guides/environment-variables) to configure the DQA web app. However, MCP server (not to be confused with DQA's built-in MCP server), server-side rendering (SSR) mode, API, Progressive Web App (PWA) and public sharing will be disabled, irrespective of what is specified through the environment variables.
+ - `PREFECT_API_URL`: This can be used to specify the Prefect Cloud API URL (in which case, you must set the `PREFECT_API_KEY`, see details) or the local self-hosted API URL at `http://localhost:4200/api`. The default value is None, which _will turn off Durable Agents_!
  - `BROWSER_STATE_SECRET`: This is the secret used by Gradio to encrypt the browser state data. The default value is `a2a_dapr_bstate_secret`.
  - `BROWSER_STATE_CHAT_HISTORIES`: This is the key in browser state used by Gradio to store the chat histories (local values). The default value is `a2a_dapr_chat_histories`.
  - `APP_DAPR_SVC_HOST` and `APP_DAPR_SVC_PORT`: The host and port at which Dapr actor service will listen on. These default to `127.0.0.1` and `32768`. Should you change these, you must change the corresponding information in `dapr.yaml`.

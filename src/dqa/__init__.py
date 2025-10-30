@@ -26,9 +26,7 @@ class EnvVars:
     )
     FASTMCP_HOST: str = env.str("FASTMCP_HOST", default="localhost")
     FASTMCP_PORT: int = env.int("FASTMCP_PORT", default=8000)
-    WORKFLOW_SINGLE_AGENT_MODE: bool = env.bool(
-        "WORKFLOW_SINGLE_AGENT_MODE", default=True
-    )
+
     LLM_CONFIG_FILE: str = env.str("LLM_CONFIG_FILE", default="conf/llm.json")
     MCP_CONFIG_FILE: str = env.str("MCP_CONFIG_FILE", default="conf/mcp.json")
     APP_DAPR_SVC_HOST: str = env.str("APP_DAPR_SVC_HOST", default="127.0.0.1")
@@ -53,6 +51,8 @@ class EnvVars:
     BROWSER_STATE_CHAT_HISTORIES: str = env.str(
         "BROWSER_STATE_CHAT_HISTORIES", default="a2a_dapr_chat_histories"
     )
+
+    PREFECT_API_URL: str = env.str("PREFECT_API_URL", default=None)
 
     API_KEY_ALPHAVANTAGE: str = env.str("ALPHAVANTAGE_API_KEY", default=None)
     API_KEY_TAVILY: str = env.str("TAVILY_API_KEY", default=None)

@@ -25,6 +25,7 @@ from pydantic_ai import (
     ThinkingPartDelta,
     ToolCallPartDelta,
 )
+from pydantic_ai.durable_exec.prefect import PrefectAgent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.toolsets.fastmcp import FastMCPToolset
@@ -93,11 +94,17 @@ class MHQAWorkflow:
                         f"Loaded {len(configured_mcp_servers)} MCP configurations from {mcp_config_file}: {list(configured_mcp_servers.keys())}"
                     )
 
+            if EnvVars.PREFECT_API_URL:
+                logger.warning(
+                    f"Prefect API URL is set to '{EnvVars.PREFECT_API_URL}'. Durable Agents will be used. However, this is an experimental feature!"
+                )
+
             responder_llm_config = self.llm_config.get(
                 MHQAWorkflowAgentType.RESPONDER.value.lower(), {}
             )
 
-            self.responder_agent = Agent(
+            basic_responder_agent = Agent(
+                name=f"MHQA{MHQAWorkflowAgentType.RESPONDER.value.capitalize()}Agent",
                 model=OpenAIChatModel(
                     model_name=responder_llm_config.get("model", None),
                     provider=OllamaProvider(
@@ -113,13 +120,21 @@ class MHQAWorkflow:
                 output_type=Response,
                 toolsets=[FastMCPToolset(self.mcp_config)],
                 retries=EnvVars.AGENT_RETRY_ATTEMPTS,
+                event_stream_handler=MHQAWorkflow.event_stream_handler,
+            )
+
+            self.responder_agent = (
+                PrefectAgent(basic_responder_agent)
+                if EnvVars.PREFECT_API_URL
+                else basic_responder_agent
             )
 
             reviewer_llm_config = self.llm_config.get(
                 MHQAWorkflowAgentType.REVIEWER.value.lower(), {}
             )
 
-            self.reviewer_agent = Agent[None, ResponseRevisionRequired | ResponseOK](
+            basic_reviewer_agent = Agent[None, ResponseRevisionRequired | ResponseOK](
+                name=f"MHQA{MHQAWorkflowAgentType.REVIEWER.value.capitalize()}Agent",
                 model=OpenAIChatModel(
                     model_name=reviewer_llm_config.get("model", None),
                     provider=OllamaProvider(
@@ -132,7 +147,16 @@ class MHQAWorkflow:
                 ),
                 output_type=ResponseRevisionRequired | ResponseOK,
                 retries=EnvVars.AGENT_RETRY_ATTEMPTS,
+                event_stream_handler=MHQAWorkflow.event_stream_handler,
             )
+
+            self.reviewer_agent = (
+                PrefectAgent(basic_reviewer_agent)
+                if EnvVars.PREFECT_API_URL
+                else basic_reviewer_agent
+            )
+
+            # ic(self.responder_agent, self.reviewer_agent)
 
             self.initialised = (
                 hasattr(self, "llm_config")
@@ -201,19 +225,16 @@ class Respond(BaseNode[ResponseState]):
             )
         else:
             prompt = f"Provide your response to the message from the user.\n{ctx.state.user_message}"
-        async with MHQAWorkflow().responder_agent.run_stream(
-            prompt,
-            message_history=ctx.state.responder_messages,
-            event_stream_handler=MHQAWorkflow.event_stream_handler,
-        ) as agent_run:
-            result = await agent_run.get_output()
-            ctx.state.responder_messages.extend(agent_run.new_messages())
-            if result.is_user_message_a_statement:
-                return End(result.body)
-            else:
-                review_node = Review()
-                review_node.response_text = result.body
-                return review_node
+        result = await MHQAWorkflow().responder_agent.run(
+            prompt, message_history=ctx.state.responder_messages
+        )
+        ctx.state.responder_messages.extend(result.new_messages())
+        if result.output.is_user_message_a_statement:
+            return End(result.output.body)
+        else:
+            review_node = Review()
+            review_node.response_text = result.output.body
+            return review_node
 
 
 class Review(BaseNode[ResponseState, None, str]):
@@ -227,14 +248,10 @@ class Review(BaseNode[ResponseState, None, str]):
                 "supporting_evidences": ctx.state.responder_messages,
             }
         )
-        async with MHQAWorkflow().reviewer_agent.run_stream(
-            prompt,
-            event_stream_handler=MHQAWorkflow.event_stream_handler,
-        ) as agent_run:
-            result = await agent_run.get_output()
-            if isinstance(result, ResponseRevisionRequired):
-                respond_node = Respond()
-                respond_node.response_feedback = result.review
-                return respond_node
-            else:
-                return End(self.response_text)
+        result = await MHQAWorkflow().reviewer_agent.run(prompt)
+        if isinstance(result.output, ResponseRevisionRequired):
+            respond_node = Respond()
+            respond_node.response_feedback = result.output.review
+            return respond_node
+        else:
+            return End(self.response_text)
