@@ -39,7 +39,7 @@ from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 from pydantic_core import to_jsonable_python
 from pydantic_graph import BaseNode, End, Graph, GraphRunContext
 
-from dqa import EnvVars
+from dqa import EnvVars, ic
 
 
 logger = logging.getLogger(__name__)
@@ -206,6 +206,7 @@ class MHQAWorkflowHelper:
             user_message=user_message, responder_messages=self._message_history
         )
         self._initial_run_state = state
+        ic(state.responder_messages)
         result = await self._mhqa_graph.run(Respond(helper=self), state=state)
         self._message_history = to_jsonable_python(result.state.responder_messages)
         self._message_history_json = json.dumps(self._message_history)
@@ -276,7 +277,7 @@ class Respond(BaseNode[ResponseState]):
         result = await self._helper._responder_agent.run(
             prompt, message_history=ctx.state.responder_messages
         )
-        ctx.state.responder_messages.extend(result.new_messages())
+        ctx.state.responder_messages = result.all_messages()
         if result.output.is_user_message_a_statement:
             return End(result.output.body)
         else:

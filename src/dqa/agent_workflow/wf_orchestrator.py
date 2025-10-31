@@ -7,11 +7,10 @@ from typing import Any, Dict
 
 from rich.console import Console
 from rich.markdown import Markdown
-from rich import print_json
 
 from prefect import flow
 
-from dqa import EnvVars, ic
+from dqa import EnvVars
 from dqa.agent_workflow.mhqa_workflow import MHQAWorkflowHelper
 
 logger = logging.getLogger(__name__)
@@ -100,7 +99,7 @@ class MHQAWorkflowOrchestrator:
     log_prints=False,
     persist_result=True,
 )
-async def init_and_chat(actor_id: str, user_query: str):
+async def init_and_chat(actor_id: str, user_query: list[str]):
     chat_message_history_file = f"agent_run_messages_{actor_id}.json"
     wf_helper = MHQAWorkflowHelper()
     if os.path.exists(chat_message_history_file):
@@ -108,37 +107,50 @@ async def init_and_chat(actor_id: str, user_query: str):
             message_history_json = f.read()
             wf_helper.update_message_history_from_json(message_history_json)
 
-    result = await wf_helper.run_workflow(user_message=user_query)
-    print_json(wf_helper._message_history_json)
-    ic(wf_helper._message_history)
+    result = await wf_helper.run_workflow(user_message=user_query[5])
+    # print_json(wf_helper._message_history_json)
+    # ic(wf_helper._message_history)
+    print_result(result.output)
+    result = await wf_helper.run_workflow(user_message=user_query[6])
     with open(chat_message_history_file, "w") as f:
         f.write(wf_helper._message_history_json)
-    return result.output
+    print_result(result.output)
 
 
-def main():
-    result = asyncio.run(
-        init_and_chat(
-            "test_actor",
-            # "Watson borrowed 100 Euros from Holmes on October 27, 2025, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds based on the rate on the day he borrowed the money?",
-            # "Hi there, the name's Sherlock! I mean, I am THE Sherlock Holmes!"
-            # "Did I tell you my name?"
-            "Where was Watson on October 27, 2025?",
-            # "Oh, I am THE Sherlock Holmes! Now, can you confidently tell where I was on October 27, 2025?",
-            # "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?"
-            # "Whose mother is 80 years old?",
-            # "What was the daughter's age when her mother was fourteen times her age?",
-            # "What is the current share price of Hitachi (6501.T) at the Tokyo Stock Exchange?",
-            # "The Eiffel Tower is located in which city?",
-            # "Which David Fincher film that stars Edward Norton does not star Brad Pitt?"
-        )
-    )
+def print_result(result: Any):
     print("=" * 80)
     console = Console(soft_wrap=True)
     if isinstance(result, list):
         console.print("\n".join(result))
     else:
         console.print(Markdown(result))
+
+
+def main():
+    asyncio.run(
+        init_and_chat(
+            "test_actor",
+            [
+                "Watson borrowed 100 Euros from Holmes on October 27, 2025, in Paris. Upon returning to London today, how much does Watson owe Holmes in pounds based on the rate on the day he borrowed the money?",
+                "Hi there, the name's Sherlock! I mean, I am THE Sherlock Holmes!",
+                "Did I tell you my name?",
+                "Where was Watson on October 27, 2025?",
+                "Oh, I am THE Sherlock Holmes! Now, can you confidently tell where I was on October 27, 2025?",
+                "Zoe is 54 years old and her mother is 80, how many years ago was Zoe's mother's age some integer multiple of her age?",
+                "Whose mother is 80 years old?",
+                "What was the daughter's age when her mother was fourteen times her age?",
+                "What is the current share price of Hitachi (6501.T) at the Tokyo Stock Exchange?",
+                "The Eiffel Tower is located in which city?",
+                "Which David Fincher film that stars Edward Norton does not star Brad Pitt?",
+            ],
+        )
+    )
+    # print("=" * 80)
+    # console = Console(soft_wrap=True)
+    # if isinstance(result, list):
+    #     console.print("\n".join(result))
+    # else:
+    #     console.print(Markdown(result))
 
 
 if __name__ == "__main__":
