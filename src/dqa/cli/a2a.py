@@ -84,7 +84,7 @@ class DQACliApp(A2AClientMixin):
         finally:
             self._cleanup()
 
-    async def _mhqa_chat(
+    async def _chat(
         self,
         message: str,
         thread_id: str,
@@ -118,14 +118,14 @@ class DQACliApp(A2AClientMixin):
             validated_response = MHQAResponse.model_validate_json(full_message_content)
             return validated_response
 
-    async def run_mhqa_chat(
+    async def run_chat(
         self,
         message: str,
         thread_id: str,
     ):
         try:
             self._initialize()
-            response = await self._mhqa_chat(
+            response = await self._chat(
                 message=message,
                 thread_id=thread_id,
             )
@@ -136,7 +136,7 @@ class DQACliApp(A2AClientMixin):
         finally:
             self._cleanup()
 
-    async def _mhqa_get_history(
+    async def _get_history(
         self,
         thread_id: str,
     ) -> List[MHQAResponse]:
@@ -170,13 +170,13 @@ class DQACliApp(A2AClientMixin):
             ]  # Reverse to chronological order to look right in the CLI
             return validated_response
 
-    async def run_mhqa_get_history(
+    async def run_get_history(
         self,
         thread_id: str,
     ):
         try:
             self._initialize()
-            response = await self._mhqa_get_history(
+            response = await self._get_history(
                 thread_id=thread_id,
             )
             response_adapter = TypeAdapter(List[MHQAResponse])
@@ -186,7 +186,7 @@ class DQACliApp(A2AClientMixin):
         finally:
             self._cleanup()
 
-    async def _mhqa_delete_history(
+    async def _delete_history(
         self,
         thread_id: str,
     ) -> str:
@@ -215,13 +215,13 @@ class DQACliApp(A2AClientMixin):
                     full_message_content = get_message_text(response[0].status.message)
             return full_message_content
 
-    async def run_mhqa_delete_history(
+    async def run_delete_history(
         self,
         thread_id: str,
     ):
         try:
             self._initialize()
-            response = await self._mhqa_delete_history(
+            response = await self._delete_history(
                 thread_id=thread_id,
             )
             print(
@@ -246,7 +246,7 @@ def hello(
 
 
 @app.command()
-def mhqa_chat(
+def chat(
     message: str = typer.Argument(
         default="Hello there, tell me about your capabilities!",
         help="The message to send to the A2A endpoint.",
@@ -261,11 +261,11 @@ def mhqa_chat(
     """
 
     app_handler = DQACliApp()
-    asyncio.run(app_handler.run_mhqa_chat(message=message, thread_id=thread_id))
+    asyncio.run(app_handler.run_chat(message=message, thread_id=thread_id))
 
 
 @app.command()
-def mhqa_get_history(
+def get_history(
     thread_id: str = typer.Option(
         help="A thread ID to identify your conversation.",
     ),
@@ -275,11 +275,11 @@ def mhqa_get_history(
     """
 
     app_handler = DQACliApp()
-    asyncio.run(app_handler.run_mhqa_get_history(thread_id=thread_id))
+    asyncio.run(app_handler.run_get_history(thread_id=thread_id))
 
 
 @app.command()
-def mhqa_delete_history(
+def delete_history(
     thread_id: str = typer.Option(
         help="A thread ID to identify your conversation.",
     ),
@@ -289,7 +289,7 @@ def mhqa_delete_history(
     """
 
     app_handler = DQACliApp()
-    asyncio.run(app_handler.run_mhqa_delete_history(thread_id=thread_id))
+    asyncio.run(app_handler.run_delete_history(thread_id=thread_id))
 
 
 def main():  # pragma: no cover
