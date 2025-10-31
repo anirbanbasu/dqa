@@ -215,7 +215,7 @@ class GradioApp(A2AClientMixin):
             async def refresh_chat_history_from_agent(chat_id: str) -> list:
                 validated_response = []
                 logger.info(f"Refreshing remote chat history for chat ID: {chat_id}")
-                async with httpx.AsyncClient(timeout=600) as httpx_client:
+                async with httpx.AsyncClient() as httpx_client:
                     client, _ = await self.obtain_a2a_client(
                         httpx_client=httpx_client,
                         base_url=self._mhqa_a2a_base_url,
@@ -306,7 +306,7 @@ class GradioApp(A2AClientMixin):
 
             async def delete_remote_chat_history(chat_id: str):
                 logger.info(f"Deleting remote chat history for chat ID: {chat_id}")
-                async with httpx.AsyncClient(timeout=600) as httpx_client:
+                async with httpx.AsyncClient() as httpx_client:
                     client, _ = await self.obtain_a2a_client(
                         httpx_client=httpx_client,
                         base_url=self._mhqa_a2a_base_url,
@@ -420,7 +420,7 @@ class GradioApp(A2AClientMixin):
                             state_selected_chat_id: selected_chat_id,
                         }
                         logger.info(f"Sending message to A2A endpoint: {user_query}")
-                        async with httpx.AsyncClient(timeout=600) as httpx_client:
+                        async with httpx.AsyncClient() as httpx_client:
                             client, _ = await self.obtain_a2a_client(
                                 httpx_client=httpx_client,
                                 base_url=self._mhqa_a2a_base_url,
@@ -458,6 +458,7 @@ class GradioApp(A2AClientMixin):
                                         full_message_content
                                         and full_message_content.strip() != ""
                                     ):
+                                        agent_response: MHQAResponse | None = None
                                         try:
                                             agent_response = (
                                                 MHQAResponse.model_validate_json(
@@ -466,7 +467,7 @@ class GradioApp(A2AClientMixin):
                                             )
                                         except ValidationError as ve:
                                             logger.warning(
-                                                f"Validation error while parsing MHQAResponse. {ve}"
+                                                f"Validation error while parsing response. {ve}"
                                             )
                                             agent_response = MHQAResponse(
                                                 thread_id=selected_chat_id,
@@ -475,12 +476,13 @@ class GradioApp(A2AClientMixin):
                                                 tool_invocations=[],
                                                 status=MHQAResponseStatus.failed,
                                             )
+                                            gr.Warning(full_message_content)
                                         if (
-                                            agent_response.agent_output
+                                            agent_response
+                                            and agent_response.agent_output
                                             and agent_response.agent_output.strip()
                                             != ""
                                         ):
-                                            # print(agent_response.agent_output)
                                             new_messages = self.convert_mhqa_response_to_chat_messages(
                                                 agent_response
                                             )

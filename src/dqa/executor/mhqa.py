@@ -41,9 +41,9 @@ class MHQAAgentExecutor(AgentExecutor):
 
     async def do_mhqa_respond(self, data: MHQAInput):
         # TODO: Potential memory leak without closing the streams?
-        send_stream, recv_stream = anyio.create_memory_object_stream(math.inf)
+        send_stream, receive_stream = anyio.create_memory_object_stream[str](math.inf)
 
-        def message_handler(message: SubscriptionMessage) -> TopicEventResponse:
+        def pubsub_message_handler(message: SubscriptionMessage) -> TopicEventResponse:
             # TODO: Is this a reasonable way to drop stale messages?
             parsed_timestamp = message.extensions().get("time", None)
             if parsed_timestamp is not None:
@@ -79,12 +79,19 @@ class MHQAAgentExecutor(AgentExecutor):
                 dc.subscribe_with_handler(
                     pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
                     topic=pubsub_topic_name,
-                    handler_fn=message_handler,
+                    handler_fn=pubsub_message_handler,
                 )
-                tg.start_soon(invoke_actor)
 
-            async for item in recv_stream:
-                yield item
+                tg.start_soon(invoke_actor)
+                # FIXME: Error "Attempted to exit cancel scope in a different task than it was entered in".
+                async with receive_stream:
+                    async for item in receive_stream:
+                        yield item
+
+                tg.cancel_scope.cancel()
+
+            receive_stream.close()
+            send_stream.close()
 
     async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
         proxy = ActorProxy.create(

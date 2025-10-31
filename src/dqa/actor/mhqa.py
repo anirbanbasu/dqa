@@ -16,6 +16,7 @@ from pydantic_ai import (
     ThinkingPart,
     ThinkingPartDelta,
     ToolCallPartDelta,
+    ToolReturnPart,
 )
 
 
@@ -135,23 +136,21 @@ class MHQAActor(Actor, MHQAActorInterface):
                         input=str(event.part.args),
                         tool_call_id=event.part.tool_call_id,
                     )
-                    print(
-                        f"[Tools] The LLM calls tool={event.part.tool_name!r} with args={event.part.args} (tool_call_id={event.part.tool_call_id!r})"
-                    )
                 elif isinstance(event, FunctionToolResultEvent):
-                    print(
-                        f"[Tools] Tool call {event.tool_call_id!r} returned => {event.result.content}"
-                    )
-                    if event.result and current_tool_invocation:
+                    if (
+                        event.result
+                        and current_tool_invocation
+                        and isinstance(event.result, ToolReturnPart)
+                    ):
                         if current_tool_invocation.tool_call_id == event.tool_call_id:
                             current_tool_invocation.output = (
                                 str(event.result.content)
-                                if event.result.has_content()
+                                if hasattr(event.result, "content")
                                 else None
                             )
                             current_tool_invocation.metadata = (
                                 str(event.result.metadata)
-                                if event.result.metadata
+                                if hasattr(event.result, "metadata")
                                 else None
                             )
                             self._current_run_tool_invocations.append(

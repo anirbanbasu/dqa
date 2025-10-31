@@ -3,6 +3,7 @@ from enum import StrEnum, auto
 import json
 import logging
 
+
 from dataclasses import dataclass, field
 import os
 from typing import AsyncIterable, List
@@ -34,6 +35,8 @@ from pydantic_ai import (
     ThinkingPartDelta,
     ToolCallPartDelta,
 )
+
+from pydantic_ai.agent.abstract import EventStreamHandler
 from pydantic_ai.durable_exec.prefect import PrefectAgent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
@@ -76,16 +79,19 @@ class ResponseOK(BaseModel):
 class MHQAWorkflowHelper:
     """Multi-Hop Question Answering Workflow Helper."""
 
-    # _instance: ClassVar = None
-
     def __init__(
-        self, message_history_json: str | None = None, agent_event_stream_handler=None
+        self,
+        message_history_json: str | None = None,
+        agent_event_stream_handler: EventStreamHandler | None = None,
     ):
         if not hasattr(self, "initialised"):
             self.update_message_history_from_json(message_history_json)
-            self.agent_event_stream_handler = (
-                agent_event_stream_handler or MHQAWorkflowHelper.event_stream_handler
-            )
+            if agent_event_stream_handler is not None:
+                self.agent_event_stream_handler = agent_event_stream_handler
+            else:
+                self.agent_event_stream_handler = (
+                    MHQAWorkflowHelper.event_stream_handler
+                )
             self.initialise()
 
     def initialise(self):
@@ -362,7 +368,7 @@ class Review(BaseNode[ResponseState, None, str]):
                 "supporting_evidences": ctx.state.responder_messages,
             }
         )
-        result = await MHQAWorkflowHelper()._reviewer_agent.run(prompt)
+        result = await self._helper._reviewer_agent.run(prompt)
         if isinstance(result.output, ResponseRevisionRequired):
             return self._helper.create_respond_node(
                 response_feedback=result.output.review
