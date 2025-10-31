@@ -5,11 +5,20 @@ import logging
 
 from dataclasses import dataclass, field
 import os
-from typing import AsyncIterable
+from typing import AsyncIterable, List
 
 from pydantic import BaseModel
 
-from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter, format_as_xml
+from pydantic_ai import (
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ModelRequest,
+    ModelResponse,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+    format_as_xml,
+)
 
 from pydantic_ai import (
     Agent,
@@ -33,6 +42,7 @@ from pydantic_core import to_jsonable_python
 from pydantic_graph import BaseNode, End, Graph, GraphRunContext
 
 from dqa import EnvVars
+from dqa.model.mhqa import MCPToolInvocation, MHQAResponse, MHQAResponseStatus
 
 
 logger = logging.getLogger(__name__)
@@ -134,7 +144,7 @@ class MHQAWorkflowHelper:
                 event_stream_handler=self.agent_event_stream_handler,
             )
 
-            self.responder_agent = (
+            self._responder_agent = (
                 PrefectAgent(basic_responder_agent)
                 if EnvVars.PREFECT_API_URL
                 else basic_responder_agent
@@ -161,7 +171,7 @@ class MHQAWorkflowHelper:
                 event_stream_handler=self.agent_event_stream_handler,
             )
 
-            self.reviewer_agent = (
+            self._reviewer_agent = (
                 PrefectAgent(basic_reviewer_agent)
                 if EnvVars.PREFECT_API_URL
                 else basic_reviewer_agent
@@ -169,35 +179,97 @@ class MHQAWorkflowHelper:
 
             # ic(self.responder_agent, self.reviewer_agent)
 
-            self.mhqa_graph = Graph(nodes=(Respond, Review))
+            self._mhqa_graph = Graph(nodes=(Respond, Review))
 
             self.initialised = (
                 hasattr(self, "llm_config")
                 and hasattr(self, "mcp_config")
-                and hasattr(self, "message_history")
-                and hasattr(self, "responder_agent")
-                and hasattr(self, "reviewer_agent")
-                and hasattr(self, "mhqa_graph")
+                and hasattr(self, "_message_history")
+                and hasattr(self, "_responder_agent")
+                and hasattr(self, "_reviewer_agent")
+                and hasattr(self, "_mhqa_graph")
             )
         except Exception as e:
             logger.error(f"Error initialising MHQA workflow. {e}")
 
     def update_message_history_from_json(self, message_history_json: str | None = None):
-        self.message_history_json = message_history_json
-        if hasattr(self, "message_history_json") and self.message_history_json:
-            self.message_history = ModelMessagesTypeAdapter.validate_python(
-                json.loads(self.message_history_json)
+        self._message_history_json = message_history_json
+        if hasattr(self, "_message_history_json") and self._message_history_json:
+            self._message_history = ModelMessagesTypeAdapter.validate_python(
+                json.loads(self._message_history_json)
             )
         else:
-            self.message_history = []
+            self._message_history = []
+
+    def convert_message_history(self, thread_id: str) -> List[MHQAResponse]:
+        converted_responses: List[MHQAResponse] = []
+        current_tool_invocations: List[MCPToolInvocation] = []
+        new_tool_invocation: MCPToolInvocation | None = None
+        response_constructed: bool = False
+        response: MHQAResponse | None = None
+        for msg in self._message_history:
+            if isinstance(msg, ModelRequest):
+                for part in msg.parts:
+                    if type(part) is UserPromptPart:
+                        response = MHQAResponse(
+                            thread_id=thread_id,
+                            user_input=part.content,
+                            status=MHQAResponseStatus.completed,
+                        )
+                    elif type(part) is ToolReturnPart:
+                        if (
+                            new_tool_invocation
+                            and part.tool_name == new_tool_invocation.name
+                        ):
+                            new_tool_invocation.output = part.content
+                            current_tool_invocations.append(new_tool_invocation)
+                            new_tool_invocation = None
+                    else:
+                        ...
+                        # ic(part, type(msg))
+
+            elif isinstance(msg, ModelResponse):
+                for part in msg.parts:
+                    if type(part) is ToolCallPart:
+                        if part.tool_name != "final_result":
+                            new_tool_invocation = MCPToolInvocation(
+                                name=part.tool_name,
+                                input=part.args,
+                                tool_call_id=part.tool_call_id,
+                            )
+                        else:
+                            # Final result part
+                            if response:
+                                parsed_result = (
+                                    Response(**part.args)
+                                    if type(part.args) is dict
+                                    else Response(**json.loads(part.args))
+                                )
+                                response.agent_output = parsed_result.body
+                                response.tool_invocations = current_tool_invocations
+
+                                current_tool_invocations = []
+                                response_constructed = True
+                    else:
+                        ...
+                        # ic(part, type(msg))
+
+            # validated_response = MHQAResponse(thread_id=thread_id)
+            if response_constructed:
+                converted_responses.append(response)
+                response = None
+                response_constructed = False
+        # ic(converted_responses)
+        return converted_responses
 
     async def run_workflow(self, user_message: str):
         state = ResponseState(
-            user_message=user_message, responder_messages=self.message_history
+            user_message=user_message, responder_messages=self._message_history
         )
-        result = await self.mhqa_graph.run(Respond(helper=self), state=state)
-        self.message_history = to_jsonable_python(result.state.responder_messages)
-        self.message_history_json = json.dumps(self.message_history)
+        self._initial_run_state = state
+        result = await self._mhqa_graph.run(Respond(helper=self), state=state)
+        self._message_history = to_jsonable_python(result.state.responder_messages)
+        self._message_history_json = json.dumps(self._message_history)
         return result
 
     def create_respond_node(self, response_feedback: str | None = None) -> Respond:
@@ -262,7 +334,7 @@ class Respond(BaseNode[ResponseState]):
             )
         else:
             prompt = f"Provide your response to the message from the user.\n{ctx.state.user_message}"
-        result = await self._helper.responder_agent.run(
+        result = await self._helper._responder_agent.run(
             prompt, message_history=ctx.state.responder_messages
         )
         ctx.state.responder_messages.extend(result.new_messages())
@@ -290,7 +362,7 @@ class Review(BaseNode[ResponseState, None, str]):
                 "supporting_evidences": ctx.state.responder_messages,
             }
         )
-        result = await MHQAWorkflowHelper().reviewer_agent.run(prompt)
+        result = await MHQAWorkflowHelper()._reviewer_agent.run(prompt)
         if isinstance(result.output, ResponseRevisionRequired):
             return self._helper.create_respond_node(
                 response_feedback=result.output.review

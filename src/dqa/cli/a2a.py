@@ -7,7 +7,7 @@ from types import FrameType
 from typing import List
 from uuid import uuid4
 
-from pydantic import TypeAdapter
+from pydantic import ValidationError
 from rich import print_json
 
 from a2a.utils import get_message_text
@@ -32,6 +32,8 @@ from dqa.model.mhqa import (
     MHQAHistoryInput,
     MHQAInput,
     MHQAResponse,
+    MHQAResponseStatus,
+    MHQAResponsesTypeAdapter,
 )
 
 logger = logging.getLogger(__name__)  # Get a logger instance
@@ -115,7 +117,19 @@ class DQACliApp(A2AClientMixin):
             async for response in streaming_response:
                 if response[0].status.message:
                     full_message_content = get_message_text(response[0].status.message)
-            validated_response = MHQAResponse.model_validate_json(full_message_content)
+            try:
+                validated_response = MHQAResponse.model_validate_json(
+                    full_message_content
+                )
+            except ValidationError as ve:
+                logger.warning(f"Validation error while parsing MHQAResponse. {ve}")
+                validated_response = MHQAResponse(
+                    thread_id=thread_id,
+                    user_input=message,
+                    agent_output=full_message_content,
+                    tool_invocations=[],
+                    status=MHQAResponseStatus.failed,
+                )
             return validated_response
 
     async def run_chat(
@@ -163,8 +177,10 @@ class DQACliApp(A2AClientMixin):
             async for response in streaming_response:
                 if response[0].status.message:
                     full_message_content = get_message_text(response[0].status.message)
-            response_adapter = TypeAdapter(List[MHQAResponse])
-            validated_response = response_adapter.validate_json(full_message_content)
+            # response_adapter = TypeAdapter(List[MHQAResponse])
+            validated_response = MHQAResponsesTypeAdapter.validate_json(
+                full_message_content
+            )
             validated_response = validated_response[
                 ::-1
             ]  # Reverse to chronological order to look right in the CLI
@@ -179,8 +195,8 @@ class DQACliApp(A2AClientMixin):
             response = await self._get_history(
                 thread_id=thread_id,
             )
-            response_adapter = TypeAdapter(List[MHQAResponse])
-            print_json(response_adapter.dump_json(response).decode())
+            # response_adapter = TypeAdapter(List[MHQAResponse])
+            print_json(MHQAResponsesTypeAdapter.dump_json(response).decode())
         except Exception as e:
             logger.error(f"Error in MHQA get history. {e}")
         finally:

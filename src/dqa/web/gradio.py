@@ -1,7 +1,6 @@
 import logging
 import signal
 import sys
-from typing import List
 from uuid import uuid4
 
 
@@ -9,7 +8,7 @@ from a2a.types import Message
 from a2a.utils import get_message_text
 
 import httpx
-from pydantic import TypeAdapter
+from pydantic import ValidationError
 from dqa import EnvVars
 import gradio as gr
 
@@ -21,6 +20,8 @@ from dqa.model.mhqa import (
     MHQAHistoryInput,
     MHQAInput,
     MHQAResponse,
+    MHQAResponseStatus,
+    MHQAResponsesTypeAdapter,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,15 @@ class GradioApp(A2AClientMixin):
                 gr.ChatMessage(
                     role="assistant",
                     content=response.agent_output,
-                    metadata={"id": message_id} if message_id else None,
+                    metadata={
+                        "id": message_id,
+                        "status": "done"
+                        if response.status
+                        in [MHQAResponseStatus.completed, MHQAResponseStatus.failed]
+                        else "pending",
+                    }
+                    if message_id
+                    else None,
                 )
             )
 
@@ -228,13 +237,13 @@ class GradioApp(A2AClientMixin):
                     )
                     streaming_response = client.send_message(send_message)
                     logger.info("Parsing streaming response from the A2A endpoint")
-                    response_adapter = TypeAdapter(List[MHQAResponse])
+                    # response_adapter = TypeAdapter(List[MHQAResponse])
                     async for response in streaming_response:
                         if response[0].status.message:
                             full_message_content = get_message_text(
                                 response[0].status.message
                             )
-                            validated_response = response_adapter.validate_json(
+                            validated_response = MHQAResponsesTypeAdapter.validate_json(
                                 full_message_content
                             )
                 chat_history = []
@@ -449,11 +458,23 @@ class GradioApp(A2AClientMixin):
                                         full_message_content
                                         and full_message_content.strip() != ""
                                     ):
-                                        agent_response = (
-                                            MHQAResponse.model_validate_json(
-                                                full_message_content
+                                        try:
+                                            agent_response = (
+                                                MHQAResponse.model_validate_json(
+                                                    full_message_content
+                                                )
                                             )
-                                        )
+                                        except ValidationError as ve:
+                                            logger.warning(
+                                                f"Validation error while parsing MHQAResponse. {ve}"
+                                            )
+                                            agent_response = MHQAResponse(
+                                                thread_id=selected_chat_id,
+                                                user_input=user_query,
+                                                agent_output=full_message_content,
+                                                tool_invocations=[],
+                                                status=MHQAResponseStatus.failed,
+                                            )
                                         if (
                                             agent_response.agent_output
                                             and agent_response.agent_output.strip()

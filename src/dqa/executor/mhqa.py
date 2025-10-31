@@ -28,6 +28,7 @@ from dqa.model.mhqa import (
 
 from dapr.clients import DaprClient
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -176,12 +177,11 @@ class MHQAAgentExecutor(AgentExecutor):
             else:
                 raise ValueError("No response received from the actor(s)!")
         except Exception as e:
-            logger.exception(f"Error in MHQAAgentExecutor. {e}")
+            exception_message = f"Error in MHQAAgentExecutor. {e}. Please try again."
+            logger.exception(exception_message)
             await task_updater.failed(
                 message=new_agent_text_message(
-                    # FIXME: The output will fail JSON validation in the client side
-                    # because it is not of type MHQAResponse
-                    text=str(e),
+                    text=exception_message,
                     task_id=task.id,
                     context_id=task.context_id,
                 )
