@@ -6,6 +6,8 @@ from a2a.client import A2ACardResolver, ClientFactory, ClientConfig
 from a2a.types import AgentCard
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 
+from dqa import EnvVars
+
 logger = logging.getLogger(__name__)
 
 
@@ -15,6 +17,7 @@ class A2AClientMixin:
         httpx_client: httpx.AsyncClient,
         base_url: str,
     ):
+        httpx_client.timeout = httpx.Timeout(timeout=EnvVars.HTTPX_TIMEOUT)
         # initialise A2ACardResolver
         resolver = A2ACardResolver(
             httpx_client=httpx_client,
