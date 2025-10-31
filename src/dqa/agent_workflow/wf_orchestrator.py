@@ -2,14 +2,12 @@ import asyncio
 import logging
 import os
 import re
-import sys
 from typing import Any, Dict
 
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich import print_json
-from rich.pretty import pprint
 
 from prefect import flow
 
@@ -109,9 +107,7 @@ async def init_and_chat(actor_id: str, user_query: str):
         with open(chat_message_history_file, "r") as f:
             message_history_json = f.read()
             wf_helper.update_message_history_from_json(message_history_json)
-    pprint(wf_helper.convert_message_history(actor_id))
-    if 1 < 2:
-        sys.exit(0)
+
     result = await wf_helper.run_workflow(user_message=user_query)
     print_json(wf_helper._message_history_json)
     ic(wf_helper._message_history)

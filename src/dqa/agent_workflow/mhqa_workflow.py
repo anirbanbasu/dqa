@@ -6,18 +6,13 @@ import logging
 
 from dataclasses import dataclass, field
 import os
-from typing import AsyncIterable, List
+from typing import AsyncIterable
 
 from pydantic import BaseModel
 
 from pydantic_ai import (
     ModelMessage,
     ModelMessagesTypeAdapter,
-    ModelRequest,
-    ModelResponse,
-    ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
     format_as_xml,
 )
 
@@ -45,7 +40,6 @@ from pydantic_core import to_jsonable_python
 from pydantic_graph import BaseNode, End, Graph, GraphRunContext
 
 from dqa import EnvVars
-from dqa.model.mhqa import MCPToolInvocation, MHQAResponse, MHQAResponseStatus
 
 
 logger = logging.getLogger(__name__)
@@ -206,67 +200,6 @@ class MHQAWorkflowHelper:
             )
         else:
             self._message_history = []
-
-    def convert_message_history(self, thread_id: str) -> List[MHQAResponse]:
-        converted_responses: List[MHQAResponse] = []
-        current_tool_invocations: List[MCPToolInvocation] = []
-        new_tool_invocation: MCPToolInvocation | None = None
-        response_constructed: bool = False
-        response: MHQAResponse | None = None
-        for msg in self._message_history:
-            if isinstance(msg, ModelRequest):
-                for part in msg.parts:
-                    if type(part) is UserPromptPart:
-                        response = MHQAResponse(
-                            thread_id=thread_id,
-                            user_input=part.content,
-                            status=MHQAResponseStatus.completed,
-                        )
-                    elif type(part) is ToolReturnPart:
-                        if (
-                            new_tool_invocation
-                            and part.tool_name == new_tool_invocation.name
-                        ):
-                            new_tool_invocation.output = part.content
-                            current_tool_invocations.append(new_tool_invocation)
-                            new_tool_invocation = None
-                    else:
-                        ...
-                        # ic(part, type(msg))
-
-            elif isinstance(msg, ModelResponse):
-                for part in msg.parts:
-                    if type(part) is ToolCallPart:
-                        if part.tool_name != "final_result":
-                            new_tool_invocation = MCPToolInvocation(
-                                name=part.tool_name,
-                                input=part.args,
-                                tool_call_id=part.tool_call_id,
-                            )
-                        else:
-                            # Final result part
-                            if response:
-                                parsed_result = (
-                                    Response(**part.args)
-                                    if type(part.args) is dict
-                                    else Response(**json.loads(part.args))
-                                )
-                                response.agent_output = parsed_result.body
-                                response.tool_invocations = current_tool_invocations
-
-                                current_tool_invocations = []
-                                response_constructed = True
-                    else:
-                        ...
-                        # ic(part, type(msg))
-
-            # validated_response = MHQAResponse(thread_id=thread_id)
-            if response_constructed:
-                converted_responses.append(response)
-                response = None
-                response_constructed = False
-        # ic(converted_responses)
-        return converted_responses
 
     async def run_workflow(self, user_message: str):
         state = ResponseState(

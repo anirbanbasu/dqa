@@ -24,7 +24,7 @@ from abc import abstractmethod
 from dapr.actor import Actor, ActorInterface, actormethod
 from dapr.clients import DaprClient
 
-from dqa import EnvVars
+from dqa import EnvVars, ic
 from dqa.actor import MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -86,6 +86,7 @@ class MHQAActor(Actor, MHQAActorInterface):
                 saved_internal_conversation_memory
             )
             logger.info("Restored internal conversation history from state store.")
+            ic(self._wf_helper._message_history)
 
         saved_user_conversation_memory = (
             await self._state_manager.get_state(self._user_conversation_memory)
@@ -214,6 +215,7 @@ class MHQAActor(Actor, MHQAActorInterface):
         result = False
         if not self._cancelled:
             self._wf_helper.update_message_history_from_json()
+            self.user_conversation_history = []
             if await self._state_manager.contains_state(
                 self._internal_conversation_memory
             ):

@@ -36,6 +36,10 @@ from dqa.model.mhqa import (
     MHQAResponsesTypeAdapter,
 )
 
+from rich.console import Console
+from rich.json import JSON
+from rich.live import Live
+
 logger = logging.getLogger(__name__)  # Get a logger instance
 
 app = typer.Typer(
@@ -90,6 +94,7 @@ class DQACliApp(A2AClientMixin):
         self,
         message: str,
         thread_id: str,
+        console: Console,
     ) -> MHQAResponse:
         async with httpx.AsyncClient() as httpx_client:
             client, _ = await self.obtain_a2a_client(
@@ -114,9 +119,19 @@ class DQACliApp(A2AClientMixin):
             streaming_response = client.send_message(send_message)
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
-            async for response in streaming_response:
-                if response[0].status.message:
-                    full_message_content = get_message_text(response[0].status.message)
+            with Live(
+                "[bold yellow]Streaming response[/bold yellow]",
+                console=console,
+                screen=False,
+                redirect_stdout=True,
+                transient=True,
+            ) as live:
+                async for response in streaming_response:
+                    if response[0].status.message:
+                        full_message_content = get_message_text(
+                            response[0].status.message
+                        )
+                        live.update(JSON(full_message_content))
             try:
                 validated_response = MHQAResponse.model_validate_json(
                     full_message_content
@@ -139,11 +154,14 @@ class DQACliApp(A2AClientMixin):
     ):
         try:
             self._initialize()
+            console = Console(soft_wrap=True)
             response = await self._chat(
                 message=message,
                 thread_id=thread_id,
+                console=console,
             )
-            print_json(response.model_dump_json())
+            console.print("[bold cyan]Final response[/bold cyan]")
+            console.print_json(response.model_dump_json())
         except Exception as e:
             logger.error(f"Error in MHQA chat. {e}")
             logger.exception(e)
