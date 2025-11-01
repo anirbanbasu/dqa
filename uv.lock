@@ -1539,16 +1539,16 @@ wheels = [
 
 [[package]]
 name = "llama-index-tools-mcp"
-version = "0.4.1"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "llama-index-core" },
     { name = "mcp" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/2b/c104b8d283a897735bb0f2db09682f526af4901fdb570fc5da21adfa9cf6/llama_index_tools_mcp-0.4.1.tar.gz", hash = "sha256:142e4371870cc876d65078ac7f5be82fef225a15b12d92c4de87106c69b38841", size = 12663, upload-time = "2025-09-08T20:44:40.61Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/9b/eb46e382534a736921e437288bfcaa9b4b3672d739458fb150f80b98e692/llama_index_tools_mcp-0.4.3.tar.gz", hash = "sha256:252103b595fc07ae06321dd7a5e17530ef854a86fc25e9cf3e733fdbbd919fdc", size = 12745, upload-time = "2025-10-22T15:44:08.931Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/48/ce987cb62083ee15085fceb61ff19f6f880024f1c27a7801887b1fd68a56/llama_index_tools_mcp-0.4.1-py3-none-any.whl", hash = "sha256:79ffe48a1efcce24fc376ec794184bd18c0e6655f6f566ced388742b500fbe5f", size = 13813, upload-time = "2025-09-08T20:44:39.868Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/88/e2c59a87e48e3913effec9345517d48918fb27aab5a337e53e5bb109aee7/llama_index_tools_mcp-0.4.3-py3-none-any.whl", hash = "sha256:01cbecd9bfb58011e2a83c80bd3f906d1de259b014c004a4cfef2d8268e6391f", size = 13894, upload-time = "2025-10-22T15:44:08.059Z" },
 ]
 
 [[package]]
