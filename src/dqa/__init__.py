@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 from typing import ClassVar
 from rich.logging import RichHandler
@@ -64,8 +65,13 @@ class EnvVars:
     )
     APP_MHQA_A2A_REMOTE_URL: str = env.str("APP_MHQA_A2A_REMOTE_URL", default=None)
     DAPR_PUBSUB_NAME: str = env.str("DAPR_PUBSUB_NAME", default="pubsub")
-    MCP_SERVER_HOST: str = FASTMCP_HOST
-    MCP_SERVER_PORT: int = FASTMCP_PORT
+    APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE: int = env.int(
+        "APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE",
+        default=65536,
+        validate=Range(min=32768, max=math.inf),
+    )
+    MCP_SERVER_HOST: str = env.str("FASTMCP_HOST", default="localhost")
+    MCP_SERVER_PORT: int = env.int("FASTMCP_PORT", default=8000)
     BROWSER_STATE_SECRET: str = env.str(
         "BROWSER_STATE_SECRET",
         default="a2a_dapr_bstate_secret",

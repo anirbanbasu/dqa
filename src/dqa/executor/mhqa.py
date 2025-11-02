@@ -1,6 +1,5 @@
 import datetime
 import logging
-import math
 import anyio
 from dapr.actor import ActorProxy, ActorId, ActorProxyFactory
 from dapr.clients.retry import RetryPolicy
@@ -41,7 +40,9 @@ class MHQAAgentExecutor(AgentExecutor):
 
     async def do_mhqa_respond(self, data: MHQAInput):
         # TODO: Potential memory leak without closing the streams?
-        send_stream, receive_stream = anyio.create_memory_object_stream[str](math.inf)
+        send_stream, receive_stream = anyio.create_memory_object_stream[str](
+            EnvVars.APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE
+        )
 
         def pubsub_message_handler(message: SubscriptionMessage) -> TopicEventResponse:
             # TODO: Is this a reasonable way to drop stale messages?
@@ -87,8 +88,6 @@ class MHQAAgentExecutor(AgentExecutor):
                 async with receive_stream:
                     async for item in receive_stream:
                         yield item
-
-                tg.cancel_scope.cancel()
 
             receive_stream.close()
             send_stream.close()

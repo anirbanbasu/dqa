@@ -77,27 +77,25 @@ class MHQAWorkflowHelper:
         try:
             if not hasattr(self, "llm_config"):
                 self.llm_config = {}
-                llm_config_file = EnvVars.LLM_CONFIG_FILE
-                if os.path.exists(llm_config_file):
-                    with open(llm_config_file, "r") as f:
+                if os.path.exists(EnvVars.LLM_CONFIG_FILE):
+                    with open(EnvVars.LLM_CONFIG_FILE, "r") as f:
                         self.llm_config = json.load(f)
             if MHQAWorkflowAgentType.RESPONDER.value.lower() not in self.llm_config:
                 raise ValueError(
-                    f"LLM configuration for responder agent not found in {llm_config_file}"
+                    f"LLM configuration for responder agent not found in {EnvVars.LLM_CONFIG_FILE}"
                 )
             if MHQAWorkflowAgentType.REVIEWER.value.lower() not in self.llm_config:
                 raise ValueError(
-                    f"LLM configuration for reviewer agent not found in {llm_config_file}"
+                    f"LLM configuration for reviewer agent not found in {EnvVars.LLM_CONFIG_FILE}"
                 )
             if not hasattr(self, "mcp_config"):
                 self.mcp_config = {}
-                mcp_config_file = EnvVars.MCP_CONFIG_FILE
-                if os.path.exists(mcp_config_file):
-                    with open(mcp_config_file, "r") as f:
+                if os.path.exists(EnvVars.MCP_CONFIG_FILE):
+                    with open(EnvVars.MCP_CONFIG_FILE, "r") as f:
                         self.mcp_config = json.load(f)
                     configured_mcp_servers = self.mcp_config.get("mcpServers", {})
                     logger.info(
-                        f"Loaded {len(configured_mcp_servers)} MCP configurations from {mcp_config_file}: {list(configured_mcp_servers.keys())}"
+                        f"Loaded {len(configured_mcp_servers)} MCP configurations from {EnvVars.MCP_CONFIG_FILE}: {list(configured_mcp_servers.keys())}"
                     )
 
             if EnvVars.PREFECT_API_URL:

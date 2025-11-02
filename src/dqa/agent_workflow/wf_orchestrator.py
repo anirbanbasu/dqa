@@ -143,12 +143,6 @@ def main():
             ],
         )
     )
-    # print("=" * 80)
-    # console = Console(soft_wrap=True)
-    # if isinstance(result, list):
-    #     console.print("\n".join(result))
-    # else:
-    #     console.print(Markdown(result))
 
 
 if __name__ == "__main__":

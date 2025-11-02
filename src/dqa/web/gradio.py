@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import signal
 import sys
@@ -220,8 +221,10 @@ class GradioApp(A2AClientMixin):
                         "--------"
                     )
                     logger.info(header_details_msg)
-                    oauth_username = headers_dict.get("x-auth-user-name", None)
-                    oauth_userid = headers_dict.get("x-auth-user-id", None)
+                    oauth_username: str | None = headers_dict.get(
+                        "x-auth-user-name", None
+                    )
+                    oauth_userid: str | None = headers_dict.get("x-auth-user-id", None)
                     if oauth_userid and oauth_userid.strip() != "":
                         logger.info(
                             f"OAuth username obtained: '{oauth_username}' ({oauth_userid})"
@@ -235,7 +238,7 @@ class GradioApp(A2AClientMixin):
                     else:
                         return (
                             oauth_username,
-                            oauth_username.lower().replace(" ", "_")
+                            hashlib.sha256(oauth_username.encode()).hexdigest()
                             if oauth_username
                             else None,
                             welcome_msg,
