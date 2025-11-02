@@ -10,5 +10,5 @@ on_http_request:
       - type: add-headers
         config:
           headers:
-            X-Auth-User-ID: "${actions.ngrok.oauth.identity.provider_user_id}"
-            X-Auth-User-Name: "${actions.ngrok.oauth.identity.name}"
+            x-auth-user-id: "${actions.ngrok.oauth.identity.provider_user_id}"
+            x-auth-user-name: "${actions.ngrok.oauth.identity.name}"
