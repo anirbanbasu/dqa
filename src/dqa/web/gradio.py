@@ -204,46 +204,43 @@ class GradioApp(A2AClientMixin):
 
             @gr.on(
                 triggers=[self.ui.load],
-                outputs=[state_oauth_username, state_oauth_userid],
+                outputs=[state_oauth_username, state_oauth_userid, md_welcome_msg],
             )
             def capture_oauth_user(request: gr.Request):
+                welcome_msg = "Select an existing chat to continue, or start a new chat. Alternatively, manually add a new chat ID."
                 if request:
                     headers_dict = dict(request.headers)
-                    print(f"{'-' * 4} Incoming HTTP Request Details {'-' * 4}")
-                    print(f"IP Address: {request.client.host}")
-                    print(f"Headers: {headers_dict}")
-                    print(f"Query Parameters: {dict(request.query_params)}")
-                    print(f"Session Hash: {request.session_hash}")
-                    print(
-                        f"Username: {headers_dict.get('x-auth-user-name', None)} ({headers_dict.get('x-auth-user-id', None)})"
+                    header_details_msg = (
+                        "---- Incoming HTTP Request Details ----\n"
+                        f"IP Address: {request.client.host}\n"
+                        f"Headers: {headers_dict}\n"
+                        f"Query Parameters: {dict(request.query_params)}\n"
+                        f"Session Hash: {request.session_hash}\n"
+                        f"Username: {headers_dict.get('x-auth-user-name', None)} ({headers_dict.get('x-auth-user-id', None)})\n"
+                        "--------"
                     )
-                    print("-" * 32)
+                    logger.info(header_details_msg)
                     oauth_username = headers_dict.get("x-auth-user-name", None)
-                    oauth_id = headers_dict.get("x-auth-user-id", None)
-                    if oauth_id and oauth_id.strip() != "":
-                        return oauth_username, oauth_id
+                    oauth_userid = headers_dict.get("x-auth-user-id", None)
+                    if oauth_userid and oauth_userid.strip() != "":
+                        logger.info(
+                            f"OAuth username obtained: '{oauth_username}' ({oauth_userid})"
+                        )
+                    if oauth_username and oauth_username.strip() != "":
+                        welcome_msg = (
+                            f"_Welcome, **{oauth_username}**!_  \n{welcome_msg}"
+                        )
+                    if oauth_userid and oauth_userid.strip() != "":
+                        return oauth_username, oauth_userid, welcome_msg
                     else:
-                        return oauth_username, oauth_username.lower().replace(
-                            " ", "_"
-                        ) if oauth_username else None
-                else:
-                    return None, None
-
-            @gr.on(
-                triggers=[state_oauth_username.change, state_oauth_userid.change],
-                inputs=[state_oauth_username, state_oauth_userid],
-                outputs=[md_welcome_msg],
-            )
-            def set_username_in_chat_list(oauth_username: str, oauth_userid: str):
-                if oauth_userid and oauth_userid.strip() != "":
-                    logger.info(
-                        f"OAuth username obtained: '{oauth_username}' ({oauth_userid})"
-                    )
-                welcome_msg = "Select an existing chat to continue, or start a new chat. Alternatively, manually add a new chat ID."
-                if oauth_username and oauth_username.strip() != "":
-                    return f"_Welcome, **{oauth_username}**!_  \n{welcome_msg}"
-                else:
-                    return welcome_msg
+                        return (
+                            oauth_username,
+                            oauth_username.lower().replace(" ", "_")
+                            if oauth_username
+                            else None,
+                            welcome_msg,
+                        )
+                return None, None, welcome_msg
 
             @gr.on(
                 triggers=[bstate_chat_histories.change, self.ui.load],
