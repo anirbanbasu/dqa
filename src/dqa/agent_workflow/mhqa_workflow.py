@@ -6,7 +6,6 @@ import logging
 
 from dataclasses import dataclass, field
 import os
-from typing import AsyncIterable
 
 from pydantic import BaseModel
 
@@ -18,17 +17,6 @@ from pydantic_ai import (
 
 from pydantic_ai import (
     Agent,
-    AgentStreamEvent,
-    FinalResultEvent,
-    FunctionToolCallEvent,
-    FunctionToolResultEvent,
-    PartDeltaEvent,
-    PartStartEvent,
-    RunContext,
-    TextPartDelta,
-    ThinkingPart,
-    ThinkingPartDelta,
-    ToolCallPartDelta,
 )
 
 from pydantic_ai.agent.abstract import EventStreamHandler
@@ -39,7 +27,7 @@ from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 from pydantic_core import to_jsonable_python
 from pydantic_graph import BaseNode, End, Graph, GraphRunContext
 
-from dqa import EnvVars, ic
+from dqa import EnvVars
 
 
 logger = logging.getLogger(__name__)
@@ -80,13 +68,9 @@ class MHQAWorkflowHelper:
     ):
         if not hasattr(self, "initialised"):
             self.update_message_history_from_json(message_history_json)
-            if agent_event_stream_handler is not None:
-                self.agent_event_stream_handler = agent_event_stream_handler
-            else:
-                # self.agent_event_stream_handler = (
-                #     MHQAWorkflowHelper.event_stream_handler
-                # )
-                self.agent_event_stream_handler = None
+            self.agent_event_stream_handler = (
+                agent_event_stream_handler if agent_event_stream_handler else None
+            )
             self.initialise()
 
     def initialise(self):
@@ -220,41 +204,6 @@ class MHQAWorkflowHelper:
     def create_review_node(self, response_text: str | None = None) -> Review:
         return Review(helper=self, response_text=response_text)
 
-    async def handle_event(event: AgentStreamEvent):
-        if isinstance(event, PartStartEvent):
-            if isinstance(event.part, ThinkingPart):
-                print(f"\n[Thinking]\n{event.part.content}", flush=True, end="")
-            else:
-                # Such as starting TextPart, ToolCallPart, etc.
-                print()
-        elif isinstance(event, PartDeltaEvent):
-            if isinstance(event.delta, TextPartDelta):
-                # This handler chooses to output deltas for the thinking part but not the text parts
-                pass
-            elif isinstance(event.delta, ThinkingPartDelta):
-                print(f"{event.delta.content_delta}", flush=True, end="")
-            elif isinstance(event.delta, ToolCallPartDelta):
-                # We don't output deltas for tool calls
-                pass
-        elif isinstance(event, FunctionToolCallEvent):
-            print(
-                f"[Tools] The LLM calls tool={event.part.tool_name!r} with args={event.part.args} (tool_call_id={event.part.tool_call_id!r})"
-            )
-        elif isinstance(event, FunctionToolResultEvent):
-            print(
-                f"[Tools] Tool call {event.tool_call_id!r} returned => {event.result.content}"
-            )
-        elif isinstance(event, FinalResultEvent):
-            # We don't output this through the event stream handler
-            pass
-
-    async def event_stream_handler(
-        ctx: RunContext,
-        event_stream: AsyncIterable[AgentStreamEvent],
-    ):
-        async for event in event_stream:
-            await MHQAWorkflowHelper.handle_event(event)
-
 
 class Respond(BaseNode[ResponseState]):
     # response_feedback: str | None = None
@@ -276,7 +225,6 @@ class Respond(BaseNode[ResponseState]):
             )
         else:
             prompt = f"Provide your response to the message from the user.\n{ctx.state.user_message}"
-        ic(ctx.state.responder_messages)
         result = await self._helper._responder_agent.run(
             prompt, message_history=ctx.state.responder_messages
         )

@@ -50,6 +50,7 @@ The following API keys are optional but maybe provided for additional functional
 The following environment variables are all optional.
  - `APP_LOG_LEVEL`: The general log level of the DQA app. Defaults to `INFO`.
  - `DQA_MCP_SERVER_TRANSPORT`, `FASTMCP_HOST` and `FASTMCP_PORT`: These specify the transport type, the host and port for the built-in MCP server of DQA. The default values are `stdio`, `localhost` and `8000` respectively.
+ - `HTTPX_TIMEOUT`: This specifies the timeout value in seconds a HTTP client will wait for the server to respond before raising an error. This applies, for example, to the communication timeout between the web frontend or CLI frontend to the A2A endpoint(s). Default value is 120 (seconds).
  - `LLM_CONFIG_FILE` and `MCP_CONFIG_FILE`: These specify where the LLM and MCP configurations These default to `conf/llm.json` and `conf/mcp.json` respectively.
  - [Gradio environment variables](https://www.gradio.app/guides/environment-variables) to configure the DQA web app. However, MCP server (not to be confused with DQA's built-in MCP server), server-side rendering (SSR) mode, API, Progressive Web App (PWA), analytics and public sharing will be disabled, irrespective of what is specified through the environment variables.
  - `PREFECT_API_URL`: This can be used to specify the Prefect Cloud API URL (in which case, you must set the `PREFECT_API_KEY`, see details) or the local self-hosted API URL at `http://localhost:4200/api`. The default value is None, which _will turn off Durable Agents_!
@@ -68,6 +69,9 @@ The following environment variables are all optional.
 - Invoke the A2A agent using JSON-RPC by calling `uv run dqa-cli --help` to learn about the various skills-based A2A endpoint invocations.
 - Or, start the Gradio web app by running `uv run dqa-web-app` and then browse to http://localhost:7860.
 - Once done, stop the dapr sidecars by running `./stop_dapr_multi.sh`.
+- Alternatively, you could also run `./unified_dapr_webapp.sh` to run the Dapr sidecars as well as the web app, which will be available at http://localhost:7860. Press Ctrl+C to abort the server and the unified runner script will also shutdown the Dapr sidecars.
+- Further to exposing the web app on localhost, you could also call `./run_ngrok.sh` (which requires you to have `ngrok` setup, [see instructions](https://ngrok.com/download/)) with an optional parameter `--domain your-ngrok-FQDN` to make your ap available through `ngrok` publicly at https://your-ngrok-FQDN/.
+  - A feature of exposing the app over `ngrok` is that the configured traffic policy for `ngrok` will require any user accessing the app to authenticate themselves using an OAuth provider (GitHub). This is necessary to transparently create a user namespace such that two users concurrently each naming a chat ID as `test-chat` (for instance) will **not** have a chat ID collision because they will be effectively handled by different actor IDs based on the underlying OAuth provider supplied user IDs.
 
 ## Tests and coverage
 

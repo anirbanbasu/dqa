@@ -22,7 +22,7 @@ class EnvVars:
     APP_LOG_LEVEL: str = env.str("APP_LOG_LEVEL", default="INFO").upper()
     HTTPX_TIMEOUT: float = env.float(
         "HTTPX_TIMEOUT",
-        default=60.0,
+        default=120.0,
         validate=Range(min=5.0, max=600.0),
     )
     DQA_MCP_SERVER_TRANSPORT: str = env.str(

@@ -1,0 +1,14 @@
+# See: https://ngrok.com/blog/block-threats-waf-actions -- this is a paid feature
+on_http_request:
+  - actions:
+      - type: oauth
+        config:
+          provider: github
+          idle_session_timeout: 15m
+          max_session_duration: 1h
+  - actions:
+      - type: add-headers
+        config:
+          headers:
+            X-Auth-User-ID: "${actions.ngrok.oauth.identity.provider_user_id}"
+            X-Auth-User-Name: "${actions.ngrok.oauth.identity.name}"
