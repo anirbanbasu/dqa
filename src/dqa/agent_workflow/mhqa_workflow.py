@@ -83,9 +83,10 @@ class MHQAWorkflowHelper:
             if agent_event_stream_handler is not None:
                 self.agent_event_stream_handler = agent_event_stream_handler
             else:
-                self.agent_event_stream_handler = (
-                    MHQAWorkflowHelper.event_stream_handler
-                )
+                # self.agent_event_stream_handler = (
+                #     MHQAWorkflowHelper.event_stream_handler
+                # )
+                self.agent_event_stream_handler = None
             self.initialise()
 
     def initialise(self):
@@ -177,8 +178,6 @@ class MHQAWorkflowHelper:
                 else basic_reviewer_agent
             )
 
-            # ic(self.responder_agent, self.reviewer_agent)
-
             self._mhqa_graph = Graph(nodes=(Respond, Review))
 
             self.initialised = (
@@ -206,10 +205,13 @@ class MHQAWorkflowHelper:
             user_message=user_message, responder_messages=self._message_history
         )
         self._initial_run_state = state
-        ic(state.responder_messages)
         result = await self._mhqa_graph.run(Respond(helper=self), state=state)
-        self._message_history = to_jsonable_python(result.state.responder_messages)
-        self._message_history_json = json.dumps(self._message_history)
+        self._message_history = ModelMessagesTypeAdapter.validate_python(
+            to_jsonable_python(result.state.responder_messages)
+        )
+        self._message_history_json = ModelMessagesTypeAdapter.dump_json(
+            self._message_history
+        ).decode()
         return result
 
     def create_respond_node(self, response_feedback: str | None = None) -> Respond:
@@ -274,10 +276,11 @@ class Respond(BaseNode[ResponseState]):
             )
         else:
             prompt = f"Provide your response to the message from the user.\n{ctx.state.user_message}"
+        ic(ctx.state.responder_messages)
         result = await self._helper._responder_agent.run(
             prompt, message_history=ctx.state.responder_messages
         )
-        ctx.state.responder_messages = result.all_messages()
+        ctx.state.responder_messages.extend(result.new_messages())
         if result.output.is_user_message_a_statement:
             return End(result.output.body)
         else:

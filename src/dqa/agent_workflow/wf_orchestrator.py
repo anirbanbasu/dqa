@@ -108,8 +108,6 @@ async def init_and_chat(actor_id: str, user_query: list[str]):
             wf_helper.update_message_history_from_json(message_history_json)
 
     result = await wf_helper.run_workflow(user_message=user_query[5])
-    # print_json(wf_helper._message_history_json)
-    # ic(wf_helper._message_history)
     print_result(result.output)
     result = await wf_helper.run_workflow(user_message=user_query[6])
     with open(chat_message_history_file, "w") as f:
