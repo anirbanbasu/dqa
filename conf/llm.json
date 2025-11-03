@@ -1,8 +1,10 @@
 {
-  "ollama": {
-    "base_url": "http://localhost:11434",
-    "model": "gpt-oss:20b-cloud",
-    "request_timeout": 300,
-    "thinking": false
+  "responder": {
+    "base_url": "http://localhost:11434/v1",
+    "model": "gpt-oss:20b-cloud"
+  },
+  "reviewer": {
+    "base_url": "http://localhost:11434/v1",
+    "model": "gpt-oss:20b-cloud"
   }
 }

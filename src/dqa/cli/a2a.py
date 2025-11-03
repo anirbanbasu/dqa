@@ -7,26 +7,16 @@ from types import FrameType
 from typing import List
 from uuid import uuid4
 
-from pydantic import TypeAdapter
+from pydantic import ValidationError
 from rich import print_json
 
 from a2a.utils import get_message_text
 
 import httpx
 
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 
 from a2a.types import Message
-
-from dqa.model.echo_task import (
-    DeleteEchoHistoryInput,
-    EchoAgentA2AInputMessage,
-    EchoAgentSkills,
-    EchoHistoryInput,
-    EchoInput,
-    EchoResponse,
-    EchoResponseWithHistory,
-)
 
 from dqa import ic  # noqa: F401
 
@@ -42,7 +32,13 @@ from dqa.model.mhqa import (
     MHQAHistoryInput,
     MHQAInput,
     MHQAResponse,
+    MHQAResponseStatus,
+    MHQAResponsesTypeAdapter,
 )
+
+from rich.console import Console
+from rich.json import JSON
+from rich.live import Live
 
 logger = logging.getLogger(__name__)  # Get a logger instance
 
@@ -68,16 +64,13 @@ class DQACliApp(A2AClientMixin):
 
     def _initialize(self):
         logger.debug("Initialising A2A server URLs...")
-        a2a_asgi_host = ParsedEnvVars().APP_A2A_SRV_HOST
-        echo_a2a_asgi_port = ParsedEnvVars().APP_ECHO_A2A_SRV_PORT
-        self.echo_base_url = f"http://{a2a_asgi_host}:{echo_a2a_asgi_port}"
+        a2a_asgi_host = EnvVars.APP_A2A_SRV_HOST
 
-        mhqa_a2a_asgi_port = ParsedEnvVars().APP_MHQA_A2A_SRV_PORT
+        mhqa_a2a_asgi_port = EnvVars.APP_MHQA_A2A_SRV_PORT
         self.mhqa_base_url = (
-            ParsedEnvVars().APP_MHQA_A2A_REMOTE_URL
+            EnvVars.APP_MHQA_A2A_REMOTE_URL
             or f"http://{a2a_asgi_host}:{mhqa_a2a_asgi_port}"
         )
-        logger.debug(f"Echo A2A base URL: {self.echo_base_url}")
         logger.debug(f"MHQA A2A base URL: {self.mhqa_base_url}")
 
     def _cleanup(self):
@@ -97,164 +90,11 @@ class DQACliApp(A2AClientMixin):
         finally:
             self._cleanup()
 
-    async def _echo_a2a_echo(
+    async def _chat(
         self,
         message: str,
         thread_id: str,
-    ) -> EchoResponseWithHistory:
-        async with httpx.AsyncClient() as httpx_client:
-            client, _ = await self.obtain_a2a_client(
-                httpx_client=httpx_client,
-                base_url=self.echo_base_url,
-            )
-
-            message_payload = EchoAgentA2AInputMessage(
-                skill=EchoAgentSkills.ECHO,
-                data=EchoInput(
-                    thread_id=thread_id,
-                    user_input=message,
-                ),
-            )
-
-            send_message = Message(
-                role="user",
-                parts=[{"kind": "text", "text": message_payload.model_dump_json()}],
-                message_id=str(uuid4()),
-            )
-            logger.info("Sending message to the A2A endpoint")
-            streaming_response = client.send_message(send_message)
-            logger.info("Parsing streaming response from the A2A endpoint")
-            full_message_content = ""
-            async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
-            validated_response = EchoResponseWithHistory.model_validate_json(
-                full_message_content
-            )
-            validated_response.past = validated_response.past[
-                ::-1
-            ]  # Reverse to chronological order to look right in the CLI
-            return validated_response
-
-    async def run_echo_a2a_echo(
-        self,
-        message: str,
-        thread_id: str,
-    ):
-        try:
-            self._initialize()
-            response = await self._echo_a2a_echo(
-                message=message,
-                thread_id=thread_id,
-            )
-            print_json(response.model_dump_json())
-        except Exception as e:
-            logger.error(f"Error in echo A2A echo. {e}")
-        finally:
-            self._cleanup()
-
-    async def _echo_a2a_history(
-        self,
-        thread_id: str,
-    ) -> List[EchoResponse]:
-        async with httpx.AsyncClient() as httpx_client:
-            client, _ = await self.obtain_a2a_client(
-                httpx_client=httpx_client,
-                base_url=self.echo_base_url,
-            )
-
-            message_payload = EchoAgentA2AInputMessage(
-                skill=EchoAgentSkills.HISTORY,
-                data=EchoHistoryInput(
-                    thread_id=thread_id,
-                ),
-            )
-
-            send_message = Message(
-                role="user",
-                parts=[{"kind": "text", "text": message_payload.model_dump_json()}],
-                message_id=str(uuid4()),
-            )
-            logger.info("Sending message to the A2A endpoint")
-            streaming_response = client.send_message(send_message)
-            logger.info("Parsing streaming response from the A2A endpoint")
-            full_message_content = ""
-            async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
-            response_adapter = TypeAdapter(List[EchoResponse])
-            validated_response = response_adapter.validate_json(full_message_content)
-            validated_response = validated_response[
-                ::-1
-            ]  # Reverse to chronological order to look right in the CLI
-            return validated_response
-
-    async def run_echo_a2a_history(
-        self,
-        thread_id: str,
-    ):
-        try:
-            self._initialize()
-            response = await self._echo_a2a_history(
-                thread_id=thread_id,
-            )
-            response_adapter = TypeAdapter(List[EchoResponse])
-            print_json(response_adapter.dump_json(response).decode())
-        except Exception as e:
-            logger.error(f"Error in echo A2A history. {e}")
-        finally:
-            self._cleanup()
-
-    async def _echo_a2a_delete_history(
-        self,
-        thread_id: str,
-    ) -> str:
-        async with httpx.AsyncClient() as httpx_client:
-            client, _ = await self.obtain_a2a_client(
-                httpx_client=httpx_client,
-                base_url=self.echo_base_url,
-            )
-
-            message_payload = EchoAgentA2AInputMessage(
-                skill=EchoAgentSkills.DELETE_HISTORY,
-                data=DeleteEchoHistoryInput(
-                    thread_id=thread_id,
-                ),
-            )
-
-            send_message = Message(
-                role="user",
-                parts=[{"kind": "text", "text": message_payload.model_dump_json()}],
-                message_id=str(uuid4()),
-            )
-            logger.info("Sending message to the A2A endpoint")
-            streaming_response = client.send_message(send_message)
-            logger.info("Parsing streaming response from the A2A endpoint")
-            full_message_content = ""
-            async for response in streaming_response:
-                if isinstance(response, Message):
-                    full_message_content += get_message_text(response)
-            return full_message_content
-
-    async def run_echo_a2a_delete_history(
-        self,
-        thread_id: str,
-    ):
-        try:
-            self._initialize()
-            response = await self._echo_a2a_delete_history(
-                thread_id=thread_id,
-            )
-            print(response)
-        except Exception as e:
-            logger.error(f"Error in echo A2A delete history. {e}")
-        finally:
-            self._cleanup()
-
-    async def _mhqa_chat(
-        self,
-        message: str,
-        thread_id: str,
+        console: Console,
     ) -> MHQAResponse:
         async with httpx.AsyncClient() as httpx_client:
             client, _ = await self.obtain_a2a_client(
@@ -279,30 +119,56 @@ class DQACliApp(A2AClientMixin):
             streaming_response = client.send_message(send_message)
             logger.info("Parsing streaming response from the A2A endpoint")
             full_message_content = ""
-            async for response in streaming_response:
-                if response[0].status.message:
-                    full_message_content = get_message_text(response[0].status.message)
-            validated_response = MHQAResponse.model_validate_json(full_message_content)
+            with Live(
+                "[bold yellow]Streaming response[/bold yellow]",
+                console=console,
+                screen=False,
+                redirect_stdout=True,
+                transient=True,
+            ) as live:
+                async for response in streaming_response:
+                    if response[0].status.message:
+                        full_message_content = get_message_text(
+                            response[0].status.message
+                        )
+                        live.update(JSON(full_message_content))
+            try:
+                validated_response = MHQAResponse.model_validate_json(
+                    full_message_content
+                )
+            except ValidationError as ve:
+                logger.warning(f"Validation error while parsing MHQAResponse. {ve}")
+                validated_response = MHQAResponse(
+                    thread_id=thread_id,
+                    user_input=message,
+                    agent_output=full_message_content,
+                    tool_invocations=[],
+                    status=MHQAResponseStatus.failed,
+                )
             return validated_response
 
-    async def run_mhqa_chat(
+    async def run_chat(
         self,
         message: str,
         thread_id: str,
     ):
         try:
             self._initialize()
-            response = await self._mhqa_chat(
+            console = Console(soft_wrap=True)
+            response = await self._chat(
                 message=message,
                 thread_id=thread_id,
+                console=console,
             )
-            print_json(response.model_dump_json())
+            console.print("[bold cyan]Final response[/bold cyan]")
+            console.print_json(response.model_dump_json())
         except Exception as e:
             logger.error(f"Error in MHQA chat. {e}")
+            logger.exception(e)
         finally:
             self._cleanup()
 
-    async def _mhqa_get_history(
+    async def _get_history(
         self,
         thread_id: str,
     ) -> List[MHQAResponse]:
@@ -329,30 +195,32 @@ class DQACliApp(A2AClientMixin):
             async for response in streaming_response:
                 if response[0].status.message:
                     full_message_content = get_message_text(response[0].status.message)
-            response_adapter = TypeAdapter(List[MHQAResponse])
-            validated_response = response_adapter.validate_json(full_message_content)
+            # response_adapter = TypeAdapter(List[MHQAResponse])
+            validated_response = MHQAResponsesTypeAdapter.validate_json(
+                full_message_content
+            )
             validated_response = validated_response[
                 ::-1
             ]  # Reverse to chronological order to look right in the CLI
             return validated_response
 
-    async def run_mhqa_get_history(
+    async def run_get_history(
         self,
         thread_id: str,
     ):
         try:
             self._initialize()
-            response = await self._mhqa_get_history(
+            response = await self._get_history(
                 thread_id=thread_id,
             )
-            response_adapter = TypeAdapter(List[MHQAResponse])
-            print_json(response_adapter.dump_json(response).decode())
+            # response_adapter = TypeAdapter(List[MHQAResponse])
+            print_json(MHQAResponsesTypeAdapter.dump_json(response).decode())
         except Exception as e:
             logger.error(f"Error in MHQA get history. {e}")
         finally:
             self._cleanup()
 
-    async def _mhqa_delete_history(
+    async def _delete_history(
         self,
         thread_id: str,
     ) -> str:
@@ -381,13 +249,13 @@ class DQACliApp(A2AClientMixin):
                     full_message_content = get_message_text(response[0].status.message)
             return full_message_content
 
-    async def run_mhqa_delete_history(
+    async def run_delete_history(
         self,
         thread_id: str,
     ):
         try:
             self._initialize()
-            response = await self._mhqa_delete_history(
+            response = await self._delete_history(
                 thread_id=thread_id,
             )
             print(
@@ -412,53 +280,7 @@ def hello(
 
 
 @app.command()
-def echo_a2a_echo(
-    message: str = typer.Argument(
-        default="Hello there, from an A2A client!",
-        help="The message to send to the A2A endpoint.",
-    ),
-    thread_id: str = typer.Option(
-        default=str(uuid4()),
-        help="A thread ID to identify your conversation. If not specified, a random UUID will be used.",
-    ),
-) -> None:
-    """
-    Query the echo A2A endpoint with a message and print the response.
-    """
-    app_handler = DQACliApp()
-    asyncio.run(app_handler.run_echo_a2a_echo(message=message, thread_id=thread_id))
-
-
-@app.command()
-def echo_a2a_history(
-    thread_id: str = typer.Option(
-        help="A thread ID to identify your conversation.",
-    ),
-) -> None:
-    """
-    Retrieve the history of messages for a given thread ID from the A2A endpoint.
-    """
-
-    app_handler = DQACliApp()
-    asyncio.run(app_handler.run_echo_a2a_history(thread_id=thread_id))
-
-
-@app.command()
-def echo_a2a_delete_history(
-    thread_id: str = typer.Option(
-        help="A thread ID to identify your conversation.",
-    ),
-) -> None:
-    """
-    Delete the history of messages for a given thread ID from the A2A endpoint.
-    """
-
-    app_handler = DQACliApp()
-    asyncio.run(app_handler.run_echo_a2a_delete_history(thread_id=thread_id))
-
-
-@app.command()
-def mhqa_chat(
+def chat(
     message: str = typer.Argument(
         default="Hello there, tell me about your capabilities!",
         help="The message to send to the A2A endpoint.",
@@ -469,15 +291,15 @@ def mhqa_chat(
     ),
 ) -> None:
     """
-    Query the echo A2A endpoint with a message and print the response.
+    Query the MHQA A2A endpoint with a message and print the response.
     """
 
     app_handler = DQACliApp()
-    asyncio.run(app_handler.run_mhqa_chat(message=message, thread_id=thread_id))
+    asyncio.run(app_handler.run_chat(message=message, thread_id=thread_id))
 
 
 @app.command()
-def mhqa_get_history(
+def get_history(
     thread_id: str = typer.Option(
         help="A thread ID to identify your conversation.",
     ),
@@ -487,11 +309,11 @@ def mhqa_get_history(
     """
 
     app_handler = DQACliApp()
-    asyncio.run(app_handler.run_mhqa_get_history(thread_id=thread_id))
+    asyncio.run(app_handler.run_get_history(thread_id=thread_id))
 
 
 @app.command()
-def mhqa_delete_history(
+def delete_history(
     thread_id: str = typer.Option(
         help="A thread ID to identify your conversation.",
     ),
@@ -501,7 +323,7 @@ def mhqa_delete_history(
     """
 
     app_handler = DQACliApp()
-    asyncio.run(app_handler.run_mhqa_delete_history(thread_id=thread_id))
+    asyncio.run(app_handler.run_delete_history(thread_id=thread_id))
 
 
 def main():  # pragma: no cover

@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import List, Optional, TypeAlias, Union
 
 from typing_extensions import Annotated
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from dqa.actor import MHQAActorMethods
 
@@ -29,12 +29,18 @@ class MHQADeleteHistoryInput(MHQAActorIO):
 
 class MCPToolInvocation(BaseModel):
     name: Annotated[str, "Name of the tool to be invoked"]
-    input: Annotated[Optional[str], "Input parameters for the tool in JSON format"]
-    output: Annotated[Optional[str], "Output from the tool invocation, if any"]
+    input: Annotated[Optional[str], "Input parameters for the tool in JSON format"] = (
+        None
+    )
+    output: Annotated[Optional[str], "Output from the tool invocation, if any"] = None
+    tool_call_id: Annotated[
+        Optional[str],
+        "Unique identifier for the tool call instance",
+    ] = None
     metadata: Annotated[
         Optional[str],
         "Additional metadata related to the tool invocation, if any",
-    ]
+    ] = None
 
 
 class MHQAResponseStatus(StrEnum):
@@ -68,3 +74,13 @@ class MHQAAgentInputMessage(BaseModel):
         Union[MHQAInput, MHQAHistoryInput, MHQADeleteHistoryInput],
         "Input data for the requested skill.",
     ]
+
+
+MHQAResponsesTypeAdapter = TypeAdapter(
+    List[MHQAResponse],
+    config=ConfigDict(
+        defer_build=True,
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    ),
+)

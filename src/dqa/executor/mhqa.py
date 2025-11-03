@@ -1,6 +1,5 @@
 import datetime
 import logging
-import math
 import anyio
 from dapr.actor import ActorProxy, ActorId, ActorProxyFactory
 from dapr.clients.retry import RetryPolicy
@@ -12,7 +11,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.types import TaskState
 
 
-from dqa import ParsedEnvVars
+from dqa import EnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -28,6 +27,7 @@ from dqa.model.mhqa import (
 
 from dapr.clients import DaprClient
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,16 +35,15 @@ class MHQAAgentExecutor(AgentExecutor):
     def __init__(self):
         self._actor_mhqa = MHQAActor.__name__
         self._factory = ActorProxyFactory(
-            retry_policy=RetryPolicy(
-                max_attempts=ParsedEnvVars().APP_DAPR_ACTOR_RETRY_ATTEMPTS
-            )
+            retry_policy=RetryPolicy(max_attempts=EnvVars.APP_DAPR_ACTOR_RETRY_ATTEMPTS)
         )
 
     async def do_mhqa_respond(self, data: MHQAInput):
-        # TODO: Potential memory leak without closing the streams?
-        send_stream, recv_stream = anyio.create_memory_object_stream(math.inf)
+        send_stream, receive_stream = anyio.create_memory_object_stream[str](
+            EnvVars.APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE
+        )
 
-        def message_handler(message: SubscriptionMessage) -> TopicEventResponse:
+        def pubsub_message_handler(message: SubscriptionMessage) -> TopicEventResponse:
             # TODO: Is this a reasonable way to drop stale messages?
             parsed_timestamp = message.extensions().get("time", None)
             if parsed_timestamp is not None:
@@ -52,7 +51,7 @@ class MHQAAgentExecutor(AgentExecutor):
                 timestamp = datetime.datetime.fromisoformat(parsed_timestamp)
                 td = timenow - timestamp
                 if td > datetime.timedelta(
-                    seconds=ParsedEnvVars().APP_DAPR_PUBSUB_STALE_MSG_SECS
+                    seconds=EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS
                 ):
                     logger.warning(
                         f"Dropping stale message for topic={message.topic()} with age {td} seconds"
@@ -68,6 +67,7 @@ class MHQAAgentExecutor(AgentExecutor):
                 actor_interface=MHQAActorInterface,
                 actor_proxy_factory=self._factory,
             )
+            # FIXME: Timeout error can happen here and all similar invoke_method calls
             return await proxy.invoke_method(
                 method=MHQAActorMethods.Respond,
                 raw_body=data.model_dump_json().encode(),
@@ -77,14 +77,16 @@ class MHQAAgentExecutor(AgentExecutor):
             async with anyio.create_task_group() as tg:
                 pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
                 dc.subscribe_with_handler(
-                    pubsub_name=ParsedEnvVars().DAPR_PUBSUB_NAME,
+                    pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
                     topic=pubsub_topic_name,
-                    handler_fn=message_handler,
+                    handler_fn=pubsub_message_handler,
                 )
-                tg.start_soon(invoke_actor)
 
-            async for item in recv_stream:
-                yield item
+                tg.start_soon(invoke_actor)
+                # FIXME: Error "Attempted to exit cancel scope in a different task than it was entered in".
+                async with receive_stream:
+                    async for item in receive_stream:
+                        yield item
 
     async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
         proxy = ActorProxy.create(
@@ -135,22 +137,27 @@ class MHQAAgentExecutor(AgentExecutor):
             ):
                 raise ValueError(("Missing mandatory thread_id in the input!"))
 
-            response = None
+            response: str | None = None
             match message_payload.skill:
                 case MHQAAgentSkills.Respond:
                     response_generator = self.do_mhqa_respond(data=message_payload.data)
                     async for partial_response in response_generator:
-                        response = partial_response
-                        parsed_response = MHQAResponse.model_validate_json(response)
-                        if parsed_response.status == MHQAResponseStatus.completed:
-                            break
-                        await task_updater.start_work(
-                            new_agent_text_message(
-                                text=response,
-                                task_id=task.id,
-                                context_id=task.context_id,
+                        try:
+                            response = partial_response
+                            parsed_response = MHQAResponse.model_validate_json(response)
+                            if parsed_response.status == MHQAResponseStatus.completed:
+                                break
+                            await task_updater.start_work(
+                                new_agent_text_message(
+                                    text=response,
+                                    task_id=task.id,
+                                    context_id=task.context_id,
+                                )
                             )
-                        )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error parsing partial MHQA response. {e}. Ignoring and continuing to stream."
+                            )
                 case MHQAAgentSkills.GetChatHistory:
                     response = await self.do_mhqa_get_history(data=message_payload.data)
                 case MHQAAgentSkills.ResetChatHistory:
@@ -172,12 +179,11 @@ class MHQAAgentExecutor(AgentExecutor):
             else:
                 raise ValueError("No response received from the actor(s)!")
         except Exception as e:
-            logger.error(f"Error in MHQAAgentExecutor. {e}")
+            exception_message = f"Error in MHQAAgentExecutor. {e}. Please try again."
+            logger.exception(exception_message)
             await task_updater.failed(
                 message=new_agent_text_message(
-                    # FIXME: The output will fail JSON validation in the client side
-                    # because it is not of type MHQAResponse
-                    text=str(e),
+                    text=exception_message,
                     task_id=task.id,
                     context_id=task.context_id,
                 )
