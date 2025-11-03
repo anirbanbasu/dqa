@@ -1,5 +1,4 @@
 import logging
-import math
 import re
 from typing import ClassVar
 from rich.logging import RichHandler
@@ -68,7 +67,7 @@ class EnvVars:
     APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE: int = env.int(
         "APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE",
         default=65536,
-        validate=Range(min=32768, max=math.inf),
+        validate=Range(min=32768, max=(2**31 - 1)),
     )
     MCP_SERVER_HOST: str = env.str("FASTMCP_HOST", default="localhost")
     MCP_SERVER_PORT: int = env.int("FASTMCP_PORT", default=8000)

@@ -66,7 +66,7 @@ class MHQAWorkflowHelper:
         message_history_json: str | None = None,
         agent_event_stream_handler: EventStreamHandler | None = None,
     ):
-        if not hasattr(self, "initialised"):
+        if not getattr(self, "initialised", False):
             self.update_message_history_from_json(message_history_json)
             self.agent_event_stream_handler = (
                 agent_event_stream_handler if agent_event_stream_handler else None
