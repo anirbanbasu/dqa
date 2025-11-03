@@ -250,9 +250,29 @@ class GradioApp(A2AClientMixin):
                 inputs=[bstate_chat_histories],
                 outputs=[list_task_ids],
             )
-            async def btn_chats_refresh_required(bstate_chat_histories: dict):
-                if bstate_chat_histories:
-                    yield (list(bstate_chat_histories.keys()))
+            async def btn_chats_refresh_required(browser_state_chat_histories: list):
+                # ic(browser_state_chat_histories, type(browser_state_chat_histories))
+                if browser_state_chat_histories:
+                    # # TODO: Validate that the data in browser state is indeed a list of strings
+                    # ic(browser_state_chat_histories, type(browser_state_chat_histories))
+                    need_to_clear_chat_ids = []
+                    for item in browser_state_chat_histories:
+                        # ic(item, type(item))
+                        if not isinstance(item, str):
+                            need_to_clear_chat_ids.append(item)
+                            logger.warning(
+                                f"Invalid data found in browser state for chat histories. Will remove it.\n{item}"
+                            )
+                    for item_to_clear in need_to_clear_chat_ids:
+                        # ic(item_to_clear, type(item_to_clear))
+                        browser_state_chat_histories.remove(item_to_clear)
+                    # FIXME: The check for list type should not be necessary
+                    yield (
+                        browser_state_chat_histories
+                        if isinstance(browser_state_chat_histories, list)
+                        else []
+                    )
+                    # yield browser_state_chat_histories
                 else:
                     yield []
 
@@ -306,19 +326,19 @@ class GradioApp(A2AClientMixin):
                 trigger_mode="always_last",
                 inputs=[
                     state_selected_chat_id,
-                    bstate_chat_histories,
                     state_oauth_userid,
                 ],
-                outputs=[btn_chat_delete, chatbot, bstate_chat_histories],
+                outputs=[btn_chat_delete, chatbot],
             )
             async def state_selected_chat_id_changed(
                 selected_chat_id: str,
-                chat_histories: dict,
+                # browser_state_chat_histories: list,
                 oauth_userid: str | None = None,
             ):
                 try:
-                    if not chat_histories:
-                        chat_histories = {}
+                    # if not browser_state_chat_histories:
+                    #     browser_state_chat_histories = []
+                    # ic(browser_state_chat_histories, type(browser_state_chat_histories))
                     if selected_chat_id and selected_chat_id.strip() != "":
                         yield {
                             btn_chat_delete: gr.update(interactive=False),
@@ -330,24 +350,23 @@ class GradioApp(A2AClientMixin):
                         refreshed_history = await refresh_chat_history_from_agent(
                             selected_chat_id, oauth_userid
                         )
-                        chat_histories[selected_chat_id] = refreshed_history
-                        yield (
-                            gr.update(interactive=True),
-                            gr.update(
-                                value=chat_histories.get(selected_chat_id, []),
+                        yield {
+                            btn_chat_delete: gr.update(interactive=True),
+                            chatbot: gr.update(
+                                value=refreshed_history,
                                 label=f"Chat ID: {selected_chat_id}",
                             ),
-                            chat_histories,
-                        )
+                            # bstate_chat_histories: browser_state_chat_histories,
+                        }
                     else:
-                        yield (
-                            gr.update(interactive=False),
-                            gr.update(
+                        yield {
+                            btn_chat_delete: gr.update(interactive=False),
+                            chatbot: gr.update(
                                 value=[],
                                 label="Chat history (a new chat will be created if none if selected)",
                             ),
-                            chat_histories,
-                        )
+                            # bstate_chat_histories: browser_state_chat_histories,
+                        }
                 except Exception as e:
                     raise gr.Error(e)
 
@@ -402,7 +421,7 @@ class GradioApp(A2AClientMixin):
                 outputs=[bstate_chat_histories, state_selected_chat_id],
             )
             async def btn_chat_delete_clicked(
-                browser_state_chat_histories: dict,
+                browser_state_chat_histories: list,
                 selected_chat_id,
                 oauth_userid: str | None = None,
             ):
@@ -410,7 +429,7 @@ class GradioApp(A2AClientMixin):
                     if selected_chat_id in browser_state_chat_histories:
                         gr.Info(f"Requested deletion of chat ID: {selected_chat_id}...")
                         await delete_remote_chat_history(selected_chat_id, oauth_userid)
-                        del browser_state_chat_histories[selected_chat_id]
+                        browser_state_chat_histories.remove(selected_chat_id)
                         selected_chat_id = None
                     else:
                         gr.Warning(
@@ -426,16 +445,18 @@ class GradioApp(A2AClientMixin):
                 outputs=[bstate_chat_histories, state_selected_chat_id, txt_chat_id],
             )
             async def btn_new_chat_clicked(
-                new_chat_id: str, browser_state_chat_histories: dict
+                new_chat_id: str, browser_state_chat_histories: list
             ):
                 if not new_chat_id or new_chat_id.strip() == "":
                     new_chat_id = uuid4().hex
                 else:
                     new_chat_id = new_chat_id.strip()
                     new_chat_id = new_chat_id.replace(" ", "")
-                if not browser_state_chat_histories:
-                    browser_state_chat_histories = {}
-                browser_state_chat_histories[new_chat_id] = []
+                if not browser_state_chat_histories or isinstance(
+                    browser_state_chat_histories, dict
+                ):
+                    browser_state_chat_histories = []
+                browser_state_chat_histories.append(new_chat_id)
                 yield browser_state_chat_histories, new_chat_id, None
 
             @gr.on(
@@ -454,9 +475,9 @@ class GradioApp(A2AClientMixin):
                     chatbot,
                 ],
             )
-            async def btn_echo_clicked(
+            async def btn_send_clicked(
                 user_query: str,
-                browser_state_chat_histories: dict,
+                browser_state_chat_histories: list,
                 state_selected_chat: str,
                 chat_history: list,
                 oauth_userid: str | None = None,
@@ -464,11 +485,13 @@ class GradioApp(A2AClientMixin):
                 selected_chat_id = (
                     state_selected_chat if state_selected_chat else uuid4().hex
                 )
+                if not browser_state_chat_histories:
+                    browser_state_chat_histories = []
+
+                if selected_chat_id not in browser_state_chat_histories:
+                    browser_state_chat_histories.append(selected_chat_id)
                 try:
                     if user_query and user_query.strip() != "":
-                        if not browser_state_chat_histories:
-                            browser_state_chat_histories = {}
-
                         temp_user_message = self.convert_mhqa_response_to_chat_messages(
                             MHQAResponse(
                                 thread_id=selected_chat_id
@@ -563,23 +586,22 @@ class GradioApp(A2AClientMixin):
                                             chat_history.extend(new_messages)
                                             last_added_messages = len(new_messages)
 
-                                            browser_state_chat_histories[
-                                                selected_chat_id
-                                            ] = chat_history
                                             yield {
                                                 bstate_chat_histories: browser_state_chat_histories,
+                                                state_selected_chat_id: selected_chat_id,
                                                 chatbot: chat_history,
                                             }
                     else:
                         gr.Warning(
                             f"No input message was provided for chat ID {selected_chat_id}."
                         )
-                    yield (
-                        None,
-                        browser_state_chat_histories,
-                        selected_chat_id,
-                        chat_history,
-                    )
+                    # ic(browser_state_chat_histories, type(browser_state_chat_histories))
+                    yield {
+                        txt_input: None,
+                        bstate_chat_histories: browser_state_chat_histories,
+                        state_selected_chat_id: selected_chat_id,
+                        chatbot: chat_history,
+                    }
                 except Exception as e:
                     yield {
                         txt_input: user_query,
