@@ -11,7 +11,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.types import TaskState
 
 
-from dqa import EnvVars
+from dqa import EnvVars, ic
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -43,6 +43,8 @@ class MHQAAgentExecutor(AgentExecutor):
             EnvVars.APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE
         )
 
+        dc = DaprClient()
+
         def pubsub_message_handler(message: SubscriptionMessage) -> TopicEventResponse:
             # TODO: Is this a reasonable way to drop stale messages?
             parsed_timestamp = message.extensions().get("time", None)
@@ -73,20 +75,28 @@ class MHQAAgentExecutor(AgentExecutor):
                 raw_body=data.model_dump_json().encode(),
             )
 
-        with DaprClient() as dc:
-            async with anyio.create_task_group() as tg:
-                pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
+        pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
+
+        async with anyio.create_task_group() as tg:
+            try:
                 dc.subscribe_with_handler(
                     pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
                     topic=pubsub_topic_name,
                     handler_fn=pubsub_message_handler,
                 )
-
-                tg.start_soon(invoke_actor)
+                tg.start_soon(invoke_actor, name=invoke_actor.__name__)
                 # FIXME: Error "Attempted to exit cancel scope in a different task than it was entered in".
-                async with receive_stream:
-                    async for item in receive_stream:
-                        yield item
+                async for item in receive_stream:
+                    yield item
+                tg.cancel_scope.cancel()
+                ic("Cancelled anyio task group")
+            except Exception as e:
+                logger.exception(e)
+            finally:
+                await receive_stream.aclose()
+                await send_stream.aclose()
+                dc.close()
+                ic("Receive and send streams closed")
 
     async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
         proxy = ActorProxy.create(
