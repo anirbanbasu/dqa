@@ -101,49 +101,6 @@ class GradioApp(A2AClientMixin):
     def component_main_content(self):
         with gr.Column() as component:
             with gr.Row(equal_height=False):
-                with gr.Column(scale=1):
-                    gr.Image(
-                        GradioApp._APP_LOGO_PATH,
-                        show_label=False,
-                        container=False,
-                        interactive=False,
-                        buttons=[],
-                    )
-
-                    state_selected_chat_id = gr.State(value=None)
-                    state_oauth_username = gr.State(value=None)
-                    state_oauth_userid = gr.State(value=None)
-                    with gr.Group():
-                        md_welcome_msg = gr.Markdown(
-                            padding=True,
-                        )
-                        txt_chat_id = gr.Textbox(
-                            label="Manually add a new chat ID",
-                            # info="Enter a chat ID or, leave blank to create a new UUID. To add to the list, press Enter.",
-                            placeholder="Enter a new chat ID",
-                            lines=1,
-                            max_lines=1,
-                            buttons=["copy"],
-                        )
-                        list_task_ids = gr.List(
-                            wrap=True,
-                            line_breaks=True,
-                            headers=["Chat IDs"],
-                            min_width=128,
-                            column_widths=[128],
-                            pinned_columns=1,
-                            interactive=False,
-                            static_columns=[0],
-                            show_search="filter",
-                            buttons=[],
-                        )
-                        btn_chat_delete = gr.Button(
-                            "Delete selected chat",
-                            size="sm",
-                            variant="stop",
-                            icon=GradioApp._ICON_BTN_DELETE,
-                            interactive=False,
-                        )
                 with gr.Column(scale=3):
                     bstate_chat_histories = gr.BrowserState(
                         storage_key=EnvVars.BROWSER_STATE_CHAT_HISTORIES,
@@ -202,6 +159,49 @@ class GradioApp(A2AClientMixin):
                         examples_per_page=5,
                         inputs=[txt_input],
                     )
+                with gr.Column(scale=1):
+                    gr.Image(
+                        GradioApp._APP_LOGO_PATH,
+                        show_label=False,
+                        container=False,
+                        interactive=False,
+                        buttons=[],
+                    )
+
+                    state_selected_chat_id = gr.State(value=None)
+                    state_oauth_username = gr.State(value=None)
+                    state_oauth_userid = gr.State(value=None)
+                    with gr.Group():
+                        md_welcome_msg = gr.Markdown(
+                            padding=True,
+                        )
+                        txt_chat_id = gr.Textbox(
+                            label="Manually add a new chat ID",
+                            # info="Enter a chat ID or, leave blank to create a new UUID. To add to the list, press Enter.",
+                            placeholder="Enter a new chat ID",
+                            lines=1,
+                            max_lines=1,
+                            buttons=["copy"],
+                        )
+                        list_task_ids = gr.List(
+                            wrap=True,
+                            line_breaks=True,
+                            headers=["Chat IDs"],
+                            min_width=128,
+                            column_widths=[128],
+                            pinned_columns=1,
+                            interactive=False,
+                            static_columns=[0],
+                            show_search="filter",
+                            buttons=[],
+                        )
+                        btn_chat_delete = gr.Button(
+                            "Delete selected chat",
+                            size="sm",
+                            variant="stop",
+                            icon=GradioApp._ICON_BTN_DELETE,
+                            interactive=False,
+                        )
 
             @gr.on(
                 triggers=[self.ui.load],

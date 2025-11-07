@@ -718,7 +718,7 @@ wheels = [
 
 [[package]]
 name = "dqa"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "a2a-sdk", extra = ["http-server"] },
@@ -729,6 +729,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "frankfurtermcp" },
     { name = "gradio" },
+    { name = "hallbayes" },
     { name = "ollama" },
     { name = "pydantic-ai-slim", extra = ["fastmcp", "openai", "prefect"] },
     { name = "pydantic-graph" },
@@ -756,6 +757,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.12.4" },
     { name = "frankfurtermcp", specifier = ">=0.3.6" },
     { name = "gradio", specifier = ">=5.46.1" },
+    { name = "hallbayes", git = "https://github.com/leochlon/hallbayes.git" },
     { name = "ollama", specifier = ">=0.6.0" },
     { name = "pydantic-ai-slim", extras = ["openai", "fastmcp", "prefect"], specifier = ">=1.7.0" },
     { name = "pydantic-graph", specifier = ">=1.7.0" },
@@ -1207,6 +1209,16 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1d/17/afa56379f94ad0fe8defd37d6eb3f89a25404ffc71d4d848893d270325fc/h2-4.3.0.tar.gz", hash = "sha256:6c59efe4323fa18b47a632221a1888bd7fde6249819beda254aeca909f221bf1", size = 2152026, upload-time = "2025-08-23T18:12:19.778Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/69/b2/119f6e6dcbd96f9069ce9a2665e0146588dc9f88f29549711853645e736a/h2-4.3.0-py3-none-any.whl", hash = "sha256:c438f029a25f7945c69e0ccf0fb951dc3f73a5f6412981daee861431b70e2bdd", size = 61779, upload-time = "2025-08-23T18:12:17.779Z" },
+]
+
+[[package]]
+name = "hallbayes"
+version = "0.1.0"
+source = { git = "https://github.com/leochlon/hallbayes.git#14a295b20c1944a5367be722f26acb00fabb945e" }
+dependencies = [
+    { name = "numpy" },
+    { name = "openai" },
+    { name = "requests" },
 ]
 
 [[package]]

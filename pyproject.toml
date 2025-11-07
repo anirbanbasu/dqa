@@ -1,6 +1,6 @@
 [project]
 name = "dqa"
-version = "0.2.0"
+version = "0.3.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -16,6 +16,7 @@ dependencies = [
     "fastmcp>=2.12.4",
     "frankfurtermcp>=0.3.6",
     "gradio>=5.46.1",
+    "hallbayes",
     "ollama>=0.6.0",
     "pydantic-ai-slim[openai,fastmcp,prefect]>=1.7.0",
     "pydantic-graph>=1.7.0",
@@ -46,3 +47,6 @@ test = [
     "coverage>=7.10.6",
     "pytest>=8.4.2",
 ]
+
+[tool.uv.sources]
+hallbayes = { git = "https://github.com/leochlon/hallbayes.git" }

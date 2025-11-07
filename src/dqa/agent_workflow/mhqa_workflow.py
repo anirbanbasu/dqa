@@ -27,6 +27,9 @@ from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 from pydantic_core import to_jsonable_python
 from pydantic_graph import BaseNode, End, Graph, GraphRunContext
 
+from hallbayes.htk_backends import OllamaBackend
+from hallbayes.hallucination_toolkit import OpenAIItem, OpenAIPlanner
+
 from dqa import EnvVars
 
 
@@ -103,16 +106,16 @@ class MHQAWorkflowHelper:
                     f"Prefect API URL is set to '{EnvVars.PREFECT_API_URL}'. Durable Agents will be used. However, this is an experimental feature!"
                 )
 
-            responder_llm_config = self.llm_config.get(
+            self._responder_llm_config = self.llm_config.get(
                 MHQAWorkflowAgentType.RESPONDER.value.lower(), {}
             )
 
             basic_responder_agent = Agent(
                 name=f"MHQA{MHQAWorkflowAgentType.RESPONDER.value.capitalize()}Agent",
                 model=OpenAIChatModel(
-                    model_name=responder_llm_config.get("model", None),
+                    model_name=self._responder_llm_config.get("model", None),
                     provider=OllamaProvider(
-                        base_url=responder_llm_config.get("base_url", None)
+                        base_url=self._responder_llm_config.get("base_url", None)
                     ),
                 ),
                 system_prompt=(
@@ -133,16 +136,16 @@ class MHQAWorkflowHelper:
                 else basic_responder_agent
             )
 
-            reviewer_llm_config = self.llm_config.get(
+            self._reviewer_llm_config = self.llm_config.get(
                 MHQAWorkflowAgentType.REVIEWER.value.lower(), {}
             )
 
             basic_reviewer_agent = Agent[None, ResponseRevisionRequired | ResponseOK](
                 name=f"MHQA{MHQAWorkflowAgentType.REVIEWER.value.capitalize()}Agent",
                 model=OpenAIChatModel(
-                    model_name=reviewer_llm_config.get("model", None),
+                    model_name=self._reviewer_llm_config.get("model", None),
                     provider=OllamaProvider(
-                        base_url=reviewer_llm_config.get("base_url", None)
+                        base_url=self._reviewer_llm_config.get("base_url", None)
                     ),
                 ),
                 system_prompt=(
@@ -161,6 +164,18 @@ class MHQAWorkflowHelper:
             )
 
             self._mhqa_graph = Graph(nodes=(Respond, Review))
+
+            # This should be an OpenAI like backend instead of OllamaBackend
+            self._responder_backend = OllamaBackend(
+                model=self._responder_llm_config.get("model", None),
+            )
+
+            self._reviewer_backed = OllamaBackend(
+                model=self._reviewer_llm_config.get("model", None),
+            )
+
+            self._responder_planner = OpenAIPlanner(self._responder_backend)
+            self._reviewer_planner = OpenAIPlanner(self._reviewer_backed)
 
             self.initialised = (
                 hasattr(self, "llm_config")
@@ -228,6 +243,19 @@ class Respond(BaseNode[ResponseState]):
         )
         ctx.state.responder_messages.extend(result.new_messages())
         if result.output.is_user_message_a_statement:
+            hallbayes_metrics = self._helper._responder_planner.run(
+                [
+                    OpenAIItem(
+                        prompt=f"{self._helper._responder_agent.system_prompt}\n{prompt}",
+                        n_samples=3,
+                        m=6,
+                        skeleton_policy="auto",
+                    )
+                ]
+            )
+            logger.info(
+                f"Responder HB metrics: {[json.dumps(m.__dict__) for m in hallbayes_metrics]}"
+            )
             return End(result.output.body)
         else:
             return self._helper.create_review_node(response_text=result.output.body)
@@ -253,6 +281,19 @@ class Review(BaseNode[ResponseState, None, str]):
         )
         result = await self._helper._reviewer_agent.run(prompt)
         if isinstance(result.output, ResponseRevisionRequired):
+            hallbayes_metrics = self._helper._reviewer_planner.run(
+                [
+                    OpenAIItem(
+                        prompt=f"{self._helper._reviewer_agent.system_prompt}\n{prompt}",
+                        n_samples=3,
+                        m=6,
+                        skeleton_policy="auto",
+                    )
+                ]
+            )
+            logger.info(
+                f"Reviewer HB metrics: {[json.dumps(m.__dict__) for m in hallbayes_metrics]}"
+            )
             return self._helper.create_respond_node(
                 response_feedback=result.output.review
             )
