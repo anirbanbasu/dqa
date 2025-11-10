@@ -87,6 +87,9 @@ class EnvVars:
     )
 
     PREFECT_API_URL: str = env.str("PREFECT_API_URL", default=None)
+    PHOENIX_COLLECTOR_ENDPOINT: str = env.str(
+        "PHOENIX_COLLECTOR_ENDPOINT", default="http://localhost:6006"
+    )
 
     API_KEY_ALPHAVANTAGE: str = env.str("ALPHAVANTAGE_API_KEY", default=None)
     API_KEY_TAVILY: str = env.str("TAVILY_API_KEY", default=None)
@@ -102,6 +105,7 @@ class EnvVars:
         return cls._instance
 
 
+# Setup logging config
 logging.basicConfig(
     level=EnvVars.APP_LOG_LEVEL,
     format="%(message)s",
