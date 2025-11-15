@@ -11,7 +11,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.types import TaskState
 
 
-from dqa import EnvVars, ic
+from dqa import EnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -104,13 +104,6 @@ class MHQAAgentExecutor(AgentExecutor):
                     # The solution is asynccontextmanager but how? Do we need custom context managers? https://anyio.readthedocs.io/en/stable/contextmanagers.html
                     async with receive_stream, send_stream:
                         async for item in receive_stream:
-                            # Check the stack of running tasks for debugging
-                            ic(
-                                [
-                                    (t.id, t.parent_id, t.name, t.coro)
-                                    for t in anyio.get_running_tasks()
-                                ]
-                            )
                             yield item
                 # tg.cancel_scope.cancel()
                 # ic("Cancelled anyio task group")
