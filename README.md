@@ -18,13 +18,27 @@ However, DQA is experimental with the emphasis on standardising agentic communic
 
 ## Installation
 
+### Package manager and dependencies
+
 - Install [`uv` package manager](https://docs.astral.sh/uv/getting-started/installation/).
-- Install self-hosted ([with Docker](https://docs.prefect.io/v3/how-to-guides/self-hosted/server-docker)) a Prefect server by running `docker run -p 4200:4200 -d --restart unless-stopped --name prefect prefecthq/prefect:3-latest -- prefect server start --host 0.0.0.0`. _This is only necessary for [Durable Agents](https://ai.pydantic.dev/durable_execution/overview/) connecting to a self-hosted Prefect server_. Note that Durable Agents support is experimental and may be dropped in the future.
 - Install project dependencies by running `uv sync --all-groups`.
-- Configure Dapr to run [with docker](https://docs.dapr.io/operations/hosting/self-hosted/self-hosted-with-docker/).
+
+### Observability
+
+- Install a self-hosted, [with Docker](https://arize.com/docs/phoenix/self-hosting/deployment-options/docker), Arize Phoenix observability system by running `docker run -d --restart unless-stopped -p 6006:6006 -p 4317:4317 --name arizephoenix -i -t arizephoenix/phoenix:latest`. Alternatively, use [Arize Phoenix cloud](https://arize.com/docs/phoenix/phoenix-cloud).
+
+### Durable agents (optional)
+- Install a self-hosted, ([with Docker](https://docs.prefect.io/v3/how-to-guides/self-hosted/server-docker)), Prefect server by running `docker run -p 4200:4200 -d --restart unless-stopped --name prefect prefecthq/prefect:3-latest -- prefect server start --host 0.0.0.0`. _This is only necessary for [Durable Agents](https://ai.pydantic.dev/durable_execution/overview/) connecting to a self-hosted Prefect server_. Note that Durable Agents support is experimental and may be dropped in the future.
+
+### Dapr
+- Install and configure Dapr to run [with docker](https://docs.dapr.io/operations/hosting/self-hosted/self-hosted-with-docker/).
 - Run `dapr init` to initialise `daprd` and the relevant containers.
 
 _If deployment over Kubernetes is desired then check [these deployment instructions](https://docs.dapr.io/operations/hosting/kubernetes/kubernetes-deploy/)_.
+
+### Dockerised, with `dapr --slim`
+
+_Coming soon._
 
 ## Configuration and environment variables
 
@@ -39,7 +53,10 @@ There are Dapr related configuration files too.
  - Dapr telemetry configuration at `.dapr/config.yaml`.
  - Dapr hot-swappable component configuration files at `.dapr/components/`.
 
-
+The following environment variables are _mandatory_.
+ - `DQA_SECRETS_REDIS_HOST`: Use this to specify your Redis host that Dapr will use for its _statestore_ and _pubsub_ components, e.g., `localhost:6379` or `host.internal.docker:6379`.
+ - `DQA_SECRETS_REDIS_USERNAME`: Use this to specify your Redis username that Dapr will use to connect to the Redis host specified above, e.g., `default`.
+ - `DQA_SECRETS_REDIS_PASSWORD`: Use this to specify your Redis password that Dapr will use to connect to the Redis host specified above. The password for local installations is typically blank.
 
 The following API keys are optional but maybe provided for additional functionality. If not provided, the corresponding functionality will not be available.
 
@@ -54,6 +71,7 @@ The following environment variables are all optional.
  - `LLM_CONFIG_FILE` and `MCP_CONFIG_FILE`: These specify where the LLM and MCP configurations These default to `conf/llm.json` and `conf/mcp.json` respectively.
  - [Gradio environment variables](https://www.gradio.app/guides/environment-variables) to configure the DQA web app. However, MCP server (not to be confused with DQA's built-in MCP server), server-side rendering (SSR) mode, API, Progressive Web App (PWA), analytics and public sharing will be disabled, irrespective of what is specified through the environment variables.
  - `PREFECT_API_URL`: This can be used to specify the Prefect Cloud API URL (in which case, you must set the `PREFECT_API_KEY`, see details) or the local self-hosted API URL at `http://localhost:4200/api`. The default value is None, which _will turn off Durable Agents_!
+ - `PHOENIX_COLLECTOR_ENDPOINT`: This is used to specify the collector endpoint of an Arize Phoenix installation. The default value is `http://localhost:6006`. If you specify a remote endpoint that requires an API key, such as Phoenix cloud then you must also specify the environment variable `PHOENIX_API_KEY`.
  - `BROWSER_STATE_SECRET`: This is the secret used by Gradio to encrypt the browser state data. The default value is `a2a_dapr_bstate_secret`.
  - `BROWSER_STATE_CHAT_HISTORIES`: This is the key in browser state used by Gradio to store the chat histories (local values). The default value is `a2a_dapr_chat_histories`.
  - `APP_DAPR_SVC_HOST` and `APP_DAPR_SVC_PORT`: The host and port at which Dapr actor service will listen on. These default to `127.0.0.1` and `32768`. Should you change these, you must change the corresponding information in `dapr.yaml`.
@@ -70,7 +88,7 @@ The following environment variables are all optional.
 - Invoke the A2A agent using JSON-RPC by calling `uv run dqa-cli --help` to learn about the various skills-based A2A endpoint invocations.
 - Or, start the Gradio web app by running `uv run dqa-web-app` and then browse to http://localhost:7860.
 - Once done, stop the dapr sidecars by running `./stop_dapr_multi.sh`.
-- Alternatively, you could also run `./unified_dapr_webapp.sh` to run the Dapr sidecars as well as the web app, which will be available at http://localhost:7860. Press Ctrl+C to abort the server and the unified runner script will also shutdown the Dapr sidecars.
+- Alternatively, you could also run `./unified_start.sh` to run the Dapr sidecars as well as the web app, which will be available at http://localhost:7860. Press Ctrl+C to abort the server and the unified runner script will also shutdown the Dapr sidecars.
 - Further to exposing the web app on localhost, you could also call `./run_ngrok.sh` (which requires you to have `ngrok` setup, [see instructions](https://ngrok.com/download/)) with an optional parameter `--domain your-ngrok-FQDN` to make your app available through `ngrok` publicly at https://your-ngrok-FQDN/.
   - Note that a feature of exposing the app over `ngrok` is that the configured traffic policy for `ngrok` will require any user accessing the app to authenticate themselves using an OAuth provider (GitHub). This is necessary to transparently create a user namespace such that two users concurrently each naming a chat ID as `test-chat` (for instance) will _not_ have a chat ID collision because each chat will be effectively handled by a different actor ID in the namespace based on the underlying OAuth provider supplied user ID. Thus, `user1__test-chat` is different from `user2__test-chat`.
   - Also note that the same OAuth-authenticated user using more than one separate browsers will _not_ have the same list of chat IDs visible on each browser. This is because the chat IDs list is local to each browser. However, the user will be able to load a specific chat ID on one browser in another browser by manually adding that chat ID. Since those chat IDs are in their OAuth-authenticated user namespaces, an authenticated user will only be able to add their own chat ID, not someone else's.

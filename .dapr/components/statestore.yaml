@@ -7,8 +7,21 @@ spec:
   version: v1
   metadata:
   - name: redisHost
-    value: localhost:6379
+    value: ""
+    secretKeyRef:
+      name: REDIS_HOST
+      key: REDIS_HOST
+  - name: redisUsername
+    value: ""
+    secretKeyRef:
+      name: REDIS_USERNAME
+      key: REDIS_USERNAME
   - name: redisPassword
     value: ""
+    secretKeyRef:
+      name: REDIS_PASSWORD
+      key: REDIS_PASSWORD
   - name: actorStateStore
     value: "true"
+auth:
+  secretStore: envvar-secret-store

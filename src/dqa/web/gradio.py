@@ -607,7 +607,7 @@ class GradioApp(A2AClientMixin):
             fill_width=True,
             fill_height=True,
             analytics_enabled=False,
-            theme=gr.themes.Monochrome(font=gr.themes.GoogleFont("Sora")),
+            # theme=gr.themes.Monochrome(font=gr.themes.GoogleFont("Sora")),
         ) as self.ui:
             gr.set_static_paths(
                 paths=[
