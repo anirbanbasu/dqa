@@ -1,6 +1,7 @@
 import logging
 from typing import AsyncIterable, ClassVar, List
-
+import zlib
+import base64
 
 from dqa.agent_workflow.mhqa_workflow import MHQAWorkflowHelper
 
@@ -15,6 +16,7 @@ from pydantic_ai import (
     TextPartDelta,
     ThinkingPart,
     ThinkingPartDelta,
+    ToolCallPart,
     ToolCallPartDelta,
     ToolReturnPart,
 )
@@ -73,7 +75,13 @@ class MHQAActor(Actor, MHQAActorInterface):
             raise ValueError("Agent workflow helper could not be initialised.")
 
         saved_internal_conversation_memory = (
-            await self._state_manager.get_state(self._internal_conversation_memory)
+            zlib.decompress(
+                base64.b64decode(
+                    await self._state_manager.get_state(
+                        self._internal_conversation_memory
+                    )
+                )
+            ).decode()
             if await self._state_manager.contains_state(
                 self._internal_conversation_memory
             )
@@ -88,7 +96,11 @@ class MHQAActor(Actor, MHQAActorInterface):
             logger.info("Restored internal conversation history from state store.")
 
         saved_user_conversation_memory = (
-            await self._state_manager.get_state(self._user_conversation_memory)
+            zlib.decompress(
+                base64.b64decode(
+                    await self._state_manager.get_state(self._user_conversation_memory)
+                )
+            ).decode()
             if await self._state_manager.contains_state(self._user_conversation_memory)
             else None
         )
@@ -118,7 +130,10 @@ class MHQAActor(Actor, MHQAActorInterface):
             async for event in event_stream:
                 if isinstance(event, PartStartEvent):
                     if isinstance(event.part, ThinkingPart):
-                        agent_output_message = f"\n[Thinking]\n{event.part.content}"
+                        # agent_output_message = f"\n[Thinking]\n{event.part.content}"
+                        agent_output_message = "\n[Thinking]\n"
+                    elif isinstance(event.part, ToolCallPart):
+                        agent_output_message = "\n[Calling tools]\n"
                     else:
                         pass
                 elif isinstance(event, PartDeltaEvent):
@@ -126,7 +141,9 @@ class MHQAActor(Actor, MHQAActorInterface):
                         # This handler chooses to output deltas for the thinking part but not the text parts
                         pass
                     elif isinstance(event.delta, ThinkingPartDelta):
-                        agent_output_message += event.delta.content_delta
+                        # This is too verbose
+                        # agent_output_message += event.delta.content_delta
+                        pass
                     elif isinstance(event.delta, ToolCallPartDelta):
                         # We don't output deltas for tool calls
                         pass
@@ -168,7 +185,11 @@ class MHQAActor(Actor, MHQAActorInterface):
                 dc.publish_event(
                     pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
                     topic_name=pubsub_topic_name,
-                    data=response.model_dump_json().encode(),
+                    # data=base64.b64encode(zlib.compress(response.model_dump_json().encode())).decode(),
+                    publish_metadata=dict(
+                        ttlInSeconds=f"{EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS * 3}"
+                    ),
+                    data=response.model_dump_json(),
                 )
 
     async def respond(self, data: dict) -> dict:
@@ -189,16 +210,26 @@ class MHQAActor(Actor, MHQAActorInterface):
             dc.publish_event(
                 pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
                 topic_name=pubsub_topic_name,
-                data=response.model_dump_json().encode(),
+                # data=base64.b64encode(zlib.compress(response.model_dump_json().encode())).decode(),
+                publish_metadata=dict(
+                    ttlInSeconds=f"{EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS * 3}"
+                ),
+                data=response.model_dump_json(),
             )
         await self._state_manager.set_state(
             self._internal_conversation_memory,
-            self._wf_helper._message_history_json,
+            base64.b64encode(
+                zlib.compress(self._wf_helper._message_history_json.encode())
+            ).decode(),
         )
         self.user_conversation_history.append(response)
         await self._state_manager.set_state(
             self._user_conversation_memory,
-            MHQAResponsesTypeAdapter.dump_json(self.user_conversation_history).decode(),
+            base64.b64encode(
+                zlib.compress(
+                    MHQAResponsesTypeAdapter.dump_json(self.user_conversation_history)
+                )
+            ).decode(),
         )
         await self._state_manager.save_state()
         return response.model_dump()

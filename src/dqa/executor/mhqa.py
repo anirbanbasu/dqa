@@ -104,6 +104,8 @@ class MHQAAgentExecutor(AgentExecutor):
                     # The solution is asynccontextmanager but how? Do we need custom context managers? https://anyio.readthedocs.io/en/stable/contextmanagers.html
                     async with receive_stream, send_stream:
                         async for item in receive_stream:
+                            # processed_item = zlib.decompress(base64.b64decode(item)).decode()
+                            # yield processed_item
                             yield item
                 # tg.cancel_scope.cancel()
                 # ic("Cancelled anyio task group")
@@ -112,8 +114,8 @@ class MHQAAgentExecutor(AgentExecutor):
         finally:
             # await receive_stream.aclose()
             # await send_stream.aclose()
-            if not tg.cancel_scope.cancel_called:
-                tg.cancel_scope.cancel()
+            # if not tg.cancel_scope.cancel_called:
+            #     tg.cancel_scope.cancel()
             dc.close()
             # ic("Receive and send streams closed")
 
