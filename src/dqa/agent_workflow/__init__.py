@@ -13,6 +13,7 @@ from dqa import EnvVars
 endpoint = f"{EnvVars.PHOENIX_COLLECTOR_ENDPOINT}/v1/traces"
 # Set up the tracer provider
 tracer_provider = register(
+    endpoint=endpoint,
     project_name="DQA",
     batch=True,
     protocol="http/protobuf",
