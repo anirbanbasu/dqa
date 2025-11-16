@@ -30,6 +30,9 @@ class EnvVars:
         default="stdio",
         validate=OneOf(["stdio", "sse", "streamable-http"]),
     )
+    DQA_SECRETS_OLLAMA_BASE_URL: str | None = env.str(
+        "DQA_SECRETS_OLLAMA_BASE_URL", default=None
+    )
     FASTMCP_HOST: str = env.str("FASTMCP_HOST", default="localhost")
     FASTMCP_PORT: int = env.int("FASTMCP_PORT", default=8000)
 
@@ -87,6 +90,9 @@ class EnvVars:
     )
 
     PREFECT_API_URL: str = env.str("PREFECT_API_URL", default=None)
+    PHOENIX_COLLECTOR_ENDPOINT: str = env.str(
+        "PHOENIX_COLLECTOR_ENDPOINT", default="http://localhost:6006"
+    )
 
     API_KEY_ALPHAVANTAGE: str = env.str("ALPHAVANTAGE_API_KEY", default=None)
     API_KEY_TAVILY: str = env.str("TAVILY_API_KEY", default=None)
@@ -102,6 +108,7 @@ class EnvVars:
         return cls._instance
 
 
+# Setup logging config
 logging.basicConfig(
     level=EnvVars.APP_LOG_LEVEL,
     format="%(message)s",

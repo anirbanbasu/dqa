@@ -11,7 +11,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.types import TaskState
 
 
-from dqa import EnvVars, ic
+from dqa import EnvVars
 from dqa.actor.mhqa import MHQAActor, MHQAActorInterface, MHQAActorMethods
 from dqa.actor.pubsub_topics import PubSubTopics
 from dqa.model.mhqa import (
@@ -43,60 +43,81 @@ class MHQAAgentExecutor(AgentExecutor):
             EnvVars.APP_DAPR_PUBSUB_MEMORY_STREAM_BUFFER_SIZE
         )
 
-        dc = DaprClient()
-
         def pubsub_message_handler(message: SubscriptionMessage) -> TopicEventResponse:
             # TODO: Is this a reasonable way to drop stale messages?
-            parsed_timestamp = message.extensions().get("time", None)
-            if parsed_timestamp is not None:
-                timenow = datetime.datetime.now(datetime.timezone.utc)
-                timestamp = datetime.datetime.fromisoformat(parsed_timestamp)
-                td = timenow - timestamp
-                if td > datetime.timedelta(
-                    seconds=EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS
-                ):
-                    logger.warning(
-                        f"Dropping stale message for topic={message.topic()} with age {td} seconds"
-                    )
-                    return TopicEventResponse("drop")
-            send_stream.send_nowait(message.data())
-            return TopicEventResponse("success")
+            try:
+                parsed_timestamp = message.extensions().get("time", None)
+                if parsed_timestamp is not None:
+                    timenow = datetime.datetime.now(datetime.timezone.utc)
+                    timestamp = datetime.datetime.fromisoformat(parsed_timestamp)
+                    td = timenow - timestamp
+                    if td > datetime.timedelta(
+                        seconds=EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS
+                    ):
+                        logger.warning(
+                            f"Dropping stale message for topic={message.topic()} with age {td} seconds"
+                        )
+                        return TopicEventResponse("drop")
+                send_stream.send_nowait(message.data())
+                return TopicEventResponse("success")
+            except anyio.get_cancelled_exc_class():
+                # FIXME: Is this really running as an anyio task?
+                logger.info("Pub-sub message handler cancelled.")
+                raise
+            except Exception as e:
+                logger.exception(f"Error in pubsub_message_handler. {e}")
+                return TopicEventResponse("drop")
 
         async def invoke_actor():
-            proxy = ActorProxy.create(
-                actor_type=self._actor_mhqa,
-                actor_id=ActorId(actor_id=data.thread_id),
-                actor_interface=MHQAActorInterface,
-                actor_proxy_factory=self._factory,
-            )
-            # FIXME: Timeout error can happen here and all similar invoke_method calls
-            return await proxy.invoke_method(
-                method=MHQAActorMethods.Respond,
-                raw_body=data.model_dump_json().encode(),
-            )
+            try:
+                proxy = ActorProxy.create(
+                    actor_type=self._actor_mhqa,
+                    actor_id=ActorId(actor_id=data.thread_id),
+                    actor_interface=MHQAActorInterface,
+                    actor_proxy_factory=self._factory,
+                )
+                # FIXME: Timeout error can happen here and all similar invoke_method calls
+                return await proxy.invoke_method(
+                    method=MHQAActorMethods.Respond,
+                    raw_body=data.model_dump_json().encode(),
+                )
+            except anyio.get_cancelled_exc_class():
+                logger.info("MHQAActor Respond invocation cancelled.")
+                raise
+            except Exception as e:
+                logger.exception(f"Error invoking MHQAActor Respond. {e}")
 
         pubsub_topic_name = f"{PubSubTopics.MHQA_RESPONSE}/{data.thread_id}"
 
-        async with anyio.create_task_group() as tg:
-            try:
-                dc.subscribe_with_handler(
-                    pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
-                    topic=pubsub_topic_name,
-                    handler_fn=pubsub_message_handler,
-                )
-                tg.start_soon(invoke_actor, name=invoke_actor.__name__)
-                # FIXME: Error "Attempted to exit cancel scope in a different task than it was entered in".
-                async for item in receive_stream:
-                    yield item
-                tg.cancel_scope.cancel()
-                ic("Cancelled anyio task group")
-            except Exception as e:
-                logger.exception(e)
-            finally:
-                await receive_stream.aclose()
-                await send_stream.aclose()
-                dc.close()
-                ic("Receive and send streams closed")
+        dc = DaprClient()
+        try:
+            async with anyio.create_task_group() as tg:
+                with anyio.CancelScope(shield=True):
+                    dc.subscribe_with_handler(
+                        pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
+                        topic=pubsub_topic_name,
+                        handler_fn=pubsub_message_handler,
+                    )
+                    tg.start_soon(invoke_actor, name=invoke_actor.__name__)
+                    # FIXME: Error "Attempted to exit cancel scope in a different task than it was entered in".
+                    # See: https://anyio.readthedocs.io/en/stable/cancellation.html#avoiding-cancel-scope-stack-corruption
+                    # The solution is asynccontextmanager but how? Do we need custom context managers? https://anyio.readthedocs.io/en/stable/contextmanagers.html
+                    async with receive_stream, send_stream:
+                        async for item in receive_stream:
+                            # processed_item = zlib.decompress(base64.b64decode(item)).decode()
+                            # yield processed_item
+                            yield item
+                # tg.cancel_scope.cancel()
+                # ic("Cancelled anyio task group")
+        except ExceptionGroup as eg:
+            logger.exception(eg)
+        finally:
+            # await receive_stream.aclose()
+            # await send_stream.aclose()
+            # if not tg.cancel_scope.cancel_called:
+            #     tg.cancel_scope.cancel()
+            dc.close()
+            # ic("Receive and send streams closed")
 
     async def do_mhqa_get_history(self, data: MHQAHistoryInput) -> str:
         proxy = ActorProxy.create(
