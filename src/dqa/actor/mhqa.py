@@ -182,15 +182,17 @@ class MHQAActor(Actor, MHQAActorInterface):
                     agent_output=agent_output_message,
                     tool_invocations=self._current_run_tool_invocations,
                 )
-                dc.publish_event(
-                    pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
-                    topic_name=pubsub_topic_name,
-                    # data=base64.b64encode(zlib.compress(response.model_dump_json().encode())).decode(),
-                    publish_metadata=dict(
-                        ttlInSeconds=f"{EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS * 3}"
-                    ),
-                    data=response.model_dump_json(),
-                )
+                if isinstance(event, PartStartEvent):
+                    # Publish on PartStartEvent to give real-time feel
+                    dc.publish_event(
+                        pubsub_name=EnvVars.DAPR_PUBSUB_NAME,
+                        topic_name=pubsub_topic_name,
+                        # data=base64.b64encode(zlib.compress(response.model_dump_json().encode())).decode(),
+                        publish_metadata=dict(
+                            ttlInSeconds=f"{EnvVars.APP_DAPR_PUBSUB_STALE_MSG_SECS * 3}"
+                        ),
+                        data=response.model_dump_json(),
+                    )
 
     async def respond(self, data: dict) -> dict:
         user_input = data.get("user_input", "")
