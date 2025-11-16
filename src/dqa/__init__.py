@@ -30,6 +30,9 @@ class EnvVars:
         default="stdio",
         validate=OneOf(["stdio", "sse", "streamable-http"]),
     )
+    DQA_SECRETS_OLLAMA_BASE_URL: str | None = env.str(
+        "DQA_SECRETS_OLLAMA_BASE_URL", default=None
+    )
     FASTMCP_HOST: str = env.str("FASTMCP_HOST", default="localhost")
     FASTMCP_PORT: int = env.int("FASTMCP_PORT", default=8000)
 

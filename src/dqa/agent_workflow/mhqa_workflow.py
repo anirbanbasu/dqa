@@ -112,7 +112,8 @@ class MHQAWorkflowHelper:
                 model=OpenAIChatModel(
                     model_name=responder_llm_config.get("model", None),
                     provider=OllamaProvider(
-                        base_url=responder_llm_config.get("base_url", None)
+                        base_url=EnvVars.DQA_SECRETS_OLLAMA_BASE_URL
+                        or responder_llm_config.get("base_url", None)
                     ),
                 ),
                 system_prompt=(
@@ -142,7 +143,8 @@ class MHQAWorkflowHelper:
                 model=OpenAIChatModel(
                     model_name=reviewer_llm_config.get("model", None),
                     provider=OllamaProvider(
-                        base_url=reviewer_llm_config.get("base_url", None)
+                        base_url=EnvVars.DQA_SECRETS_OLLAMA_BASE_URL
+                        or reviewer_llm_config.get("base_url", None)
                     ),
                 ),
                 system_prompt=(
